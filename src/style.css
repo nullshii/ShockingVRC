@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+@theme {
+    --color-accent: #FF4100;
+    --color-bg: #000000;
+    --color-separator: #444444;
+    --color-text: #F2F2F2;
+    --color-line: #100C0B;
+    --color-base-power: #00FF7F;
+    --color-boost-power: #FF6B35;
+    --color-limit-power: #FF3B30;
+    --color-over-power: #FFD700;
+}
