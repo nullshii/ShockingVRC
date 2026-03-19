@@ -6,11 +6,5 @@ import TopBar from './components/TopBar.vue';
 <template>
   <main class="flex flex-col h-screen w-full bg-bg text-text p-2">
     <TopBar />
-    <div class="border-2 border-separator">
-      CENTRAL_CONTENT
-    </div>
-    <div class="flex flex-row border-2 border-separator">
-      BOTTOM_BAR
-    </div>
   </main>
 </template>
