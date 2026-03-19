@@ -28,7 +28,7 @@
 	width: 100%;
 	height: 100%;
 
-	background-image: repeating-linear-gradient(45deg,
+	background-image: repeating-linear-gradient(315deg,
 			transparent,
 			transparent 5px,
 			#44444450 5px,
