@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import SlidersIcon from '@/assets/sliders.svg?component';
+import SettingsIcon from '@/assets/settings.svg?component';
+
 import BottomBarButton from './BottomBarButton.vue';
 import EmergencyStopButton from './EmergencyStopButton.vue';
 
@@ -6,8 +9,8 @@ import EmergencyStopButton from './EmergencyStopButton.vue';
 
 <template>
 	<div class="flex flex-row h-8 ring-2 ring-separator justify-between">
-		<BottomBarButton iconName="sliders" title="Presets" />
+		<BottomBarButton :icon="SlidersIcon" title="Presets" />
 		<EmergencyStopButton />
-		<BottomBarButton iconName="settings" title="Settings" />
+		<BottomBarButton :icon="SettingsIcon" title="Settings" />
 	</div>
 </template>
