@@ -1,14 +1,13 @@
 <script setup lang="ts">
+import BottomBarButton from './BottomBarButton.vue';
 import EmergencyStopButton from './EmergencyStopButton.vue';
-import PresetsButton from './PresetsButton.vue';
-import SettingsButton from './SettingsButton.vue';
 
 </script>
 
 <template>
 	<div class="flex flex-row h-8 ring-2 ring-separator justify-between">
-		<PresetsButton />
+		<BottomBarButton iconName="sliders" title="Presets" />
 		<EmergencyStopButton />
-		<SettingsButton />
+		<BottomBarButton iconName="settings" title="Settings" />
 	</div>
 </template>
