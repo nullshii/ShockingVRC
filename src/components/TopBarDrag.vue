@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import GithubIcon from '@/assets/github.svg?component';
+</script>
+
 <template>
 	<div class="w-full h-full drag-bar relative flex flex-row items-center justify-between px-2 overflow-hidden"
 		data-tauri-drag-region>
@@ -13,7 +17,8 @@
 			</button>
 		</div>
 		<button tabindex="-1" class="flex flex-row items-center justify-center cursor-pointer z-10">
-			<img class="drag-none" src="../assets/github.svg" alt="github" />
+			<component :is="GithubIcon"
+				class="min-w-3.5 aspect-auto text-text transition-all duration-150 hover:text-accent" />
 		</button>
 	</div>
 </template>

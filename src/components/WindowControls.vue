@@ -25,15 +25,15 @@ const close = async () => {
 	<div class="flex flex-row items-center ring-2 ring-separator justify-center gap-5 px-2 h-full">
 		<button tabindex="-1" @click="minimize">
 			<component :is="MinimizeIcon"
-				class="drag-none min-w-5 min-h-5 transition-all duration-150 text-text hover:text-base-power" />
+				class="drag-none min-w-5 min-h-5 transition-all duration-150 text-text hover:text-base-power cursor-pointer" />
 		</button>
 		<button tabindex="-1" @click="toggleMaximize">
 			<component :is="MaximizeIcon"
-				class="drag-none min-w-5 min-h-5 transition-all duration-150 text-text hover:text-over-power" />
+				class="drag-none min-w-5 min-h-5 transition-all duration-150 text-text hover:text-over-power cursor-pointer" />
 		</button>
 		<button tabindex="-1" @click="close">
 			<component :is="CloseIcon"
-				class="drag-none min-w-5 min-h-5 transition-all duration-150 text-text hover:text-limit-power" />
+				class="drag-none min-w-5 min-h-5 transition-all duration-150 text-text hover:text-limit-power cursor-pointer" />
 		</button>
 	</div>
 </template>
