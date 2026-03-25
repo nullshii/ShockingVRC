@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue';
 
-const props = defineProps<{
+defineProps<{
   icon?: Component,
   title?: String
 }>();
