@@ -61,7 +61,6 @@ async fn main() {
                 );
             }
             // The refresh event was already sent by discover_wait, but we also
-            
             // have the data right here — print the report immediately.
             print_zone_report(&scanner.zones().await);
         }
