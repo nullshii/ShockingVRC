@@ -18,9 +18,7 @@ pub async fn is_bluetooth_available() -> bool {
 }
 
 pub async fn start_scan(adapter: &btleplug::platform::Adapter) -> Result<()> {
-    adapter
-        .start_scan(btleplug::api::ScanFilter::default())
-        .await?;
+    adapter.start_scan(btleplug::api::ScanFilter::default()).await?;
     Ok(())
 }
 

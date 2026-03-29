@@ -149,12 +149,8 @@ impl GameDevice {
         };
 
         // New Root/Tip model preferred; fall back to legacy scalar
-        let pen_self = self
-            .new_pen_level(true)
-            .unwrap_or_else(|| self.get_float("PenSelf"));
-        let pen_others = self
-            .new_pen_level(false)
-            .unwrap_or_else(|| self.get_float("PenOthers"));
+        let pen_self = self.new_pen_level(true).unwrap_or_else(|| self.get_float("PenSelf"));
+        let pen_others = self.new_pen_level(false).unwrap_or_else(|| self.get_float("PenOthers"));
 
         let frot_others = if self.get_bool("FrotOthersClose") {
             self.get_float("FrotOthers")
@@ -179,9 +175,7 @@ impl GameDevice {
             0.0
         };
 
-        let pen_self = self
-            .new_pen_level(true)
-            .unwrap_or_else(|| self.get_float("PenSelf"));
+        let pen_self = self.new_pen_level(true).unwrap_or_else(|| self.get_float("PenSelf"));
 
         // PenOthers for Orf: new model takes priority, then legacy scalar
         // (gated by PenOthersClose if present; if absent → legacy always on)
@@ -202,16 +196,9 @@ impl GameDevice {
 
         let depth_in = self.get_float("Depth_In");
 
-        [
-            touch_self,
-            touch_others,
-            pen_self,
-            pen_others,
-            frot_others,
-            depth_in,
-        ]
-        .into_iter()
-        .fold(0.0f32, f32::max)
+        [touch_self, touch_others, pen_self, pen_others, frot_others, depth_in]
+            .into_iter()
+            .fold(0.0f32, f32::max)
     }
 
     fn compute_touch_level(&self) -> f32 {
@@ -219,7 +206,7 @@ impl GameDevice {
     }
 
     // Public helpers
-    
+
     /// Snapshot of the current state as a [`ZoneEvent`].
     pub fn to_event(&self) -> ZoneEvent {
         ZoneEvent {

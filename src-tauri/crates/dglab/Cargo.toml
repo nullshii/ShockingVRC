@@ -7,7 +7,7 @@ description = "OSC control avatar parameters"
 license = "MIT"
 
 [dependencies]
-btleplug = "0.11"
+btleplug = "0.12.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio-stream = "0.1"
@@ -19,7 +19,7 @@ base64 = "0.22"
 thiserror = "2"
 log = "0.4"
 env_logger = "0.11"
-rand = "0.9"
-rosc = "0.10"
-mdns-sd = "0.13"
-reqwest = { version = "0.12", features = ["json"] }
+rand = "0.10.0"
+rosc = "0.11.4"
+mdns-sd = "0.18.2"
+reqwest = { version = "0.13.2", features = ["json"] }

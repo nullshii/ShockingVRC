@@ -10,14 +10,7 @@ pub struct WaveformBF {
 }
 
 impl WaveformBF {
-    pub fn new(
-        limit_a: u8,
-        limit_b: u8,
-        form_a: u8,
-        form_b: u8,
-        volt_a: u8,
-        volt_b: u8,
-    ) -> Self {
+    pub fn new(limit_a: u8, limit_b: u8, form_a: u8, form_b: u8, volt_a: u8, volt_b: u8) -> Self {
         Self {
             head: 0xBF,
             strength_upper_limit_a: limit_a,

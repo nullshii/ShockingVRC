@@ -22,10 +22,6 @@ pub struct VrchatAddress {
     pub http_addr: SocketAddr,
 }
 
-// ---------------------------------------------------------------------------
-// JSON shapes for OSCQuery HTTP responses
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Deserialize)]
 struct HostInfo {
     #[serde(rename = "NAME")]

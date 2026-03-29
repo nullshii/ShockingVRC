@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use rosc::{OscMessage, OscPacket, OscType};
 use tokio::net::UdpSocket;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use super::game_device::GameDevice;
 use super::oscquery::VrchatOscQuery;
@@ -112,13 +112,7 @@ impl AvatarScanner {
 
     /// Snapshot of all zones seen so far (level may be 0.0 if no active contact).
     pub async fn zones(&self) -> Vec<ZoneEvent> {
-        self.state
-            .devices
-            .read()
-            .await
-            .values()
-            .map(|d| d.to_event())
-            .collect()
+        self.state.devices.read().await.values().map(|d| d.to_event()).collect()
     }
 
     /// Return the VRChat OSC address if already discovered.
@@ -280,12 +274,7 @@ fn parse_sps_param(parts: &[&str]) -> Option<(ZoneType, String, String, bool)> {
             if (*prefix == "OGB" || *prefix == "TPS_Internal") && !contact.is_empty() =>
         {
             let zone_type = parse_zone_type(type_str)?;
-            Some((
-                zone_type,
-                id.to_string(),
-                contact.join("/"),
-                *prefix == "TPS_Internal",
-            ))
+            Some((zone_type, id.to_string(), contact.join("/"), *prefix == "TPS_Internal"))
         }
 
         // VFH

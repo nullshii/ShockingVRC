@@ -48,7 +48,7 @@ impl WaveformV3 {
         frequency_b: [u8; 4],
         intensity_b: [u8; 4],
     ) -> Self {
-        let number = rand::rng().random_range(0x00..=0x0F);
+        let number: u8 = rand::random::<u8>() & 0x0F;
         Self {
             head: 0xB0,
             strength_mode: (number << 4) | (strength_mode & 0x0F),
@@ -82,15 +82,7 @@ impl WaveformV3 {
     }
 
     pub fn waveform_only_a(frequency_a: [u8; 4], intensity_a: [u8; 4]) -> Self {
-        Self::with_mode(
-            MODE_NO_CHANGE,
-            0,
-            0,
-            frequency_a,
-            intensity_a,
-            [0; 4],
-            [0, 0, 0, 101],
-        )
+        Self::with_mode(MODE_NO_CHANGE, 0, 0, frequency_a, intensity_a, [0; 4], [0, 0, 0, 101])
     }
 
     pub fn channel_a(strength: u8, frequency: [u8; 4], intensity: [u8; 4]) -> Self {
@@ -99,14 +91,7 @@ impl WaveformV3 {
 
     pub fn channel_a_quick(strength: u8, frequency: [u8; 4]) -> Self {
         let intensity_a = [strength.min(100); 4];
-        Self::new(
-            strength,
-            0,
-            frequency,
-            intensity_a,
-            [0; 4],
-            [0, 0, 0, 101],
-        )
+        Self::new(strength, 0, frequency, intensity_a, [0; 4], [0, 0, 0, 101])
     }
 
     pub fn duration_a_ms(&self) -> u32 {
@@ -168,14 +153,30 @@ impl fmt::Display for WaveformV3 {
 
         match (self.strength_a != 0, self.strength_b != 0) {
             (true, false) => {
-                write!(f, "{}", format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a))
+                write!(
+                    f,
+                    "{}",
+                    format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a)
+                )
             }
             (false, true) => {
-                write!(f, "{}", format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b))
+                write!(
+                    f,
+                    "{}",
+                    format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b)
+                )
             }
             _ => {
-                write!(f, "{}", format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a))?;
-                write!(f, "{}", format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b))
+                write!(
+                    f,
+                    "{}",
+                    format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a)
+                )?;
+                write!(
+                    f,
+                    "{}",
+                    format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b)
+                )
             }
         }
     }

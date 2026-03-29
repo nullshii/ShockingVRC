@@ -1,6 +1,6 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use serde::{de::DeserializeOwned, Serialize};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use flate2::{Compression, read::GzDecoder, write::GzEncoder};
+use serde::{Serialize, de::DeserializeOwned};
 use std::io::{Read, Write};
 
 use crate::error::{DGLabError, Result};

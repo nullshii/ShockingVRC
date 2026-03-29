@@ -4,7 +4,7 @@ use std::time::Duration;
 use btleplug::api::{Central, Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::{Adapter, Peripheral};
 use log::{debug, error, info, warn};
-use tokio::sync::{broadcast, watch, Mutex};
+use tokio::sync::{Mutex, broadcast, watch};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -71,9 +71,7 @@ impl CoyoteDevice {
     }
 
     async fn write_to_char(&self, ch: &Characteristic, data: &[u8]) -> Result<bool> {
-        let has_write = ch
-            .properties
-            .contains(btleplug::api::CharPropFlags::WRITE);
+        let has_write = ch.properties.contains(btleplug::api::CharPropFlags::WRITE);
         let has_write_no_resp = ch
             .properties
             .contains(btleplug::api::CharPropFlags::WRITE_WITHOUT_RESPONSE);
@@ -89,13 +87,7 @@ impl CoyoteDevice {
             )));
         };
 
-        debug!(
-            "Writing {} bytes to {} ({:?}): {:02X?}",
-            data.len(),
-            ch.uuid,
-            write_type,
-            data
-        );
+        debug!("Writing {} bytes to {} ({:?}): {:02X?}", data.len(), ch.uuid, write_type, data);
 
         match self.peripheral.write(ch, data, write_type).await {
             Ok(()) => {
@@ -105,10 +97,7 @@ impl CoyoteDevice {
                 Ok(true)
             }
             Err(e) if has_write && has_write_no_resp => {
-                warn!(
-                    "WriteWithResponse failed ({}), retrying with WriteWithoutResponse",
-                    e
-                );
+                warn!("WriteWithResponse failed ({}), retrying with WriteWithoutResponse", e);
                 self.peripheral
                     .write(ch, data, WriteType::WithoutResponse)
                     .await
@@ -195,9 +184,7 @@ impl CoyoteDevice {
                 let bytes = wave.to_bytes();
                 let delay_ms = 100u64;
 
-                let has_write = write_char
-                    .properties
-                    .contains(btleplug::api::CharPropFlags::WRITE);
+                let has_write = write_char.properties.contains(btleplug::api::CharPropFlags::WRITE);
                 let write_type = if has_write {
                     WriteType::WithResponse
                 } else {
@@ -215,10 +202,7 @@ impl CoyoteDevice {
                     }
                     Err(e) => {
                         if has_write {
-                            if let Err(e2) = peripheral
-                                .write(&write_char, &bytes, WriteType::WithoutResponse)
-                                .await
-                            {
+                            if let Err(e2) = peripheral.write(&write_char, &bytes, WriteType::WithoutResponse).await {
                                 error!("Write failed (both modes): {e}, {e2}");
                             }
                         } else {
@@ -266,22 +250,15 @@ impl CoyoteDevice {
 
         println!("[dglab] Discovered characteristics:");
         for ch in &characteristics {
-            println!(
-                "  service: {}  char: {}  props: {:?}",
-                ch.service_uuid, ch.uuid, ch.properties
-            );
+            println!("  service: {}  char: {}  props: {:?}", ch.service_uuid, ch.uuid, ch.properties);
         }
 
         let write_char = characteristics
             .iter()
-            .find(|c| {
-                c.uuid == CHARACTERISTIC_WRITE && c.service_uuid == SERVICE_WRITE
-            })
+            .find(|c| c.uuid == CHARACTERISTIC_WRITE && c.service_uuid == SERVICE_WRITE)
             .or_else(|| characteristics.iter().find(|c| c.uuid == CHARACTERISTIC_WRITE))
             .cloned()
-            .ok_or_else(|| {
-                DGLabError::CharacteristicNotFound(CHARACTERISTIC_WRITE)
-            })?;
+            .ok_or_else(|| DGLabError::CharacteristicNotFound(CHARACTERISTIC_WRITE))?;
 
         println!(
             "[dglab] Write characteristic: {} in service {} (props: {:?})",
@@ -313,9 +290,10 @@ impl CoyoteDevice {
             .cloned();
 
         let notification_task = if let Some(ch) = notify_ch {
-            peripheral.subscribe(&ch).await.map_err(|e| {
-                DGLabError::NotifyError(format!("subscribe to {}: {e}", CHARACTERISTIC_NOTIFY))
-            })?;
+            peripheral
+                .subscribe(&ch)
+                .await
+                .map_err(|e| DGLabError::NotifyError(format!("subscribe to {}: {e}", CHARACTERISTIC_NOTIFY)))?;
 
             let tx = notification_tx.clone();
             let p = peripheral.clone();
@@ -386,10 +364,7 @@ impl CoyoteDevice {
 
         tokio::time::sleep(Duration::from_millis(150)).await;
 
-        let init_b0 = WaveformV3::waveform_only_a(
-            [10, 10, 10, 10],
-            [0, 10, 20, 30],
-        );
+        let init_b0 = WaveformV3::waveform_only_a([10, 10, 10, 10], [0, 10, 20, 30]);
         match device.set_waveform(&init_b0).await {
             Ok(_) => println!("[dglab] Initial B0 sent OK (device should show connected)"),
             Err(e) => println!("[dglab] Initial B0 failed: {e}"),

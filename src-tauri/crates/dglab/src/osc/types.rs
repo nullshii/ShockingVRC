@@ -14,7 +14,13 @@ impl OscValue {
         match self {
             OscValue::Float(f) => *f,
             OscValue::Int(i) => *i as f32,
-            OscValue::Bool(b) => if *b { 1.0 } else { 0.0 },
+            OscValue::Bool(b) => {
+                if *b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
         }
     }
 

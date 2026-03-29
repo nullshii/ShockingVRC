@@ -4,7 +4,6 @@
 ///   cargo run --example osc_scanner
 ///   cargo run --example osc_scanner -- --port 9001
 ///   $env:RUST_LOG="debug"; cargo run --example osc_scanner
-
 use dglab::{AvatarScanner, ZoneEvent, ZoneType};
 
 // Target zones to look for on the avatar
@@ -108,7 +107,7 @@ async fn main() {
     }
 }
 
-// Zone discovery report 
+// Zone discovery report
 fn print_zone_report(found: &[ZoneEvent]) {
     println!();
     println!("┌─────────────────────────────────────────────────┐");
@@ -120,9 +119,7 @@ fn print_zone_report(found: &[ZoneEvent]) {
     let mut total_found = 0usize;
 
     for (zone_type, id) in TARGET_ZONES {
-        let is_found = found
-            .iter()
-            .any(|z| &z.zone_type == zone_type && z.id.as_str() == *id);
+        let is_found = found.iter().any(|z| &z.zone_type == zone_type && z.id.as_str() == *id);
 
         let stat = if is_found { "✓" } else { "✗" };
         let type_str = zone_type_str(zone_type);
