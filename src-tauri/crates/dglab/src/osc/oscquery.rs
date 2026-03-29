@@ -166,6 +166,7 @@ impl Default for VrchatOscQuery {
 }
 
 // mDNS scanning (blocking, intended for spawn_blocking)
+
 /// Scan mDNS for `_oscjson._tcp.local.` for up to 5 seconds.
 /// If nothing is found, appends the VRChat default `localhost:9001` as a
 /// fallback so basic local testing works without a working mDNS stack.

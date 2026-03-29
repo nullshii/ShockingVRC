@@ -219,6 +219,7 @@ impl GameDevice {
     }
 
     // Public helpers
+    
     /// Snapshot of the current state as a [`ZoneEvent`].
     pub fn to_event(&self) -> ZoneEvent {
         ZoneEvent {

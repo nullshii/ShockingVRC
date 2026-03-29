@@ -28,6 +28,7 @@ impl OscValue {
 }
 
 /// SPS zone type corresponding to VRChat avatar contact zones.
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ZoneType {
     /// Plug (penetrating) zone — maps to `vrchat.sps.plug`

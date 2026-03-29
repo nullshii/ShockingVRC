@@ -24,7 +24,6 @@ struct ScannerState {
 // AvatarScanner — public handle
 /// Listens for VRChat OSC avatar parameters on a UDP port, discovers VRChat
 /// via OSCQuery, parses SPS contact zones and emits [`ZoneEvent`]s.
-///
 /// The scanner is cheaply cloneable; all clones share the same internal state.
 #[derive(Clone)]
 pub struct AvatarScanner {
