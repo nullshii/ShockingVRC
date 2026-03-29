@@ -37,6 +37,9 @@ pub enum DGLabError {
 
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("OSC error: {0}")]
+    OscError(String),
 }
 
 pub type Result<T> = std::result::Result<T, DGLabError>;
