@@ -1,3 +1,4 @@
+//TODO add save MAC address to device list, and try to connect to that first before scanning
 use std::sync::Arc;
 use std::time::Duration;
 

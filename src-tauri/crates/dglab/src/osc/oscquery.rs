@@ -7,10 +7,7 @@ use serde::Deserialize;
 use super::types::OscValue;
 use crate::error::{DGLabError, Result};
 
-// ---------------------------------------------------------------------------
 // Public address info
-// ---------------------------------------------------------------------------
-
 /// Addresses needed to talk to VRChat's OSC / OSCQuery endpoints.
 #[derive(Debug, Clone)]
 pub struct VrchatAddress {
@@ -22,6 +19,7 @@ pub struct VrchatAddress {
     pub http_addr: SocketAddr,
 }
 
+// JSON shapes for OSCQuery HTTP responses
 #[derive(Debug, Deserialize)]
 struct HostInfo {
     #[serde(rename = "NAME")]
@@ -44,15 +42,12 @@ struct OscQueryNode {
 }
 
 // Internal mDNS result
-
 struct MdnsCandidate {
     http_addr: SocketAddr,
 }
 
 
 // VrchatOscQuery
-
-
 /// Discovers VRChat over mDNS + OSCQuery and fetches avatar parameter trees.
 pub struct VrchatOscQuery {
     client: reqwest::Client,
@@ -74,7 +69,6 @@ impl VrchatOscQuery {
     /// Scan mDNS for `_oscjson._tcp.local.` services, probe each via
     /// `HOST_INFO`, and keep the first that identifies itself as VRChat.
     /// Falls back to `localhost:9001` if mDNS yields nothing.
-    ///
     /// Returns `true` when VRChat was successfully located.
     pub async fn discover(&mut self) -> Result<bool> {
         let candidates = tokio::task::spawn_blocking(scan_mdns)
@@ -162,7 +156,6 @@ impl Default for VrchatOscQuery {
 }
 
 // mDNS scanning (blocking, intended for spawn_blocking)
-
 /// Scan mDNS for `_oscjson._tcp.local.` for up to 5 seconds.
 /// If nothing is found, appends the VRChat default `localhost:9001` as a
 /// fallback so basic local testing works without a working mDNS stack.
@@ -206,8 +199,13 @@ fn try_scan_mdns(out: &mut Vec<MdnsCandidate>) -> std::result::Result<(), String
             Ok(ServiceEvent::ServiceResolved(info)) => {
                 let port = info.get_port();
                 for addr in info.get_addresses() {
-                    // mdns-sd 0.13 returns &HashSet<IpAddr>
-                    let socket_addr = SocketAddr::new(*addr, port);
+                    use mdns_sd::ScopedIp;
+                    let ip: std::net::IpAddr = match addr {
+                        ScopedIp::V4(v4) => std::net::IpAddr::V4(*v4.addr()),
+                        ScopedIp::V6(v6) => std::net::IpAddr::V6(*v6.addr()),
+                        _ => continue,
+                    };
+                    let socket_addr = SocketAddr::new(ip, port);
                     log::debug!("mDNS found oscjson service at {}", socket_addr);
                     out.push(MdnsCandidate { http_addr: socket_addr });
                 }
