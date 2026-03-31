@@ -1,4 +1,4 @@
-//TODO add save MAC address to device list, and try to connect to that first before scanning
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::ble::adapter;
 use crate::ble::constants::*;
+use crate::ble::known_devices::KnownDeviceList;
 use crate::error::{DGLabError, Result};
 use crate::protocol::waveform::WaveformV3;
 use crate::protocol::waveform_bf::WaveformBF;
@@ -30,6 +31,7 @@ pub struct CoyoteDevice {
     write_char: Characteristic,
     name: String,
     id: String,
+    mac_address: String,
     wave_now: Arc<Mutex<WaveformV3>>,
     notification_tx: broadcast::Sender<DeviceNotification>,
     stop_tx: Option<watch::Sender<bool>>,
@@ -44,6 +46,10 @@ impl CoyoteDevice {
 
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    pub fn mac_address(&self) -> &str {
+        &self.mac_address
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<DeviceNotification> {
@@ -240,10 +246,11 @@ impl CoyoteDevice {
         peripheral.connect().await?;
         peripheral.discover_services().await?;
 
-        let name = peripheral
-            .properties()
-            .await?
-            .and_then(|p| p.local_name)
+        let props = peripheral.properties().await?;
+        let name = props.as_ref().and_then(|p| p.local_name.clone()).unwrap_or_default();
+        let mac_address = props
+            .as_ref()
+            .map(|p| p.address.to_string().to_uppercase())
             .unwrap_or_default();
         let id = peripheral.id().to_string();
 
@@ -350,6 +357,7 @@ impl CoyoteDevice {
             write_char,
             name,
             id,
+            mac_address,
             wave_now: Arc::new(Mutex::new(default_wave)),
             notification_tx,
             stop_tx: None,
@@ -381,20 +389,84 @@ impl CoyoteDevice {
     }
 
     pub async fn scan_all_with_timeout(timeout: Duration) -> Result<Vec<CoyoteDevice>> {
+        let known = KnownDeviceList::load();
         let adapter = adapter::get_adapter().await?;
         adapter::start_scan(&adapter).await?;
-        tokio::time::sleep(timeout).await;
+
+        let mut devices: Vec<CoyoteDevice> = Vec::new();
+        let mut connected_ids: HashSet<String> = HashSet::new();
+
+        //poll briefly for known MAC addresses so we can connect without waiting for
+        let poll_budget = if known.is_empty() {
+            Duration::ZERO
+        } else {
+            timeout.min(Duration::from_secs(3))
+        };
+
+        if !poll_budget.is_zero() {
+            let step = Duration::from_millis(500);
+            let steps = (poll_budget.as_millis() / step.as_millis()).max(1) as u32;
+            'outer: for _ in 0..steps {
+                tokio::time::sleep(step).await;
+                for p in adapter.peripherals().await.unwrap_or_default() {
+                    if let Ok(Some(props)) = p.properties().await {
+                        let mac = props.address.to_string().to_uppercase();
+                        if known.contains(&mac) {
+                            let pid = p.id().to_string();
+                            if connected_ids.contains(&pid) {
+                                continue;
+                            }
+                            connected_ids.insert(pid);
+                            info!(
+                                "Found known device {} ({mac}), connecting early",
+                                props.local_name.as_deref().unwrap_or("?")
+                            );
+                            match CoyoteDevice::from_peripheral(p).await {
+                                Ok(dev) => {
+                                    info!("Connected to known device {}", dev.name());
+                                    devices.push(dev);
+                                    // All known devices found — skip remaining poll budget
+                                    if devices.len() >= known.addresses().len() {
+                                        break 'outer;
+                                    }
+                                }
+                                Err(e) => warn!("Failed to connect to known device {mac}: {e}"),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        //wait out the remaining scan window then stop.
+        let remaining = timeout.saturating_sub(poll_budget);
+        if !remaining.is_zero() {
+            tokio::time::sleep(remaining).await;
+        }
         adapter::stop_scan(&adapter).await?;
 
-        let mut devices = Vec::new();
+        //connect to any Coyote devices found by name that we haven't already connected.
+        let mut known_list = KnownDeviceList::load();
+        let mut changed = false;
         for p in find_coyote_peripherals(&adapter).await? {
+            let pid = p.id().to_string();
+            if connected_ids.contains(&pid) {
+                continue;
+            }
+            connected_ids.insert(pid);
             match CoyoteDevice::from_peripheral(p).await {
                 Ok(dev) => {
                     info!("Connected to {}", dev.name());
+                    if known_list.add(dev.mac_address()) {
+                        changed = true;
+                    }
                     devices.push(dev);
                 }
                 Err(e) => warn!("Failed to connect to peripheral: {e}"),
             }
+        }
+        if changed {
+            known_list.save();
         }
         Ok(devices)
     }
@@ -404,15 +476,61 @@ impl CoyoteDevice {
     }
 
     pub async fn scan_first_with_timeout(timeout: Duration) -> Result<Option<CoyoteDevice>> {
+        let known = KnownDeviceList::load();
         let adapter = adapter::get_adapter().await?;
         adapter::start_scan(&adapter).await?;
-        tokio::time::sleep(timeout).await;
+
+        //poll briefly for a known MAC address for a faster connection.
+        let poll_budget = if known.is_empty() {
+            Duration::ZERO
+        } else {
+            timeout.min(Duration::from_secs(3))
+        };
+
+        if !poll_budget.is_zero() {
+            let step = Duration::from_millis(500);
+            let steps = (poll_budget.as_millis() / step.as_millis()).max(1) as u32;
+            for _ in 0..steps {
+                tokio::time::sleep(step).await;
+                for p in adapter.peripherals().await.unwrap_or_default() {
+                    if let Ok(Some(props)) = p.properties().await {
+                        let mac = props.address.to_string().to_uppercase();
+                        if known.contains(&mac) {
+                            info!(
+                                "Found known device {} ({mac}), connecting early",
+                                props.local_name.as_deref().unwrap_or("?")
+                            );
+                            match CoyoteDevice::from_peripheral(p).await {
+                                Ok(dev) => {
+                                    info!("Connected to known device {}", dev.name());
+                                    let _ = adapter::stop_scan(&adapter).await;
+                                    return Ok(Some(dev));
+                                }
+                                Err(e) => warn!("Failed to connect to known device {mac}: {e}"),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        //wait out the remaining scan window then stop.
+        let remaining = timeout.saturating_sub(poll_budget);
+        if !remaining.is_zero() {
+            tokio::time::sleep(remaining).await;
+        }
         adapter::stop_scan(&adapter).await?;
 
+        //fall back to name-based scan result and save the MAC for next time.
         let peripherals = find_coyote_peripherals(&adapter).await?;
         if let Some(p) = peripherals.into_iter().next() {
             let dev = CoyoteDevice::from_peripheral(p).await?;
             info!("Connected to {}", dev.name());
+            let mut known_list = KnownDeviceList::load();
+            if known_list.add(dev.mac_address()) {
+                known_list.save();
+                info!("Saved new device MAC {} to known devices list", dev.mac_address());
+            }
             return Ok(Some(dev));
         }
         Ok(None)
