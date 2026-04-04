@@ -158,7 +158,7 @@ impl CoyoteDevice {
             .map(|c| (c.service_uuid, c.uuid, c.properties))
             .collect()
     }
-
+    //TODO if chenel power = 0 then 0 out, otherwise 1 out? or maybe preserve original value for non-zero power levels and just set to 0 for off? idk if i send send zero power to devise zero power != 0 XD
     pub fn start(&mut self) -> bool {
         if self.input_task.is_some() {
             return false;
