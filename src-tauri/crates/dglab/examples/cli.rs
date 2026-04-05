@@ -28,10 +28,11 @@
 ///   load                      — load config from cli_config.json
 ///   quit / exit               — stop and exit
 use std::path::Path;
+use std::str::FromStr;
 use std::time::Duration;
 
 use dglab::cli::{AggregationMode, ChannelConfig, CliConfig, CliEngine, PowerLimits, ZoneId};
-use dglab::{AvatarScanner, CoyoteDevice, ZoneEvent};
+use dglab::{AvatarScanner, CoyoteDevice, ZoneEvent, ZoneType};
 
 const CONFIG_FILE: &str = "cli_config.json";
 
@@ -102,17 +103,9 @@ async fn main() {
         tokio::spawn(async move {
             loop {
                 log::debug!("[ble] Starting BLE scan ({}s)...", scan_timeout);
-                match CoyoteDevice::scan_first_with_timeout(
-                    Duration::from_secs(scan_timeout),
-                )
-                .await
-                {
+                match CoyoteDevice::scan_first_with_timeout(Duration::from_secs(scan_timeout)).await {
                     Ok(Some(mut dev)) => {
-                        println!(
-                            "\n[ble] Connected: {} ({})",
-                            dev.name(),
-                            dev.mac_address()
-                        );
+                        println!("\n[ble] Connected: {} ({})", dev.name(), dev.mac_address());
                         dev.start();
                         engine_ble.connect_device(&dev).await;
 
@@ -199,7 +192,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
                 println!("  {:<5}  {:<30}  {:<8}  {}", "Type", "Name", "Level", "Channel");
                 println!("  {}", "─".repeat(60));
                 for z in &zones {
-                    let zone_id = ZoneId::new(z.zone_type.to_string(), &z.id);
+                    let zone_id = ZoneId::new(z.zone_type, &z.id);
                     let ch = if cfg.channel_a.zones.iter().any(|p| p.matches(&zone_id)) {
                         "A"
                     } else if cfg.channel_b.zones.iter().any(|p| p.matches(&zone_id)) {
@@ -207,13 +200,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
                     } else {
                         "—"
                     };
-                    println!(
-                        "  {:<5}  {:<30}  {:<8.3}  {}",
-                        z.zone_type.to_string(),
-                        z.id,
-                        z.level,
-                        ch
-                    );
+                    println!("  {:<5}  {:<30}  {:<8.3}  {}", z.zone_type.to_string(), z.id, z.level, ch);
                 }
                 println!();
             }
@@ -241,7 +228,13 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
             },
 
             ["add-a", ztype, name] => {
-                let id = ZoneId::new(*ztype, *name);
+                let id = ZoneId::new(
+                    ZoneType::from_str(ztype).unwrap_or_else(|_| {
+                        eprintln!("Warning: '{}' invalid, using DGB", ztype);
+                        ZoneType::DGB
+                    }),
+                    *name,
+                );
                 engine.add_zone_a(id.clone()).await;
                 if id.is_wildcard() {
                     let matched = count_wildcard_matches(&id, &scanner.zones().await);
@@ -252,7 +245,13 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
             }
 
             ["add-b", ztype, name] => {
-                let id = ZoneId::new(*ztype, *name);
+                let id = ZoneId::new(
+                    ZoneType::from_str(ztype).unwrap_or_else(|_| {
+                        eprintln!("Warning: '{}' invalid, using DGB", ztype);
+                        ZoneType::DGB
+                    }),
+                    *name,
+                );
                 engine.add_zone_b(id.clone()).await;
                 if id.is_wildcard() {
                     let matched = count_wildcard_matches(&id, &scanner.zones().await);
@@ -268,7 +267,11 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
                 println!("[ch-A] Added {added} zone(s) from avatar");
             }
             ["add-all-a", filter_type] => {
-                let added = add_all_zones(engine, scanner, Channel::A, Some(*filter_type)).await;
+                let ft = ZoneType::from_str(*filter_type).unwrap_or_else(|_| {
+                    eprintln!("Warning: '{}' invalid, using DGB", *filter_type);
+                    ZoneType::DGB
+                });
+                let added = add_all_zones(engine, scanner, Channel::A, Some(ft)).await;
                 println!("[ch-A] Added {added} zone(s) of type '{filter_type}' from avatar");
             }
 
@@ -278,18 +281,34 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
                 println!("[ch-B] Added {added} zone(s) from avatar");
             }
             ["add-all-b", filter_type] => {
-                let added = add_all_zones(engine, scanner, Channel::B, Some(*filter_type)).await;
-                println!("[ch-B] Added {added} zone(s) of type '{filter_type}' from avatar");
+                let ft = ZoneType::from_str(*filter_type).unwrap_or_else(|_| {
+                    eprintln!("Warning: '{}' invalid, using DGB", *filter_type);
+                    ZoneType::DGB
+                });
+                let added = add_all_zones(engine, scanner, Channel::B, Some(ft)).await;
+                println!("[ch-B] Added {added} zone(s) of type '{ft}' from avatar");
             }
 
             ["rm-a", ztype, name] => {
-                let id = ZoneId::new(*ztype, *name);
+                let id = ZoneId::new(
+                    ZoneType::from_str(ztype).unwrap_or_else(|_| {
+                        eprintln!("Warning: '{}' invalid, using DGB", ztype);
+                        ZoneType::DGB
+                    }),
+                    *name,
+                );
                 engine.remove_zone_a(&id).await;
                 println!("[ch-A] Zone removed: {id}");
             }
 
             ["rm-b", ztype, name] => {
-                let id = ZoneId::new(*ztype, *name);
+                let id = ZoneId::new(
+                    ZoneType::from_str(ztype).unwrap_or_else(|_| {
+                        eprintln!("Warning: '{}' invalid, using DGB", ztype);
+                        ZoneType::DGB
+                    }),
+                    *name,
+                );
                 engine.remove_zone_b(&id).await;
                 println!("[ch-B] Zone removed: {id}");
             }
@@ -378,25 +397,27 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
 }
 
 //Zone helpers
-enum Channel { A, B }
+enum Channel {
+    A,
+    B,
+}
 async fn add_all_zones(
     engine: &CliEngine,
     scanner: &AvatarScanner,
     channel: Channel,
-    type_filter: Option<&str>,
+    type_filter: Option<ZoneType>,
 ) -> usize {
     let zones = scanner.zones().await;
     let cfg = engine.config().await;
     let mut added = 0usize;
 
     for z in &zones {
-        let type_str = z.zone_type.to_string();
         if let Some(f) = type_filter {
-            if type_str.to_lowercase() != f.to_lowercase() {
+            if z.zone_type != f {
                 continue;
             }
         }
-        let id = ZoneId::new(&type_str, &z.id);
+        let id = ZoneId::new(z.zone_type, &z.id);
         // Skip if already covered by an existing pattern
         let already = match channel {
             Channel::A => cfg.channel_a.zones.iter().any(|p| p.matches(&id)),
@@ -415,10 +436,7 @@ async fn add_all_zones(
 }
 
 fn count_wildcard_matches(pattern: &ZoneId, zones: &[ZoneEvent]) -> usize {
-    zones
-        .iter()
-        .filter(|z| pattern.matches_event(z))
-        .count()
+    zones.iter().filter(|z| pattern.matches_event(z)).count()
 }
 
 //Default config
@@ -426,8 +444,8 @@ fn default_config() -> CliConfig {
     CliConfig {
         channel_a: ChannelConfig {
             zones: vec![
-                ZoneId::new("Orf", "Pussy"),
-                ZoneId::new("Orf", "Anal"),
+                ZoneId::new(dglab::ZoneType::Orf, "Pussy"),
+                ZoneId::new(dglab::ZoneType::Orf, "Anal"),
             ],
             frequency: [30, 200, 30, 200],
             intensity: [80, 80, 80, 80],
@@ -435,9 +453,7 @@ fn default_config() -> CliConfig {
             aggregation: AggregationMode::Max,
         },
         channel_b: ChannelConfig {
-            zones: vec![
-                ZoneId::new("Pen", "Cock"),
-            ],
+            zones: vec![ZoneId::new(dglab::ZoneType::Pen, "Cock")],
             frequency: [60, 120, 60, 120],
             intensity: [80, 80, 80, 80],
             limits: PowerLimits::new(0, 30),
@@ -468,7 +484,8 @@ fn print_banner() {
 }
 
 fn print_help() {
-    println!("
+    println!(
+        "
 Zone commands  (type: Orf | Pen | Touch | DGB  |  * = wildcard)
   add-a  <type> <name>        Add exact zone to channel A
   add-a  Orf *                Add ALL Orf zones to channel A (wildcard)
@@ -498,7 +515,8 @@ Info / config
   save                        Save config to cli_config.json
   load                        Load config from cli_config.json
   quit / exit                 Stop and exit
-");
+"
+    );
 }
 
 fn print_config_summary(cfg: &CliConfig) {
@@ -526,14 +544,8 @@ fn print_config_summary(cfg: &CliConfig) {
         "│  limits : {:>3}–{:<3}                 │  limits : {:>3}–{:<3}           │",
         a.limits.min, a.limits.max, b.limits.min, b.limits.max
     );
-    println!(
-        "│  freq   : {:?}  │  freq   : {:?} │",
-        a.frequency, b.frequency
-    );
-    println!(
-        "│  intens : {:?}  │  intens : {:?} │",
-        a.intensity, b.intensity
-    );
+    println!("│  freq   : {:?}  │  freq   : {:?} │", a.frequency, b.frequency);
+    println!("│  intens : {:?}  │  intens : {:?} │", a.intensity, b.intensity);
     println!("└─────────────────────────────────┴──────────────────────────┘");
     println!();
 }
@@ -550,30 +562,25 @@ fn print_status_header() {
 fn print_status_line(la: f32, sa: u8, lb: f32, sb: u8) {
     let bar_a = power_bar(la, 20);
     let bar_b = power_bar(lb, 20);
-    println!(
-        "{:.3}   {}  {:>3}     {:.3}   {}  {:>3}",
-        la, bar_a, sa, lb, bar_b, sb
-    );
+    println!("{:.3}   {}  {:>3}     {:.3}   {}  {:>3}", la, bar_a, sa, lb, bar_b, sb);
 }
 
 async fn print_full_status(status: &dglab::cli::engine::CliStatus) {
     let a = &status.channel_a;
     let b = &status.channel_b;
-    let dev_str = if status.device_connected { "connected" } else { "searching..." };
+    let dev_str = if status.device_connected {
+        "connected"
+    } else {
+        "searching..."
+    };
     println!();
     println!("┌──────────────────────────────────────────────────────┐");
     println!("│  Device: {dev_str:<44}│");
     println!("├──────────────────────────┬──────────────────────────┤");
     println!("│  Channel A               │  Channel B               │");
     println!("├──────────────────────────┼──────────────────────────┤");
-    println!(
-        "│  level    : {:<13.3}│  level    : {:<13.3}│",
-        a.raw_level, b.raw_level
-    );
-    println!(
-        "│  strength : {:<13}│  strength : {:<13}│",
-        a.strength, b.strength
-    );
+    println!("│  level    : {:<13.3}│  level    : {:<13.3}│", a.raw_level, b.raw_level);
+    println!("│  strength : {:<13}│  strength : {:<13}│", a.strength, b.strength);
     println!("│  active zones:           │  active zones:           │");
 
     let max_zones = a.active_zones.len().max(b.active_zones.len()).max(1);

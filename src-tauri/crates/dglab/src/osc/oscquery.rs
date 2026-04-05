@@ -46,7 +46,6 @@ struct MdnsCandidate {
     http_addr: SocketAddr,
 }
 
-
 // VrchatOscQuery
 /// Discovers VRChat over mDNS + OSCQuery and fetches avatar parameter trees.
 pub struct VrchatOscQuery {
@@ -106,10 +105,7 @@ impl VrchatOscQuery {
             .await
             .map_err(|e| DGLabError::OscError(e.to_string()))?;
 
-        let info: HostInfo = resp
-            .json()
-            .await
-            .map_err(|e| DGLabError::OscError(e.to_string()))?;
+        let info: HostInfo = resp.json().await.map_err(|e| DGLabError::OscError(e.to_string()))?;
 
         if !info.name.starts_with("VRChat-Client-") {
             return Ok(None);
@@ -138,10 +134,7 @@ impl VrchatOscQuery {
             .await
             .map_err(|e| DGLabError::OscError(e.to_string()))?;
 
-        let node: OscQueryNode = resp
-            .json()
-            .await
-            .map_err(|e| DGLabError::OscError(e.to_string()))?;
+        let node: OscQueryNode = resp.json().await.map_err(|e| DGLabError::OscError(e.to_string()))?;
 
         let mut params = Vec::new();
         collect_params(&node, &mut params);
@@ -181,9 +174,7 @@ fn try_scan_mdns(out: &mut Vec<MdnsCandidate>) -> std::result::Result<(), String
     use mdns_sd::{ServiceDaemon, ServiceEvent};
 
     let mdns = ServiceDaemon::new().map_err(|e| e.to_string())?;
-    let receiver = mdns
-        .browse("_oscjson._tcp.local.")
-        .map_err(|e| e.to_string())?;
+    let receiver = mdns.browse("_oscjson._tcp.local.").map_err(|e| e.to_string())?;
 
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
 

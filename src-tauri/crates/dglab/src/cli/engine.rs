@@ -119,18 +119,13 @@ impl CliEngine {
         compute_status(&cfg, &levels, connected)
     }
 
-    
     pub async fn is_device_connected(&self) -> bool {
         self.state.device_wave.lock().await.is_some()
     }
 
     pub async fn connect_device(&self, device: &CoyoteDevice) {
         let cfg = self.state.config.read().await;
-        let bf = WaveformBF::new(
-            cfg.channel_a.limits.max,
-            cfg.channel_b.limits.max,
-            0, 0, 0, 0,
-        );
+        let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
         drop(cfg);
 
         match device.set_wave_bf(&bf).await {
@@ -152,11 +147,7 @@ impl CliEngine {
 
     pub async fn sync_hardware_limits(&self, device: &CoyoteDevice) -> crate::error::Result<()> {
         let cfg = self.state.config.read().await;
-        let bf = WaveformBF::new(
-            cfg.channel_a.limits.max,
-            cfg.channel_b.limits.max,
-            0, 0, 0, 0,
-        );
+        let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
         drop(cfg);
         device.set_wave_bf(&bf).await?;
         Ok(())
@@ -243,10 +234,7 @@ fn build_wave(status: &CliStatus, cfg: &CliConfig) -> WaveformV3 {
     }
 }
 
-fn compute_channel_status(
-    channel: &ChannelConfig,
-    all_levels: &HashMap<ZoneId, f32>,
-) -> ChannelStatus {
+fn compute_channel_status(channel: &ChannelConfig, all_levels: &HashMap<ZoneId, f32>) -> ChannelStatus {
     let mut active_zones: Vec<(ZoneId, f32)> = Vec::new();
     let mut zone_levels: Vec<f32> = Vec::new();
     let mut seen: std::collections::HashSet<ZoneId> = std::collections::HashSet::new();
@@ -272,14 +260,14 @@ fn compute_channel_status(
 
     let raw_level = channel.aggregate(&zone_levels);
     let strength = channel.limits.scale(raw_level);
-    ChannelStatus { raw_level, strength, active_zones }
+    ChannelStatus {
+        raw_level,
+        strength,
+        active_zones,
+    }
 }
 
-fn compute_status(
-    cfg: &CliConfig,
-    levels: &HashMap<ZoneId, f32>,
-    device_connected: bool,
-) -> CliStatus {
+fn compute_status(cfg: &CliConfig, levels: &HashMap<ZoneId, f32>, device_connected: bool) -> CliStatus {
     CliStatus {
         channel_a: compute_channel_status(&cfg.channel_a, levels),
         channel_b: compute_channel_status(&cfg.channel_b, levels),

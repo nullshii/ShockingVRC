@@ -267,7 +267,7 @@ fn extract_osc_value(args: &[OscType]) -> Option<OscValue> {
 fn parse_sps_param(parts: &[&str]) -> Option<(ZoneType, String, String, bool)> {
     match parts {
         // DGB: flat zone — value IS the level
-        ["DGB", name] => Some((ZoneType::Dgb, name.to_string(), "Value".to_string(), false)),
+        ["DGB", name] => Some((ZoneType::DGB, name.to_string(), "Value".to_string(), false)),
 
         // OGB / TPS_Internal
         [prefix, type_str, id, contact @ ..]

@@ -128,11 +128,12 @@ impl GameDevice {
     /// Compute stimulation level in [0.0, 1.0] from all active contacts.
     pub fn compute_level(&self) -> f32 {
         match self.zone_type {
+            ZoneType::Any => todo!(),
             ZoneType::Pen => self.compute_pen_level(),
             ZoneType::Orf => self.compute_orf_level(),
             ZoneType::Touch => self.compute_touch_level(),
             // DGB: the OSC value IS the level — no contact hierarchy
-            ZoneType::Dgb => self.get_float("Value").clamp(0.0, 1.0),
+            ZoneType::DGB => self.get_float("Value").clamp(0.0, 1.0),
         }
     }
 

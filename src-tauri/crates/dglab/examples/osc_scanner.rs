@@ -162,7 +162,7 @@ fn print_live_event(ev: &ZoneEvent) {
         ZoneType::Pen => "PEN  ",
         ZoneType::Orf => "ORF  ",
         ZoneType::Touch => "TOUCH",
-        ZoneType::Dgb => "DGB  ",
+        ZoneType::DGB => "DGB  ",
     };
     let tps = if ev.is_tps { "[TPS]" } else { "     " };
     let bar = level_bar(ev.level, 20);
@@ -175,7 +175,7 @@ fn zone_type_str(t: &ZoneType) -> &'static str {
         ZoneType::Pen => "Pen",
         ZoneType::Orf => "Orf",
         ZoneType::Touch => "Touch",
-        ZoneType::Dgb => "DGB",
+        ZoneType::DGB => "DGB",
     }
 }
 

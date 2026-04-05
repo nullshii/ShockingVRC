@@ -1,4 +1,6 @@
-use std::fmt;
+use std::{fmt, str::FromStr};
+
+use serde::{Deserialize, Serialize};
 
 /// A value received from an OSC message argument.
 #[derive(Debug, Clone)]
@@ -35,8 +37,10 @@ impl OscValue {
 
 /// SPS zone type corresponding to VRChat avatar contact zones.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
 pub enum ZoneType {
+    /// All of them
+    Any,
     /// Plug (penetrating) zone — maps to `vrchat.sps.plug`
     Pen,
     /// Socket (receiving) zone — maps to `vrchat.sps.socket`
@@ -44,16 +48,32 @@ pub enum ZoneType {
     /// Touch-only zone — maps to `vrchat.sps.touch`
     Touch,
     /// DGB zone — flat `DGB/<name>` parameter, value is the level directly.
-    Dgb,
+    DGB,
 }
 
 impl fmt::Display for ZoneType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ZoneType::Any => write!(f, "Any"),
             ZoneType::Pen => write!(f, "Pen"),
             ZoneType::Orf => write!(f, "Orf"),
             ZoneType::Touch => write!(f, "Touch"),
-            ZoneType::Dgb => write!(f, "DGB"),
+            ZoneType::DGB => write!(f, "DGB"),
+        }
+    }
+}
+
+impl FromStr for ZoneType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "any" => Ok(ZoneType::Any),
+            "pen" => Ok(ZoneType::Pen),
+            "orf" => Ok(ZoneType::Orf),
+            "touch" => Ok(ZoneType::Touch),
+            "dgb" => Ok(ZoneType::DGB),
+            _ => Err(format!("'{}' is not a valid ZoneType", s)),
         }
     }
 }
@@ -61,7 +81,7 @@ impl fmt::Display for ZoneType {
 /// Event emitted whenever a zone's computed stimulation level changes.
 #[derive(Debug, Clone)]
 pub struct ZoneEvent {
-    /// Zone type (Pen / Orf / Touch)
+    /// Zone type (Any / Pen / Orf / Touch)
     pub zone_type: ZoneType,
     /// Zone identifier extracted from the parameter path
     pub id: String,

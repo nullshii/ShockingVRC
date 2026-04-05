@@ -1,36 +1,36 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use crate::osc::types::ZoneEvent;
+use crate::{ZoneType, osc::types::ZoneEvent};
 
 /// Identifies an OSC zone by its type (Pen/Orf/Touch/DGB) and name.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ZoneId {
-    pub zone_type: String,
+    pub zone_type: ZoneType,
     pub name: String,
 }
 
 impl ZoneId {
-    pub fn new(zone_type: impl Into<String>, name: impl Into<String>) -> Self {
+    pub fn new(zone_type: ZoneType, name: impl Into<String>) -> Self {
         Self {
-            zone_type: zone_type.into(),
+            zone_type: zone_type,
             name: name.into(),
         }
     }
 
     pub fn from_event(event: &ZoneEvent) -> Self {
         Self {
-            zone_type: event.zone_type.to_string(),
+            zone_type: event.zone_type,
             name: event.id.clone(),
         }
     }
 
     pub fn is_wildcard(&self) -> bool {
-        self.zone_type == "*" || self.name == "*"
+        self.zone_type == ZoneType::Any || self.name == "*"
     }
 
     pub fn matches(&self, other: &ZoneId) -> bool {
-        let type_ok = self.zone_type == "*" || self.zone_type == other.zone_type;
+        let type_ok = self.zone_type == ZoneType::Any || self.zone_type == other.zone_type;
         let name_ok = self.name == "*" || self.name == other.name;
         type_ok && name_ok
     }

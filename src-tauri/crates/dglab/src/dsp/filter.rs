@@ -1,4 +1,3 @@
-
 //TODO : dealta time duration time = time
 pub struct OneEuroFilter {
     min_cutoff: f32,
