@@ -32,7 +32,7 @@ struct EngineState {
     config: RwLock<CliConfig>,
     zone_levels: RwLock<HashMap<ZoneId, f32>>,
     status_tx: broadcast::Sender<CliStatus>,
-    device_wave: Mutex<Option<Arc<Mutex<WaveformV3>>>>,
+    device: Mutex<Option<Arc<CoyoteDevice>>>,
 }
 
 #[derive(Clone)]
@@ -48,7 +48,7 @@ impl CliEngine {
                 config: RwLock::new(config),
                 zone_levels: RwLock::new(HashMap::new()),
                 status_tx,
-                device_wave: Mutex::new(None),
+                device: Mutex::new(None),
             }),
         }
     }
@@ -87,6 +87,7 @@ impl CliEngine {
 
     pub async fn set_limits_a(&self, limits: PowerLimits) {
         self.state.config.write().await.channel_a.limits = limits;
+        self.try_sync_hardware_limits().await;
     }
 
     pub async fn add_zone_b(&self, zone: ZoneId) {
@@ -110,20 +111,21 @@ impl CliEngine {
 
     pub async fn set_limits_b(&self, limits: PowerLimits) {
         self.state.config.write().await.channel_b.limits = limits;
+        self.try_sync_hardware_limits().await;
     }
 
     pub async fn current_status(&self) -> CliStatus {
         let cfg = self.state.config.read().await;
         let levels = self.state.zone_levels.read().await;
-        let connected = self.state.device_wave.lock().await.is_some();
+        let connected = self.state.device.lock().await.is_some();
         compute_status(&cfg, &levels, connected)
     }
 
     pub async fn is_device_connected(&self) -> bool {
-        self.state.device_wave.lock().await.is_some()
+        self.state.device.lock().await.is_some()
     }
 
-    pub async fn connect_device(&self, device: &CoyoteDevice) {
+    pub async fn connect_device(&self, device: Arc<CoyoteDevice>) {
         let cfg = self.state.config.read().await;
         let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
         drop(cfg);
@@ -133,24 +135,34 @@ impl CliEngine {
             Err(e) => warn!("[cli] Failed to send BF limits: {e}"),
         }
 
-        *self.state.device_wave.lock().await = Some(device.wave_now());
+        *self.state.device.lock().await = Some(device);
         info!("[cli] Device attached");
     }
 
     pub async fn disconnect_device(&self) {
-        let mut guard = self.state.device_wave.lock().await;
-        if let Some(wave) = guard.take() {
-            *wave.lock().await = WaveformV3::default();
+        let mut guard = self.state.device.lock().await;
+        if let Some(dev) = guard.take() {
+            *dev.wave_now().lock().await = WaveformV3::default();
         }
         info!("[cli] Device detached");
     }
 
-    pub async fn sync_hardware_limits(&self, device: &CoyoteDevice) -> crate::error::Result<()> {
-        let cfg = self.state.config.read().await;
-        let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
-        drop(cfg);
-        device.set_wave_bf(&bf).await?;
-        Ok(())
+    /// Immediately push current power limits to the connected device (if any).
+    pub async fn sync_hardware_limits(&self) {
+        self.try_sync_hardware_limits().await;
+    }
+
+    async fn try_sync_hardware_limits(&self) {
+        let device_guard = self.state.device.lock().await;
+        if let Some(dev) = device_guard.as_ref() {
+            let cfg = self.state.config.read().await;
+            let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
+            drop(cfg);
+            match dev.set_wave_bf(&bf).await {
+                Ok(_) => info!("[cli] BF limits synced to device"),
+                Err(e) => warn!("[cli] Failed to sync BF limits: {e}"),
+            }
+        }
     }
 
     pub async fn start(&self, scanner: &AvatarScanner) -> CliStopHandle {
@@ -202,11 +214,16 @@ impl CliEngine {
     async fn build_and_push_wave(&self) -> CliStatus {
         let cfg = self.state.config.read().await;
         let levels = self.state.zone_levels.read().await;
-        let device_guard = self.state.device_wave.lock().await;
-        let connected = device_guard.is_some();
+
+        let wave_arc = {
+            let device_guard = self.state.device.lock().await;
+            device_guard.as_ref().map(|d| d.wave_now())
+        };
+
+        let connected = wave_arc.is_some();
         let status = compute_status(&cfg, &levels, connected);
 
-        if let Some(wave_now) = device_guard.as_ref() {
+        if let Some(wave_now) = wave_arc {
             let wave = build_wave(&status, &cfg);
             *wave_now.lock().await = wave;
         }

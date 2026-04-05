@@ -29,6 +29,7 @@
 ///   quit / exit               — stop and exit
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use dglab::cli::{AggregationMode, ChannelConfig, CliConfig, CliEngine, PowerLimits, ZoneId};
@@ -107,7 +108,8 @@ async fn main() {
                     Ok(Some(mut dev)) => {
                         println!("\n[ble] Connected: {} ({})", dev.name(), dev.mac_address());
                         dev.start();
-                        engine_ble.connect_device(&dev).await;
+                        let dev = Arc::new(dev);
+                        engine_ble.connect_device(Arc::clone(&dev)).await;
 
                         // Monitor until device disconnects
                         loop {
@@ -118,7 +120,7 @@ async fn main() {
                                 break;
                             }
                         }
-                        // dev drops here; its tasks are aborted, output loop already stopped
+                        // dev Arc drops here; engine already released its ref in disconnect_device
                     }
                     Ok(None) => {
                         log::debug!("[ble] No device found, retrying in 10 s");
@@ -220,8 +222,8 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
             ["load"] => match load_config(CONFIG_FILE) {
                 Ok(cfg) => {
                     engine.set_config(cfg).await;
+                    engine.sync_hardware_limits().await;
                     println!("[config] Loaded from {CONFIG_FILE}");
-                    println!("[config] Power limits will apply on next device connection.");
                     print_config_summary(&engine.config().await);
                 }
                 Err(e) => println!("[config] Load failed: {e}"),
@@ -352,7 +354,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
             ["lim-a", min_s, max_s] => {
                 if let (Ok(mn), Ok(mx)) = (min_s.parse::<u8>(), max_s.parse::<u8>()) {
                     engine.set_limits_a(PowerLimits::new(mn, mx)).await;
-                    println!("[ch-A] Limits set: {mn}–{mx} (applies on next device connection)");
+                    println!("[ch-A] Limits set: {mn}–{mx}");
                 } else {
                     println!("Usage: lim-a <min> <max>  (0–200)");
                 }
@@ -361,7 +363,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
             ["lim-b", min_s, max_s] => {
                 if let (Ok(mn), Ok(mx)) = (min_s.parse::<u8>(), max_s.parse::<u8>()) {
                     engine.set_limits_b(PowerLimits::new(mn, mx)).await;
-                    println!("[ch-B] Limits set: {mn}–{mx} (applies on next device connection)");
+                    println!("[ch-B] Limits set: {mn}–{mx}");
                 } else {
                     println!("Usage: lim-b <min> <max>  (0–200)");
                 }
