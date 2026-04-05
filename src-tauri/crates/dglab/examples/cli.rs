@@ -13,8 +13,10 @@
 ///   add-all-b [type]          — add all currently detected avatar zones to B
 ///   rm-a   <type> <name>      — remove zone from channel A (* supported)
 ///   rm-b   <type> <name>      — remove zone from channel B
-///   freq-a <v0> <v1> <v2> <v3> — channel A frequency segments (100–240)
-///   freq-b <v0> <v1> <v2> <v3> — channel B frequency segments
+///   freq-a <v0> <v1> <v2> <v3> — channel A frequency segments (raw 10–255)
+///   freq-b <v0> <v1> <v2> <v3> — channel B frequency segments (raw 10–255)
+///   freq-a-hz <h0> <h1> <h2> <h3> — channel A frequency in Hz (1–100) 
+///   freq-b-hz <h0> <h1> <h2> <h3> — channel B frequency in Hz (1–100) 
 ///   int-a  <v0> <v1> <v2> <v3> — channel A intensity segments (0–100)
 ///   int-b  <v0> <v1> <v2> <v3> — channel B intensity segments
 ///   lim-a  <min> <max>        — channel A power limits (0–200)
@@ -33,7 +35,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dglab::cli::{AggregationMode, ChannelConfig, CliConfig, CliEngine, PowerLimits, ZoneId};
-use dglab::{AvatarScanner, CoyoteDevice, ZoneEvent, ZoneType};
+use dglab::{AvatarScanner, CoyoteDevice, ZoneEvent, ZoneType, hz_to_raw, raw_to_hz};
 
 const CONFIG_FILE: &str = "cli_config.json";
 
@@ -333,6 +335,28 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner) {
                 }
             }
 
+            ["freq-a-hz", h0, h1, h2, h3] => {
+                if let Some(f) = parse_freq_4_hz(h0, h1, h2, h3) {
+                    let hz = f.map(raw_to_hz);
+                    engine.set_frequency_a(f).await;
+                    println!("[ch-A] Frequency set: {:.1}Hz {:.1}Hz {:.1}Hz {:.1}Hz (raw {:?})",
+                        hz[0], hz[1], hz[2], hz[3], f);
+                } else {
+                    println!("Usage: freq-a-hz <hz0> <hz1> <hz2> <hz3>  (1–100 Hz each)");
+                }
+            }
+
+            ["freq-b-hz", h0, h1, h2, h3] => {
+                if let Some(f) = parse_freq_4_hz(h0, h1, h2, h3) {
+                    let hz = f.map(raw_to_hz);
+                    engine.set_frequency_b(f).await;
+                    println!("[ch-B] Frequency set: {:.1}Hz {:.1}Hz {:.1}Hz {:.1}Hz (raw {:?})",
+                        hz[0], hz[1], hz[2], hz[3], f);
+                } else {
+                    println!("Usage: freq-b-hz <hz0> <hz1> <hz2> <hz3>  (1–100 Hz each)");
+                }
+            }
+
             ["int-a", v0, v1, v2, v3] => {
                 if let Some(i) = parse_4u8(v0, v1, v2, v3) {
                     engine.set_intensity_a(i).await;
@@ -499,8 +523,10 @@ Zone commands  (type: Orf | Pen | Touch | DGB  |  * = wildcard)
   rm-b   <type> <name|*>      Remove zone/pattern from channel B
 
 Pulse shape
-  freq-a <v0> <v1> <v2> <v3> Channel A frequency segments (100–240)
-  freq-b <v0> <v1> <v2> <v3> Channel B frequency segments
+  freq-a-hz <h0> <h1> <h2> <h3>  Channel A frequency in Hz (1–100) per segment
+  freq-b-hz <h0> <h1> <h2> <h3>  Channel B frequency in Hz (1–100) per segment
+  freq-a <v0> <v1> <v2> <v3> Channel A frequency segments (raw 10–255)
+  freq-b <v0> <v1> <v2> <v3> Channel B frequency segments (raw 10–255)
   int-a  <v0> <v1> <v2> <v3> Channel A intensity segments  (0–100)
   int-b  <v0> <v1> <v2> <v3> Channel B intensity segments
 
@@ -546,7 +572,18 @@ fn print_config_summary(cfg: &CliConfig) {
         "│  limits : {:>3}–{:<3}                 │  limits : {:>3}–{:<3}           │",
         a.limits.min, a.limits.max, b.limits.min, b.limits.max
     );
-    println!("│  freq   : {:?}  │  freq   : {:?} │", a.frequency, b.frequency);
+    let fmt_freq_hz = |f: &[u8; 4]| -> String {
+        f.iter().map(|&r| format!("{:>3.0}Hz", raw_to_hz(r))).collect::<Vec<_>>().join(" ")
+    };
+    println!(
+        "│  freq   : {:?}  │  freq   : {:?} │",
+        a.frequency, b.frequency
+    );
+    println!(
+        "│    (Hz) : {:<21}│    (Hz) : {:<13}│",
+        fmt_freq_hz(&a.frequency),
+        fmt_freq_hz(&b.frequency)
+    );
     println!("│  intens : {:?}  │  intens : {:?} │", a.intensity, b.intensity);
     println!("└─────────────────────────────────┴──────────────────────────┘");
     println!();
@@ -655,6 +692,23 @@ fn parse_freq_4(v0: &str, v1: &str, v2: &str, v3: &str) -> Option<[u8; 4]> {
     let c: u8 = v2.parse().ok()?;
     let d: u8 = v3.parse().ok()?;
     Some([a, b, c, d])
+}
+
+fn parse_hz_single(s: &str) -> Option<u8> {
+    let hz: f32 = s.parse().ok()?;
+    if !(1.0..=100.0).contains(&hz) {
+        return None;
+    }
+    Some(hz_to_raw(hz))
+}
+
+fn parse_freq_4_hz(v0: &str, v1: &str, v2: &str, v3: &str) -> Option<[u8; 4]> {
+    Some([
+        parse_hz_single(v0)?,
+        parse_hz_single(v1)?,
+        parse_hz_single(v2)?,
+        parse_hz_single(v3)?,
+    ])
 }
 
 fn parse_4u8(v0: &str, v1: &str, v2: &str, v3: &str) -> Option<[u8; 4]> {

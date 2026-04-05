@@ -197,3 +197,24 @@ pub fn map_freq_to_ms(value: u8) -> f64 {
 pub fn map_ms_to_freq(ms: f64) -> u8 {
     (ms * (7.0 / 45.0) + 84.4444) as u8
 }
+
+pub fn raw_to_hz(raw: u8) -> f32 {
+    const INPUT_START: f32 = 10.0;
+    const INPUT_END: f32 = 255.0;
+    const OUTPUT_START: f32 = 100.0;
+    const OUTPUT_END: f32 = 1.0;
+    OUTPUT_START
+        + (OUTPUT_END - OUTPUT_START) / (INPUT_END - INPUT_START) * (raw as f32 - INPUT_START)
+}
+
+
+pub fn hz_to_raw(hz: f32) -> u8 {
+    const INPUT_START: f32 = 100.0;
+    const INPUT_END: f32 = 1.0;
+    const OUTPUT_START: f32 = 10.0;
+    const OUTPUT_END: f32 = 255.0;
+    let hz = hz.clamp(INPUT_END, INPUT_START);
+    let raw =
+        OUTPUT_START + (OUTPUT_END - OUTPUT_START) / (INPUT_END - INPUT_START) * (hz - INPUT_START);
+    raw.round() as u8
+}
