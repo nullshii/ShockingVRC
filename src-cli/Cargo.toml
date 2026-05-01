@@ -1,0 +1,26 @@
+[package]
+name = "shocking_vrc_cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+
+[dependencies]
+shocking_vrc_core.workspace = true
+
+btleplug = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tokio-stream = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+flate2 = { workspace = true }
+base64 = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+rand = { workspace = true }
+rosc = { workspace = true }
+mdns-sd = { workspace = true }
+reqwest = { workspace = true }

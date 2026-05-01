@@ -1,4 +1,4 @@
-/// Usage:
+/// App Usage:
 ///   cargo run --release --example Cli
 ///   cargo run --release --example Cli -- --port 9001 --scan-timeout 10
 ///   cargo run --release --example Cli -- --help
@@ -35,16 +35,16 @@
 ///   load                      — load config from cli_config.json
 ///   quit / exit               — stop and exit
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use std::str::FromStr;
 
-use dglab::cli::{
+use shocking_vrc_core::cli::{
     AggregationMode, ChannelConfig, CliConfig, CliEngine, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry,
     ZoneId,
 };
-use dglab::{AvatarScanner, CoyoteDevice, ZoneEvent, ZoneType, hz_to_raw, raw_to_hz};
+use shocking_vrc_core::{AvatarScanner, CoyoteDevice, ZoneEvent, ZoneType, hz_to_raw, raw_to_hz};
 
 const CONFIG_FILE: &str = "cli_config.json";
 
@@ -664,8 +664,8 @@ fn default_config() -> CliConfig {
     CliConfig {
         channel_a: ChannelConfig {
             zones: vec![
-                ZoneEntry::new(ZoneId::new(dglab::ZoneType::Orf, "Pussy"), ContactMode::Depth),
-                ZoneEntry::new(ZoneId::new(dglab::ZoneType::Orf, "Anal"), ContactMode::Depth),
+                ZoneEntry::new(ZoneId::new(shocking_vrc_core::ZoneType::Orf, "Pussy"), ContactMode::Depth),
+                ZoneEntry::new(ZoneId::new(shocking_vrc_core::ZoneType::Orf, "Anal"), ContactMode::Depth),
             ],
             frequency: [30, 200, 30, 200],
             intensity: [80, 80, 80, 80],
@@ -674,7 +674,7 @@ fn default_config() -> CliConfig {
         },
         channel_b: ChannelConfig {
             zones: vec![ZoneEntry::new(
-                ZoneId::new(dglab::ZoneType::Pen, "Cock"),
+                ZoneId::new(shocking_vrc_core::ZoneType::Pen, "Cock"),
                 ContactMode::Depth,
             )],
             frequency: [60, 120, 60, 120],
@@ -836,7 +836,7 @@ fn print_status_line(la: f32, sa: u8, lb: f32, sb: u8) {
     println!("{:.3}   {}  {:>3}     {:.3}   {}  {:>3}", la, bar_a, sa, lb, bar_b, sb);
 }
 
-async fn print_full_status(status: &dglab::cli::engine::CliStatus) {
+async fn print_full_status(status: &shocking_vrc_core::cli::engine::CliStatus) {
     let a = &status.channel_a;
     let b = &status.channel_b;
     let dev_str = if status.device_connected {
