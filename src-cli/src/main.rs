@@ -35,10 +35,10 @@
 ///   load                      — load config from cli_config.json
 ///   quit / exit               — stop and exit
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use std::str::FromStr;
 
 use shocking_vrc_core::cli::{
     AggregationMode, ChannelConfig, CliConfig, CliEngine, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry,
