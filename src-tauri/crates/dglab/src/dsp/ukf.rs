@@ -289,6 +289,8 @@ pub struct UkfState {
 
 #[cfg(test)]
 mod tests {
+    use rand::RngExt;
+
     use super::*;
 
     #[test]
@@ -310,7 +312,6 @@ mod tests {
 
     #[test]
     fn smooths_noisy_position() {
-        use rand::Rng;
         let mut rng = rand::rng();
         let mut ukf = UnscentedKalman::new(UkfParams {
             q: 1.0,
