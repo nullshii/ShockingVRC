@@ -6,3 +6,5 @@ App is still in development, dev builds are not available yet but you can build 
 cargo build --release --all
 ```
 command
+
+`Note: at the moment gui build is broken.`
