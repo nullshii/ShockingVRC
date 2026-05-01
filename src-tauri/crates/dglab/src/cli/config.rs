@@ -51,7 +51,6 @@ impl From<UkfParams> for UkfConfig {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ContactMode {
     #[default]
@@ -168,7 +167,6 @@ pub enum AggregationMode {
     Average,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ZoneEntry {
     #[serde(flatten)]
@@ -183,7 +181,10 @@ impl ZoneEntry {
     }
 
     pub fn with_default_mode(id: ZoneId) -> Self {
-        Self { id, mode: ContactMode::default() }
+        Self {
+            id,
+            mode: ContactMode::default(),
+        }
     }
 }
 

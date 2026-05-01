@@ -5,7 +5,7 @@ members = [".", "crates/dglab"]
 name = "shocking_vrc"
 version = "0.1.0"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["nullshii", "AmigoFPS"]
 edition = "2021"
 
 [lib]

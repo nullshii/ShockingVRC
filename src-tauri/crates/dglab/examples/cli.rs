@@ -19,8 +19,8 @@
 ///   ukf [q r [alpha beta kappa] | reset] — per-contact UKF tuning (process/measurement noise)
 ///   freq-a <v0> <v1> <v2> <v3> — channel A frequency segments (raw 10–255)
 ///   freq-b <v0> <v1> <v2> <v3> — channel B frequency segments (raw 10–255)
-///   freq-a-hz <h0> <h1> <h2> <h3> — channel A frequency in Hz (1–100) 
-///   freq-b-hz <h0> <h1> <h2> <h3> — channel B frequency in Hz (1–100) 
+///   freq-a-hz <h0> <h1> <h2> <h3> — channel A frequency in Hz (1–100)
+///   freq-b-hz <h0> <h1> <h2> <h3> — channel B frequency in Hz (1–100)
 ///   int-a  <v0> <v1> <v2> <v3> — channel A intensity segments (0–100)
 ///   int-b  <v0> <v1> <v2> <v3> — channel B intensity segments
 ///   lim-a  <min> <max>        — channel A power limits (0–200)
@@ -41,8 +41,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use dglab::cli::{
-    AggregationMode, ChannelConfig, CliConfig, CliEngine, ContactMode, MotionNorms, PowerLimits,
-    UkfConfig, ZoneEntry, ZoneId,
+    AggregationMode, ChannelConfig, CliConfig, CliEngine, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry,
+    ZoneId,
 };
 use dglab::{AvatarScanner, CoyoteDevice, ZoneEvent, ZoneType, hz_to_raw, raw_to_hz};
 
@@ -210,16 +210,11 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                 let zones = scanner.zones().await;
                 let cfg = engine.config().await;
                 println!("\n[zones] {} zone(s) seen on avatar:", zones.len());
-                println!(
-                    "  {:<5}  {:<30}  {:<8}  {:<8}  {}",
-                    "Type", "Name", "Level", "Channel", "Mode"
-                );
+                println!("  {:<5}  {:<30}  {:<8}  {:<8}  {}", "Type", "Name", "Level", "Channel", "Mode");
                 println!("  {}", "─".repeat(72));
                 for z in &zones {
                     let zone_id = ZoneId::new(z.zone_type, &z.id);
-                    let (ch, mode_str) = if let Some(e) =
-                        cfg.channel_a.zones.iter().find(|e| e.id.matches(&zone_id))
-                    {
+                    let (ch, mode_str) = if let Some(e) = cfg.channel_a.zones.iter().find(|e| e.id.matches(&zone_id)) {
                         ("A", e.mode.to_string())
                     } else if let Some(e) = cfg.channel_b.zones.iter().find(|e| e.id.matches(&zone_id)) {
                         ("B", e.mode.to_string())
@@ -394,8 +389,10 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                 if let Some(f) = parse_freq_4_hz(h0, h1, h2, h3) {
                     let hz = f.map(raw_to_hz);
                     engine.set_frequency_a(f).await;
-                    println!("[ch-A] Frequency set: {:.1}Hz {:.1}Hz {:.1}Hz {:.1}Hz (raw {:?})",
-                        hz[0], hz[1], hz[2], hz[3], f);
+                    println!(
+                        "[ch-A] Frequency set: {:.1}Hz {:.1}Hz {:.1}Hz {:.1}Hz (raw {:?})",
+                        hz[0], hz[1], hz[2], hz[3], f
+                    );
                 } else {
                     println!("Usage: freq-a-hz <hz0> <hz1> <hz2> <hz3>  (1–100 Hz each)");
                 }
@@ -405,8 +402,10 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                 if let Some(f) = parse_freq_4_hz(h0, h1, h2, h3) {
                     let hz = f.map(raw_to_hz);
                     engine.set_frequency_b(f).await;
-                    println!("[ch-B] Frequency set: {:.1}Hz {:.1}Hz {:.1}Hz {:.1}Hz (raw {:?})",
-                        hz[0], hz[1], hz[2], hz[3], f);
+                    println!(
+                        "[ch-B] Frequency set: {:.1}Hz {:.1}Hz {:.1}Hz {:.1}Hz (raw {:?})",
+                        hz[0], hz[1], hz[2], hz[3], f
+                    );
                 } else {
                     println!("Usage: freq-b-hz <hz0> <hz1> <hz2> <hz3>  (1–100 Hz each)");
                 }
@@ -509,9 +508,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                                 kappa: kv,
                             })
                             .await;
-                        println!(
-                            "[ukf] q={qv:.4}  r={rv:.4}  alpha={av:.3}  beta={bv:.3}  kappa={kv:.3}"
-                        );
+                        println!("[ukf] q={qv:.4}  r={rv:.4}  alpha={av:.3}  beta={bv:.3}  kappa={kv:.3}");
                     }
                     _ => println!(
                         "Usage: ukf <q> <r> <alpha> <beta> <kappa>  (q,r,alpha > 0; typical alpha 0.001..1, beta 2, kappa 0)"
@@ -521,10 +518,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
 
             ["norms"] => {
                 let n = engine.norms().await;
-                println!(
-                    "[norms] speed={:.3}  acc={:.3}  recoil={:.3} ",
-                    n.speed, n.acc, n.recoil
-                );
+                println!("[norms] speed={:.3}  acc={:.3}  recoil={:.3} ", n.speed, n.acc, n.recoil);
             }
             ["norms", "reset"] | ["norms", "default"] | ["norms", "defaults"] => {
                 engine.set_norms(MotionNorms::default()).await;
@@ -534,25 +528,19 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                     n.speed, n.acc, n.recoil
                 );
             }
-            ["norms", speed, acc, recoil] => {
-                match (
-                    speed.parse::<f32>(),
-                    acc.parse::<f32>(),
-                    recoil.parse::<f32>(),
-                ) {
-                    (Ok(sv), Ok(av), Ok(rv)) if sv > 0.0 && av > 0.0 && rv > 0.0 => {
-                        engine
-                            .set_norms(MotionNorms {
-                                speed: sv,
-                                acc: av,
-                                recoil: rv,
-                            })
-                            .await;
-                        println!("[norms] speed={sv:.3}  acc={av:.3}  recoil={rv:.3}");
-                    }
-                    _ => println!("Usage: norms <speed> <acc> <recoil>  (all positive floats)"),
+            ["norms", speed, acc, recoil] => match (speed.parse::<f32>(), acc.parse::<f32>(), recoil.parse::<f32>()) {
+                (Ok(sv), Ok(av), Ok(rv)) if sv > 0.0 && av > 0.0 && rv > 0.0 => {
+                    engine
+                        .set_norms(MotionNorms {
+                            speed: sv,
+                            acc: av,
+                            recoil: rv,
+                        })
+                        .await;
+                    println!("[norms] speed={sv:.3}  acc={av:.3}  recoil={rv:.3}");
                 }
-            }
+                _ => println!("Usage: norms <speed> <acc> <recoil>  (all positive floats)"),
+            },
             ["norm-speed", v] => match v.parse::<f32>() {
                 Ok(val) if val > 0.0 => {
                     let mut n = engine.norms().await;
@@ -582,7 +570,11 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
             },
 
             ["mon"] | ["monitor"] => {
-                let state = if monitor_enabled.load(Ordering::Relaxed) { "on" } else { "off" };
+                let state = if monitor_enabled.load(Ordering::Relaxed) {
+                    "on"
+                } else {
+                    "off"
+                };
                 println!("[mon] Live power stream is {state}. Use 'mon on' / 'mon off' to toggle.");
             }
             ["mon", arg] | ["monitor", arg] => match parse_on_off(arg) {
@@ -661,9 +653,7 @@ fn parse_zone_id(ztype: &str, name: &str) -> ZoneId {
 async fn report_zone_added(channel: &str, id: &ZoneId, mode: ContactMode, scanner: &AvatarScanner) {
     if id.is_wildcard() {
         let matched = count_wildcard_matches(id, &scanner.zones().await);
-        println!(
-            "[ch-{channel}] Wildcard added: {id} [{mode}]  (matches {matched} zone(s) currently on avatar)"
-        );
+        println!("[ch-{channel}] Wildcard added: {id} [{mode}]  (matches {matched} zone(s) currently on avatar)");
     } else {
         println!("[ch-{channel}] Zone added: {id} [{mode}]");
     }
@@ -804,12 +794,12 @@ fn print_config_summary(cfg: &CliConfig) {
         a.limits.min, a.limits.max, b.limits.min, b.limits.max
     );
     let fmt_freq_hz = |f: &[u8; 4]| -> String {
-        f.iter().map(|&r| format!("{:>3.0}Hz", raw_to_hz(r))).collect::<Vec<_>>().join(" ")
+        f.iter()
+            .map(|&r| format!("{:>3.0}Hz", raw_to_hz(r)))
+            .collect::<Vec<_>>()
+            .join(" ")
     };
-    println!(
-        "│  freq   : {:?}  │  freq   : {:?} │",
-        a.frequency, b.frequency
-    );
+    println!("│  freq   : {:?}  │  freq   : {:?} │", a.frequency, b.frequency);
     println!(
         "│    (Hz) : {:<21}│    (Hz) : {:<13}│",
         fmt_freq_hz(&a.frequency),

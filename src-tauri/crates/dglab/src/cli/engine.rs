@@ -11,9 +11,7 @@ use crate::osc::types::ZoneEvent;
 use crate::protocol::waveform::WaveformV3;
 use crate::protocol::waveform_bf::WaveformBF;
 
-use super::config::{
-    ChannelConfig, CliConfig, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId,
-};
+use super::config::{ChannelConfig, CliConfig, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
 
 const ZONE_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
 const WATCHDOG_INTERVAL: Duration = Duration::from_millis(50);
@@ -33,7 +31,6 @@ pub struct CliStatus {
     pub channel_b: ChannelStatus,
     pub device_connected: bool,
 }
-
 
 #[derive(Debug, Clone, Copy)]
 struct ZoneKinematics {
@@ -130,7 +127,13 @@ impl CliEngine {
     }
 
     pub async fn remove_zone_a(&self, zone: &ZoneId) {
-        self.state.config.write().await.channel_a.zones.retain(|e| &e.id != zone);
+        self.state
+            .config
+            .write()
+            .await
+            .channel_a
+            .zones
+            .retain(|e| &e.id != zone);
     }
 
     pub async fn set_zone_mode_a(&self, zone: &ZoneId, mode: ContactMode) -> bool {
@@ -170,7 +173,13 @@ impl CliEngine {
     }
 
     pub async fn remove_zone_b(&self, zone: &ZoneId) {
-        self.state.config.write().await.channel_b.zones.retain(|e| &e.id != zone);
+        self.state
+            .config
+            .write()
+            .await
+            .channel_b
+            .zones
+            .retain(|e| &e.id != zone);
     }
 
     pub async fn set_zone_mode_b(&self, zone: &ZoneId, mode: ContactMode) -> bool {
@@ -361,12 +370,7 @@ fn build_wave(status: &CliStatus, cfg: &CliConfig) -> WaveformV3 {
     }
 }
 
-fn project_with_freshness(
-    k: &ZoneKinematics,
-    mode: ContactMode,
-    norms: &MotionNorms,
-    now: Instant,
-) -> f32 {
+fn project_with_freshness(k: &ZoneKinematics, mode: ContactMode, norms: &MotionNorms, now: Instant) -> f32 {
     if k.is_stale(now) {
         0.0
     } else {

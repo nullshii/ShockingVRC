@@ -189,9 +189,9 @@ impl AvatarScanner {
         let key = (zone_type.clone(), id.clone());
         let ukf_params = *self.state.ukf_params.read().await;
         let mut devices = self.state.devices.write().await;
-        let device = devices.entry(key).or_insert_with(|| {
-            GameDevice::with_ukf_params(zone_type, id, is_tps, ukf_params)
-        });
+        let device = devices
+            .entry(key)
+            .or_insert_with(|| GameDevice::with_ukf_params(zone_type, id, is_tps, ukf_params));
         device.set_value(&contact, value);
         let event = device.to_event();
         drop(devices);

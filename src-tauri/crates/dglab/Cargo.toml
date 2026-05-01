@@ -2,7 +2,7 @@
 name = "dglab"
 version = "0.0.5"
 edition = "2024"
-authors = ["Amigo_FPS"]
+authors = ["nullshii", "Amigo_FPS"]
 description = "OSC control avatar parameters"
 license = "MIT"
 

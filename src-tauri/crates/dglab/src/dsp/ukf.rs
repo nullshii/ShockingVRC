@@ -41,7 +41,6 @@ impl Default for UkfParams {
     }
 }
 
-
 type Mat4 = [[f32; N]; N];
 type Vec4 = [f32; N];
 
@@ -313,7 +312,11 @@ mod tests {
     fn smooths_noisy_position() {
         use rand::Rng;
         let mut rng = rand::rng();
-        let mut ukf = UnscentedKalman::new(UkfParams { q: 1.0, r: 0.01, ..Default::default() });
+        let mut ukf = UnscentedKalman::new(UkfParams {
+            q: 1.0,
+            r: 0.01,
+            ..Default::default()
+        });
         let mut t = 0.0f32;
         let mut max_err = 0.0f32;
         for _ in 0..400 {
