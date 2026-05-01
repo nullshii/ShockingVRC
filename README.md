@@ -1,7 +1,8 @@
-# Tauri + Vue + TypeScript
+# Shocking VRC
+Bridge gap with DG-LAB and VRC
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+App is still in development, dev builds are not available yet but you can build yourself by grabbing latest source code from [back branch](https://github.com/nullshii/ShockingVRC/tree/back) and build using
+```sh
+$env:CARGO_TARGET_DIR = "D:\Dev\rust\ShockingVRC\build"; cargo build --release --example cli 
+```
+command
