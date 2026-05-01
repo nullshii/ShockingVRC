@@ -1,7 +1,89 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 
+use crate::dsp::UkfParams;
 use crate::{ZoneType, osc::types::ZoneEvent};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct UkfConfig {
+    pub q: f32,
+    pub r: f32,
+    pub alpha: f32,
+    pub beta: f32,
+    pub kappa: f32,
+}
+
+impl Default for UkfConfig {
+    fn default() -> Self {
+        let p = UkfParams::default();
+        Self {
+            q: p.q,
+            r: p.r,
+            alpha: p.alpha,
+            beta: p.beta,
+            kappa: p.kappa,
+        }
+    }
+}
+
+impl From<UkfConfig> for UkfParams {
+    fn from(c: UkfConfig) -> Self {
+        UkfParams {
+            q: c.q,
+            r: c.r,
+            alpha: c.alpha,
+            beta: c.beta,
+            kappa: c.kappa,
+        }
+    }
+}
+
+impl From<UkfParams> for UkfConfig {
+    fn from(p: UkfParams) -> Self {
+        UkfConfig {
+            q: p.q,
+            r: p.r,
+            alpha: p.alpha,
+            beta: p.beta,
+            kappa: p.kappa,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+pub enum ContactMode {
+    #[default]
+    Depth,
+    Speed,
+    Acc,
+    Recoil,
+}
+
+impl fmt::Display for ContactMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ContactMode::Depth => write!(f, "depth"),
+            ContactMode::Speed => write!(f, "speed"),
+            ContactMode::Acc => write!(f, "acc"),
+            ContactMode::Recoil => write!(f, "recoil"),
+        }
+    }
+}
+
+impl FromStr for ContactMode {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "depth" | "d" | "raw" | "level" => Ok(ContactMode::Depth),
+            "speed" | "s" | "vel" | "velocity" => Ok(ContactMode::Speed),
+            "acc" | "a" | "accel" | "acceleration" => Ok(ContactMode::Acc),
+            "recoil" | "r" | "pullout" | "retract" => Ok(ContactMode::Recoil),
+            _ => Err(format!("'{s}' is not a valid ContactMode (depth|speed|acc|recoil)")),
+        }
+    }
+}
 
 /// Identifies an OSC zone by its type (Pen/Orf/Touch/DGB) and name.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -86,10 +168,35 @@ pub enum AggregationMode {
     Average,
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ZoneEntry {
+    #[serde(flatten)]
+    pub id: ZoneId,
+    #[serde(default)]
+    pub mode: ContactMode,
+}
+
+impl ZoneEntry {
+    pub fn new(id: ZoneId, mode: ContactMode) -> Self {
+        Self { id, mode }
+    }
+
+    pub fn with_default_mode(id: ZoneId) -> Self {
+        Self { id, mode: ContactMode::default() }
+    }
+}
+
+impl fmt::Display for ZoneEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}[{}]", self.id, self.mode)
+    }
+}
+
 /// Configuration for a single output channel (A or B).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelConfig {
-    pub zones: Vec<ZoneId>,
+    pub zones: Vec<ZoneEntry>,
     pub frequency: [u8; 4],
     pub intensity: [u8; 4],
     pub limits: PowerLimits,
@@ -125,11 +232,42 @@ impl ChannelConfig {
     }
 }
 
-/// Top-level CLI configuration containing both output channels.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct MotionNorms {
+    pub speed: f32,
+    pub acc: f32,
+    pub recoil: f32,
+}
+
+impl Default for MotionNorms {
+    fn default() -> Self {
+        Self {
+            speed: 5.0,
+            acc: 30.0,
+            recoil: 100.0,
+        }
+    }
+}
+
+impl MotionNorms {
+    pub fn sanitised(self) -> Self {
+        const MIN: f32 = 1e-3;
+        Self {
+            speed: self.speed.max(MIN),
+            acc: self.acc.max(MIN),
+            recoil: self.recoil.max(MIN),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliConfig {
     pub channel_a: ChannelConfig,
     pub channel_b: ChannelConfig,
+    #[serde(default)]
+    pub ukf: UkfConfig,
+    #[serde(default)]
+    pub norms: MotionNorms,
 }
 
 impl Default for CliConfig {
@@ -137,6 +275,8 @@ impl Default for CliConfig {
         Self {
             channel_a: ChannelConfig::default(),
             channel_b: ChannelConfig::default(),
+            ukf: UkfConfig::default(),
+            norms: MotionNorms::default(),
         }
     }
 }

@@ -79,6 +79,7 @@ impl FromStr for ZoneType {
 }
 
 /// Event emitted whenever a zone's computed stimulation level changes.
+
 #[derive(Debug, Clone)]
 pub struct ZoneEvent {
     /// Zone type (Any / Pen / Orf / Touch)
@@ -89,4 +90,7 @@ pub struct ZoneEvent {
     pub is_tps: bool,
     /// Normalised stimulation level in [0.0, 1.0]
     pub level: f32,
+    pub velocity: f32,
+    pub acceleration: f32,
+    pub recoil: f32,
 }

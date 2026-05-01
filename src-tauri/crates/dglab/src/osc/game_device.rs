@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::time::Instant;
+
+use crate::dsp::{UkfParams, UkfState, UnscentedKalman};
 
 use super::types::{OscValue, ZoneEvent, ZoneType};
 
 /// Tracks all contact parameter values for one SPS zone and derives a single
-/// output level.
 pub struct GameDevice {
     pub zone_type: ZoneType,
     pub id: String,
@@ -13,10 +15,17 @@ pub struct GameDevice {
     pen_others_len: f32,
     /// Measured span of *self's* penetrator (Tip − Root), saved while Tip < 1.
     pen_self_len: f32,
+    ukf: UnscentedKalman,
+    epoch: Instant,
+    last_state: UkfState,
 }
 
 impl GameDevice {
     pub fn new(zone_type: ZoneType, id: String, is_tps: bool) -> Self {
+        Self::with_ukf_params(zone_type, id, is_tps, UkfParams::default())
+    }
+
+    pub fn with_ukf_params(zone_type: ZoneType, id: String, is_tps: bool, params: UkfParams) -> Self {
         Self {
             zone_type,
             id,
@@ -24,14 +33,32 @@ impl GameDevice {
             values: HashMap::new(),
             pen_others_len: 0.0,
             pen_self_len: 0.0,
+            ukf: UnscentedKalman::new(params),
+            epoch: Instant::now(),
+            last_state: UkfState::default(),
         }
     }
 
+    pub fn set_ukf_params(&mut self, params: UkfParams) {
+        self.ukf.set_params(params);
+    }
+
+    pub fn reset_filter(&mut self) {
+        self.ukf.reset();
+        self.last_state = UkfState::default();
+    }
+
     /// Store a contact parameter value and refresh the saved penetrator length
-    /// if a Root/Tip probe was updated.
     pub fn set_value(&mut self, contact: &str, value: OscValue) {
         self.values.insert(contact.to_string(), value);
         self.refresh_pen_len(contact);
+        let level = self.compute_level();
+        let t = self.epoch.elapsed().as_secs_f32();
+        self.last_state = self.ukf.update(t, level);
+    }
+
+    pub fn ukf_state(&self) -> UkfState {
+        self.last_state
     }
 
     // Penetrator length tracking
@@ -210,11 +237,16 @@ impl GameDevice {
 
     /// Snapshot of the current state as a [`ZoneEvent`].
     pub fn to_event(&self) -> ZoneEvent {
+        let s = self.last_state;
+        let level = s.position.clamp(0.0, 1.0);
         ZoneEvent {
             zone_type: self.zone_type.clone(),
             id: self.id.clone(),
             is_tps: self.is_tps,
-            level: self.compute_level(),
+            level,
+            velocity: s.velocity,
+            acceleration: s.acceleration,
+            recoil: s.jerk.abs(),
         }
     }
 }

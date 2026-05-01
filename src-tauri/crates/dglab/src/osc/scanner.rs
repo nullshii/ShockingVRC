@@ -8,6 +8,7 @@ use tokio::sync::{RwLock, broadcast};
 use super::game_device::GameDevice;
 use super::oscquery::VrchatOscQuery;
 use super::types::{OscValue, ZoneEvent, ZoneType};
+use crate::dsp::UkfParams;
 use crate::error::{DGLabError, Result};
 
 // Internal shared state
@@ -19,6 +20,7 @@ struct ScannerState {
     refresh_tx: broadcast::Sender<Vec<ZoneEvent>>,
     oscquery: RwLock<VrchatOscQuery>,
     port: u16,
+    ukf_params: RwLock<UkfParams>,
 }
 
 // AvatarScanner — public handle
@@ -42,7 +44,20 @@ impl AvatarScanner {
                 refresh_tx,
                 oscquery: RwLock::new(VrchatOscQuery::new()),
                 port,
+                ukf_params: RwLock::new(UkfParams::default()),
             }),
+        }
+    }
+
+    /// Currently configured UKF parameters (shared by all contacts).
+    pub async fn ukf_params(&self) -> UkfParams {
+        *self.state.ukf_params.read().await
+    }
+    pub async fn set_ukf_params(&self, params: UkfParams) {
+        *self.state.ukf_params.write().await = params;
+        let mut devices = self.state.devices.write().await;
+        for d in devices.values_mut() {
+            d.set_ukf_params(params);
         }
     }
 
@@ -172,10 +187,11 @@ impl AvatarScanner {
         };
 
         let key = (zone_type.clone(), id.clone());
+        let ukf_params = *self.state.ukf_params.read().await;
         let mut devices = self.state.devices.write().await;
-        let device = devices
-            .entry(key)
-            .or_insert_with(|| GameDevice::new(zone_type, id, is_tps));
+        let device = devices.entry(key).or_insert_with(|| {
+            GameDevice::with_ukf_params(zone_type, id, is_tps, ukf_params)
+        });
         device.set_value(&contact, value);
         let event = device.to_event();
         drop(devices);
