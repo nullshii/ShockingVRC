@@ -190,7 +190,7 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
     let mut reader = tokio::io::BufReader::new(stdin).lines();
 
     while let Ok(Some(line)) = reader.next_line().await {
-        let trimmed: String = line.trim().to_string();
+        let trimmed: String = line.trim().to_string().to_lowercase();
         let parts: Vec<&str> = trimmed.split_whitespace().collect();
         if parts.is_empty() {
             continue;
