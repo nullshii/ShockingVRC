@@ -351,8 +351,11 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                     }),
                     *name,
                 );
-                engine.remove_zone_a(&id).await;
-                println!("[ch-A] Zone removed: {id}");
+                if engine.remove_zone_a(&id).await {
+                    println!("[ch-A] Zone removed: {id}");
+                } else {
+                    println!("[ch-A] Zone {id} not found in channel A");
+                }
             }
 
             ["rm-b", ztype, name] => {
@@ -363,8 +366,11 @@ async fn command_loop(engine: &CliEngine, scanner: &AvatarScanner, monitor_enabl
                     }),
                     *name,
                 );
-                engine.remove_zone_b(&id).await;
-                println!("[ch-B] Zone removed: {id}");
+                if engine.remove_zone_b(&id).await {
+                    println!("[ch-B] Zone removed: {id}");
+                } else {
+                    println!("[ch-B] Zone {id} not found in channel B");
+                }
             }
 
             ["freq-a", v0, v1, v2, v3] => {

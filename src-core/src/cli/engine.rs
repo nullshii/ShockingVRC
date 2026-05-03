@@ -126,14 +126,11 @@ impl CliEngine {
         }
     }
 
-    pub async fn remove_zone_a(&self, zone: &ZoneId) {
-        self.state
-            .config
-            .write()
-            .await
-            .channel_a
-            .zones
-            .retain(|e| &e.id != zone);
+    pub async fn remove_zone_a(&self, zone: &ZoneId) -> bool {
+        let mut cfg = self.state.config.write().await;
+        let before = cfg.channel_a.zones.len();
+        cfg.channel_a.zones.retain(|e| &e.id != zone);
+        cfg.channel_a.zones.len() < before
     }
 
     pub async fn set_zone_mode_a(&self, zone: &ZoneId, mode: ContactMode) -> bool {
@@ -172,14 +169,11 @@ impl CliEngine {
         }
     }
 
-    pub async fn remove_zone_b(&self, zone: &ZoneId) {
-        self.state
-            .config
-            .write()
-            .await
-            .channel_b
-            .zones
-            .retain(|e| &e.id != zone);
+    pub async fn remove_zone_b(&self, zone: &ZoneId) -> bool {
+        let mut cfg = self.state.config.write().await;
+        let before = cfg.channel_b.zones.len();
+        cfg.channel_b.zones.retain(|e| &e.id != zone);
+        cfg.channel_b.zones.len() < before
     }
 
     pub async fn set_zone_mode_b(&self, zone: &ZoneId, mode: ContactMode) -> bool {

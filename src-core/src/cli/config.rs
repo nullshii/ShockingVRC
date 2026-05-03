@@ -85,16 +85,32 @@ impl FromStr for ContactMode {
 }
 
 /// Identifies an OSC zone by its type (Pen/Orf/Touch/DGB) and name.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZoneId {
     pub zone_type: ZoneType,
     pub name: String,
 }
 
+impl PartialEq for ZoneId {
+    fn eq(&self, other: &Self) -> bool {
+        self.zone_type == other.zone_type && self.name.eq_ignore_ascii_case(&other.name)
+    }
+}
+impl Eq for ZoneId {}
+
+impl std::hash::Hash for ZoneId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.zone_type.hash(state);
+        for b in self.name.bytes() {
+            b.to_ascii_lowercase().hash(state);
+        }
+    }
+}
+
 impl ZoneId {
     pub fn new(zone_type: ZoneType, name: impl Into<String>) -> Self {
         Self {
-            zone_type: zone_type,
+            zone_type,
             name: name.into(),
         }
     }
@@ -112,7 +128,7 @@ impl ZoneId {
 
     pub fn matches(&self, other: &ZoneId) -> bool {
         let type_ok = self.zone_type == ZoneType::Any || self.zone_type == other.zone_type;
-        let name_ok = self.name == "*" || self.name == other.name;
+        let name_ok = self.name == "*" || self.name.eq_ignore_ascii_case(&other.name);
         type_ok && name_ok
     }
 
