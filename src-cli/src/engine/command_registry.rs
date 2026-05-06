@@ -1,6 +1,7 @@
+use rustyline_async::SharedWriter;
 use std::collections::HashMap;
-
-use log::warn;
+use std::io::Write;
+use tokio::io;
 
 use crate::engine::command::{Command, CommandData};
 
@@ -17,7 +18,7 @@ impl CommandRegistry {
         }
     }
 
-    pub fn add_command(&mut self, cmd: Box<dyn Command>) -> &mut Self {
+    pub fn add_command(mut self, cmd: Box<dyn Command>) -> Self {
         let index = self.commands.len();
         for name in cmd.names() {
             self.lookup.insert(name.to_string(), index);
@@ -27,15 +28,26 @@ impl CommandRegistry {
         self
     }
 
+    pub fn build(self) -> Self {
+        self
+    }
+
     pub fn get_commands(&self) -> &[Box<dyn Command>] {
         &self.commands
     }
 
-    pub fn run(&self, input: &str, args: Vec<String>) {
+    pub fn run(&self, input: &str, args: Vec<String>, writer: &mut SharedWriter) -> io::Result<()> {
         if let Some(&idx) = self.lookup.get(input) {
-            self.commands[idx].execute(args, CommandData { registry: &self });
+            self.commands[idx].execute(
+                args,
+                CommandData {
+                    registry: &self,
+                    writer: writer,
+                },
+            )?;
         } else {
-            warn!("Command not found, use help command to see list of commands.");
+            writeln!(writer, "Command not found, use help command to see list of commands.")?;
         }
+        Ok(())
     }
 }

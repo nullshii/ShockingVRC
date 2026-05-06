@@ -1,3 +1,6 @@
+use std::io::Write;
+use tokio::io;
+
 use crate::engine::command::{Command, CommandData};
 
 pub struct HelpCommand;
@@ -11,12 +14,14 @@ impl Command for HelpCommand {
         "Print list of commands."
     }
 
-    fn execute(&self, _args: Vec<String>, data: CommandData) {
+    fn execute(&self, _args: Vec<String>, data: CommandData) -> io::Result<()> {
         let commands = data.registry.get_commands();
 
-        println!("List of commands: ");
+        writeln!(data.writer, "List of commands: ")?;
         for command in commands {
-            println!("{} - {}", command.names().join(", "), command.description());
+            writeln!(data.writer, "{} - {}", command.names().join(", "), command.description())?;
         }
+
+        Ok(())
     }
 }

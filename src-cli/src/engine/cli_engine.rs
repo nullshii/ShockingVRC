@@ -1,37 +1,66 @@
-use tokio::io::{self, AsyncBufReadExt, BufReader};
+use rustyline_async::{Readline, ReadlineError, ReadlineEvent};
+use std::io::Write;
 
 use crate::engine::command_registry::CommandRegistry;
 
-pub struct CliEngine {
-    registry: CommandRegistry,
+pub struct CliEngine<'a> {
+    registry: &'a CommandRegistry,
 }
 
-impl CliEngine {
-    pub fn new(registry: CommandRegistry) -> Self {
+impl<'a> CliEngine<'a> {
+    pub fn new(registry: &'a CommandRegistry) -> Self {
         CliEngine { registry }
     }
 
-    pub async fn run(&self) -> io::Result<()> {
+    pub async fn run(&self) -> Result<(), CliError> {
+        let (mut rl, mut writer) = Readline::new("DG-LAB CLI> ".to_string())?;
+
         loop {
-            let user_input = get_user_input().await?;
-            let user_input = match user_input {
-                Some(i) => i.to_lowercase(),
-                None => continue,
-            };
+            tokio::select! {
+                event = rl.readline() => {
+                    match event {
+                        Ok(ReadlineEvent::Line(line)) => {
+                            let line = line.trim();
+                            if line.is_empty() { continue; }
 
-            let user_input: Vec<&str> = user_input.split_whitespace().collect();
+                            rl.add_history_entry(line.to_string());
 
-            if let Some((cmd_name, args)) = user_input.split_first() {
-                let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-                self.registry.run(cmd_name, string_args);
+                            let parts: Vec<&str> = line.split_whitespace().collect();
+                            if let Some((cmd_name, args)) = parts.split_first() {
+                                let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+                                // TODO: Make async
+                                self.registry.run(cmd_name, string_args, &mut writer)?;
+                            }
+                        }
+                        Ok(ReadlineEvent::Eof) => break, // Ctrl+D
+                        Ok(ReadlineEvent::Interrupted) => break, // Ctrl+C
+                        Err(e) => {
+                            writeln!(writer, "Error: {}", e)?;
+                            break;
+                        }
+                    }
+                }
             }
         }
+        Ok(())
     }
 }
 
-async fn get_user_input() -> io::Result<Option<String>> {
-    let stdin = io::stdin();
-    let mut reader = BufReader::new(stdin).lines();
+#[derive(Debug)]
+pub enum CliError {
+    IoError(std::io::Error),
+    ReadlineError(ReadlineError),
+}
 
-    reader.next_line().await
+impl From<ReadlineError> for CliError {
+    fn from(value: ReadlineError) -> Self {
+        Self::ReadlineError(value)
+    }
+}
+
+impl From<std::io::Error> for CliError {
+    fn from(value: std::io::Error) -> Self {
+        Self::IoError(value)
+    }
 }

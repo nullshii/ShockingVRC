@@ -24,3 +24,4 @@ rand = { workspace = true }
 rosc = { workspace = true }
 mdns-sd = { workspace = true }
 reqwest = { workspace = true }
+rustyline-async = { workspace = true }
