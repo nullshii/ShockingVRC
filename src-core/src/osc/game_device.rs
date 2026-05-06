@@ -3,11 +3,11 @@ use std::time::Instant;
 
 use crate::dsp::{UkfParams, UkfState, UnscentedKalman};
 
-use super::types::{OscValue, ZoneEvent, ZoneType};
+use super::types::{OldZoneType, OscValue, ZoneEvent};
 
 /// Tracks all contact parameter values for one SPS zone and derives a single
 pub struct GameDevice {
-    pub zone_type: ZoneType,
+    pub zone_type: OldZoneType,
     pub id: String,
     pub is_tps: bool,
     values: HashMap<String, OscValue>,
@@ -21,11 +21,11 @@ pub struct GameDevice {
 }
 
 impl GameDevice {
-    pub fn new(zone_type: ZoneType, id: String, is_tps: bool) -> Self {
+    pub fn new(zone_type: OldZoneType, id: String, is_tps: bool) -> Self {
         Self::with_ukf_params(zone_type, id, is_tps, UkfParams::default())
     }
 
-    pub fn with_ukf_params(zone_type: ZoneType, id: String, is_tps: bool, params: UkfParams) -> Self {
+    pub fn with_ukf_params(zone_type: OldZoneType, id: String, is_tps: bool, params: UkfParams) -> Self {
         Self {
             zone_type,
             id,
@@ -155,12 +155,12 @@ impl GameDevice {
     /// Compute stimulation level in [0.0, 1.0] from all active contacts.
     pub fn compute_level(&self) -> f32 {
         match self.zone_type {
-            ZoneType::Any => todo!(),
-            ZoneType::Pen => self.compute_pen_level(),
-            ZoneType::Orf => self.compute_orf_level(),
-            ZoneType::Touch => self.compute_touch_level(),
+            OldZoneType::Any => todo!(),
+            OldZoneType::Pen => self.compute_pen_level(),
+            OldZoneType::Orf => self.compute_orf_level(),
+            OldZoneType::Touch => self.compute_touch_level(),
             // DGB: the OSC value IS the level — no contact hierarchy
-            ZoneType::DGB => self.get_float("Value").clamp(0.0, 1.0),
+            OldZoneType::DGB => self.get_float("Value").clamp(0.0, 1.0),
         }
     }
 

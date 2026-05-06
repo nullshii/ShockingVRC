@@ -20,7 +20,7 @@ impl<'a> CliEngine<'a> {
                 event = rl.readline() => {
                     match event {
                         Ok(ReadlineEvent::Line(line)) => {
-                            let line = line.trim();
+                            let line = line.trim().to_lowercase();
                             if line.is_empty() { continue; }
 
                             rl.add_history_entry(line.to_string());

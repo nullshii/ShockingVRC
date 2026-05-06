@@ -38,7 +38,7 @@ impl OscValue {
 /// SPS zone type corresponding to VRChat avatar contact zones.
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
-pub enum ZoneType {
+pub enum OldZoneType {
     /// All of them
     Any,
     /// Plug (penetrating) zone — maps to `vrchat.sps.plug`
@@ -51,28 +51,28 @@ pub enum ZoneType {
     DGB,
 }
 
-impl fmt::Display for ZoneType {
+impl fmt::Display for OldZoneType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ZoneType::Any => write!(f, "Any"),
-            ZoneType::Pen => write!(f, "Pen"),
-            ZoneType::Orf => write!(f, "Orf"),
-            ZoneType::Touch => write!(f, "Touch"),
-            ZoneType::DGB => write!(f, "DGB"),
+            OldZoneType::Any => write!(f, "Any"),
+            OldZoneType::Pen => write!(f, "Pen"),
+            OldZoneType::Orf => write!(f, "Orf"),
+            OldZoneType::Touch => write!(f, "Touch"),
+            OldZoneType::DGB => write!(f, "DGB"),
         }
     }
 }
 
-impl FromStr for ZoneType {
+impl FromStr for OldZoneType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "any" => Ok(ZoneType::Any),
-            "pen" => Ok(ZoneType::Pen),
-            "orf" => Ok(ZoneType::Orf),
-            "touch" => Ok(ZoneType::Touch),
-            "dgb" => Ok(ZoneType::DGB),
+            "any" => Ok(OldZoneType::Any),
+            "pen" => Ok(OldZoneType::Pen),
+            "orf" => Ok(OldZoneType::Orf),
+            "touch" => Ok(OldZoneType::Touch),
+            "dgb" => Ok(OldZoneType::DGB),
             _ => Err(format!("'{}' is not a valid ZoneType", s)),
         }
     }
@@ -83,7 +83,7 @@ impl FromStr for ZoneType {
 #[derive(Debug, Clone)]
 pub struct ZoneEvent {
     /// Zone type (Any / Pen / Orf / Touch)
-    pub zone_type: ZoneType,
+    pub zone_type: OldZoneType,
     /// Zone identifier extracted from the parameter path
     pub id: String,
     /// `true` when the zone comes from the `TPS_Internal` prefix

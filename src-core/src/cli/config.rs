@@ -3,7 +3,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::dsp::UkfParams;
-use crate::{ZoneType, osc::types::ZoneEvent};
+use crate::{OldZoneType, osc::types::ZoneEvent};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct UkfConfig {
@@ -87,12 +87,12 @@ impl FromStr for ContactMode {
 /// Identifies an OSC zone by its type (Pen/Orf/Touch/DGB) and name.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ZoneId {
-    pub zone_type: ZoneType,
+    pub zone_type: OldZoneType,
     pub name: String,
 }
 
 impl ZoneId {
-    pub fn new(zone_type: ZoneType, name: impl Into<String>) -> Self {
+    pub fn new(zone_type: OldZoneType, name: impl Into<String>) -> Self {
         Self {
             zone_type: zone_type,
             name: name.into(),
@@ -107,11 +107,11 @@ impl ZoneId {
     }
 
     pub fn is_wildcard(&self) -> bool {
-        self.zone_type == ZoneType::Any || self.name == "*"
+        self.zone_type == OldZoneType::Any || self.name == "*"
     }
 
     pub fn matches(&self, other: &ZoneId) -> bool {
-        let type_ok = self.zone_type == ZoneType::Any || self.zone_type == other.zone_type;
+        let type_ok = self.zone_type == OldZoneType::Any || self.zone_type == other.zone_type;
         let name_ok = self.name == "*" || self.name == other.name;
         type_ok && name_ok
     }

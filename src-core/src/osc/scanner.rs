@@ -7,13 +7,13 @@ use tokio::sync::{RwLock, broadcast};
 
 use super::game_device::GameDevice;
 use super::oscquery::VrchatOscQuery;
-use super::types::{OscValue, ZoneEvent, ZoneType};
+use super::types::{OldZoneType, OscValue, ZoneEvent};
 use crate::dsp::UkfParams;
 use crate::error::{DGLabError, Result};
 
 // Internal shared state
 struct ScannerState {
-    devices: RwLock<HashMap<(ZoneType, String), GameDevice>>,
+    devices: RwLock<HashMap<(OldZoneType, String), GameDevice>>,
     event_tx: broadcast::Sender<ZoneEvent>,
     /// Fired after every completed bulk-fetch — contains full zone snapshot.
     /// Subscribers use this to know "avatar zones are now known".
@@ -280,10 +280,10 @@ fn extract_osc_value(args: &[OscType]) -> Option<OscValue> {
 /// | `TPS_Internal/<Type>/<id>/<contact…>` | `TPS_Internal/Orf/Anal/Depth_In` |
 /// | `VFH/Zone/<Type>/<id>/<contact>` | `VFH/Zone/Pen/Cock/PenOthers` |
 /// | `DGB/<name>` | `DGB/TouchAreaA` |
-fn parse_sps_param(parts: &[&str]) -> Option<(ZoneType, String, String, bool)> {
+fn parse_sps_param(parts: &[&str]) -> Option<(OldZoneType, String, String, bool)> {
     match parts {
         // DGB: flat zone — value IS the level
-        ["DGB", name] => Some((ZoneType::DGB, name.to_string(), "Value".to_string(), false)),
+        ["DGB", name] => Some((OldZoneType::DGB, name.to_string(), "Value".to_string(), false)),
 
         // OGB / TPS_Internal
         [prefix, type_str, id, contact @ ..]
@@ -303,11 +303,11 @@ fn parse_sps_param(parts: &[&str]) -> Option<(ZoneType, String, String, bool)> {
     }
 }
 
-fn parse_zone_type(s: &str) -> Option<ZoneType> {
+fn parse_zone_type(s: &str) -> Option<OldZoneType> {
     match s {
-        "Pen" => Some(ZoneType::Pen),
-        "Orf" => Some(ZoneType::Orf),
-        "Touch" => Some(ZoneType::Touch),
+        "Pen" => Some(OldZoneType::Pen),
+        "Orf" => Some(OldZoneType::Orf),
+        "Touch" => Some(OldZoneType::Touch),
         _ => None,
     }
 }
