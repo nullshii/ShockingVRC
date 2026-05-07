@@ -8,7 +8,7 @@ pub struct QuitCommand;
 
 impl Command for QuitCommand {
     fn names(&self) -> &[&str] {
-        &["quit", "exit", "q"]
+        &["Quit", "Exit", "Q"]
     }
 
     fn description(&self) -> &str {

@@ -6,7 +6,7 @@ pub struct AddZoneCommand;
 
 impl Command for AddZoneCommand {
     fn names(&self) -> &[&str] {
-        &["add-zone", "new-zone", "az"]
+        &["Add-Zone", "New-Zone", "AZ"]
     }
 
     fn description(&self) -> &str {

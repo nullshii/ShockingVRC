@@ -7,7 +7,7 @@ pub struct HelpCommand;
 
 impl Command for HelpCommand {
     fn names(&self) -> &[&str] {
-        &["help", "h", "?"]
+        &["Help", "H", "?"]
     }
 
     fn description(&self) -> &str {

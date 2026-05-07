@@ -21,7 +21,7 @@ impl CommandRegistry {
     pub fn add_command(mut self, cmd: Box<dyn Command>) -> Self {
         let index = self.commands.len();
         for name in cmd.names() {
-            self.lookup.insert(name.to_string(), index);
+            self.lookup.insert(name.to_string().to_lowercase(), index);
         }
         self.commands.push(cmd);
 
