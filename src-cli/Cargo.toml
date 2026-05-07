@@ -25,3 +25,4 @@ rosc = { workspace = true }
 mdns-sd = { workspace = true }
 reqwest = { workspace = true }
 rustyline-async = { workspace = true }
+clearscreen = { workspace = true }
