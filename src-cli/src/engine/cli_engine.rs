@@ -1,19 +1,23 @@
-use rustyline_async::{Readline, ReadlineError, ReadlineEvent};
 use std::io::Write;
+use std::sync::Arc;
 
+use rustyline_async::{Readline, ReadlineError, ReadlineEvent};
+
+use crate::app_state::AppState;
 use crate::engine::command_registry::CommandRegistry;
 
-pub struct CliEngine<'a> {
-    registry: &'a CommandRegistry,
+pub struct CliEngine {
+    registry: Arc<CommandRegistry>,
+    state: Arc<AppState>,
 }
 
-impl<'a> CliEngine<'a> {
-    pub fn new(registry: &'a CommandRegistry) -> Self {
-        CliEngine { registry }
+impl CliEngine {
+    pub fn new(registry: Arc<CommandRegistry>, state: Arc<AppState>) -> Self {
+        CliEngine { registry, state }
     }
 
     pub async fn run(&self) -> Result<(), CliError> {
-        let (mut rl, mut writer) = Readline::new("DG-LAB CLI> ".to_string())?;
+        let (mut rl, writer) = Readline::new("ShockingVRC> ".to_string())?;
 
         loop {
             tokio::select! {
@@ -28,15 +32,19 @@ impl<'a> CliEngine<'a> {
                             let parts: Vec<&str> = line.split_whitespace().collect();
                             if let Some((cmd_name, args)) = parts.split_first() {
                                 let string_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-
-                                // TODO: Make async
-                                self.registry.run(cmd_name, string_args, &mut writer)?;
+                                CommandRegistry::run(
+                                    Arc::clone(&self.registry),
+                                    cmd_name,
+                                    string_args,
+                                    writer.clone(),
+                                    Arc::clone(&self.state),
+                                ).await?;
                             }
                         }
-                        Ok(ReadlineEvent::Eof) => break, // Ctrl+D
-                        Ok(ReadlineEvent::Interrupted) => break, // Ctrl+C
+                        Ok(ReadlineEvent::Eof) | Ok(ReadlineEvent::Interrupted) => break,
                         Err(e) => {
-                            writeln!(writer, "Error: {}", e)?;
+                            let mut w = writer.clone();
+                            writeln!(w, "Error: {}", e)?;
                             break;
                         }
                     }

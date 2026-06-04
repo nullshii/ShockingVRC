@@ -1,8 +1,11 @@
-use rustyline_async::SharedWriter;
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::Arc;
+
+use rustyline_async::SharedWriter;
 use tokio::io;
 
+use crate::app_state::AppState;
 use crate::engine::command::{Command, CommandData};
 
 pub struct CommandRegistry {
@@ -10,7 +13,12 @@ pub struct CommandRegistry {
     lookup: HashMap<String, usize>,
 }
 
-impl CommandRegistry {
+pub struct RegistryBuilder {
+    commands: Vec<Box<dyn Command>>,
+    lookup: HashMap<String, usize>,
+}
+
+impl RegistryBuilder {
     pub fn new() -> Self {
         Self {
             commands: Vec::new(),
@@ -24,30 +32,49 @@ impl CommandRegistry {
             self.lookup.insert(name.to_string().to_lowercase(), index);
         }
         self.commands.push(cmd);
-
         self
     }
 
-    pub fn build(self) -> Self {
-        self
+    pub fn build(self) -> Arc<CommandRegistry> {
+        Arc::new(CommandRegistry {
+            commands: self.commands,
+            lookup: self.lookup,
+        })
+    }
+}
+
+impl CommandRegistry {
+    pub fn new() -> RegistryBuilder {
+        RegistryBuilder::new()
     }
 
     pub fn get_commands(&self) -> &[Box<dyn Command>] {
         &self.commands
     }
 
-    pub fn run(&self, input: &str, args: Vec<String>, writer: &mut SharedWriter) -> io::Result<()> {
-        if let Some(&idx) = self.lookup.get(input) {
-            self.commands[idx].execute(
-                args,
-                CommandData {
-                    registry: &self,
-                    writer: writer,
-                },
-            )?;
+    pub async fn run(
+        this: Arc<Self>,
+        input: &str,
+        args: Vec<String>,
+        writer: SharedWriter,
+        state: Arc<AppState>,
+    ) -> io::Result<()> {
+        if let Some(&idx) = this.lookup.get(input) {
+            this.commands[idx]
+                .execute(
+                    input.to_string(),
+                    args,
+                    CommandData {
+                        registry: Arc::clone(&this),
+                        writer,
+                        state,
+                    },
+                )
+                .await
         } else {
-            writeln!(writer, "Command not found, use help command to see list of commands.")?;
+            let mut w = writer;
+            writeln!(w, "Unknown command '{input}'. Type 'help' for a list.")?;
+            Ok(())
         }
-        Ok(())
     }
 }

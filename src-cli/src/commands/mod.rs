@@ -1,4 +1,9 @@
 pub mod add_zone_command;
+pub mod channel_commands;
 pub mod clear_command;
+pub mod filter_commands;
 pub mod help_command;
+pub mod info_commands;
+pub mod monitor_command;
 pub mod quit_command;
+pub mod zone_commands;
