@@ -218,6 +218,10 @@ pub struct ChannelConfig {
     pub intensity: [u8; 4],
     pub limits: PowerLimits,
     pub aggregation: AggregationMode,
+    #[serde(default)]
+    pub freq_modulation: [Option<crate::modulation::ModulationConfig>; 4],
+    #[serde(default)]
+    pub intensity_modulation: [Option<crate::modulation::ModulationConfig>; 4],
 }
 
 impl Default for ChannelConfig {
@@ -228,6 +232,8 @@ impl Default for ChannelConfig {
             intensity: [100; 4],
             limits: PowerLimits::default(),
             aggregation: AggregationMode::default(),
+            freq_modulation: Default::default(),
+            intensity_modulation: Default::default(),
         }
     }
 }

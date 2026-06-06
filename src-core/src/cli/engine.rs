@@ -6,6 +6,7 @@ use log::{debug, info, warn};
 use tokio::sync::{Mutex, RwLock, broadcast, watch};
 
 use crate::ble::device::CoyoteDevice;
+use crate::modulation::evaluator::{KinematicsInput, advance_and_evaluate_segments};
 use crate::osc::scanner::AvatarScanner;
 use crate::osc::types::ZoneEvent;
 use crate::protocol::waveform::WaveformV3;
@@ -22,6 +23,7 @@ pub struct ChannelStatus {
     pub raw_level: f32,
     pub strength: u8,
     pub active_zones: Vec<(ZoneId, f32)>,
+    pub kinematics: KinematicsInput,
 }
 
 /// Snapshot of both channels' runtime state.
@@ -47,12 +49,22 @@ impl ZoneKinematics {
     }
 }
 
+#[derive(Debug, Default)]
+struct ModAccumulators {
+    freq_a: [f32; 4],
+    freq_b: [f32; 4],
+    int_a:  [f32; 4],
+    int_b:  [f32; 4],
+}
+
 struct EngineState {
     config: RwLock<CliConfig>,
     zone_kinematics: RwLock<HashMap<ZoneId, ZoneKinematics>>,
     status_tx: broadcast::Sender<CliStatus>,
     device: Mutex<Option<Arc<CoyoteDevice>>>,
     scanner: RwLock<Option<AvatarScanner>>,
+    mod_accums: Mutex<ModAccumulators>,
+    last_wave_tick: Mutex<Instant>,
 }
 
 #[derive(Clone)]
@@ -70,6 +82,8 @@ impl CliEngine {
                 status_tx,
                 device: Mutex::new(None),
                 scanner: RwLock::new(None),
+                mod_accums: Mutex::new(ModAccumulators::default()),
+                last_wave_tick: Mutex::new(Instant::now()),
             }),
         }
     }
@@ -325,10 +339,19 @@ impl CliEngine {
 
         let connected = wave_arc.is_some();
         let now = Instant::now();
+
+        let dt = {
+            let mut last = self.state.last_wave_tick.lock().await;
+            let elapsed = now.saturating_duration_since(*last).as_secs_f32();
+            *last = now;
+            elapsed.min(0.5)
+        };
+
         let status = compute_status(&cfg, &kinematics, now, connected);
 
         if let Some(wave_now) = wave_arc {
-            let wave = build_wave(&status, &cfg);
+            let mut accums = self.state.mod_accums.lock().await;
+            let wave = build_wave(&status, &cfg, &mut accums, dt);
             *wave_now.lock().await = wave;
         }
 
@@ -345,22 +368,63 @@ fn project_kinematics(k: &ZoneKinematics, mode: ContactMode, norms: &MotionNorms
     }
 }
 
-fn build_wave(status: &CliStatus, cfg: &CliConfig) -> WaveformV3 {
+fn modulate_channel(
+    base_freq: [u8; 4],
+    base_intensity: [u8; 4],
+    channel: &ChannelConfig,
+    kin: &KinematicsInput,
+    freq_accums: &mut [f32; 4],
+    int_accums: &mut [f32; 4],
+    dt: f32,
+) -> ([u8; 4], [u8; 4]) {
+    let freq_f: [f32; 4] = base_freq.map(|v| v as f32);
+    let int_f: [f32; 4] = base_intensity.map(|v| v as f32);
+
+    let mod_freq = advance_and_evaluate_segments(&channel.freq_modulation, freq_accums, freq_f, kin, dt);
+    let mod_int = advance_and_evaluate_segments(&channel.intensity_modulation, int_accums, int_f, kin, dt);
+
+    let freq_out = [
+        (mod_freq[0].round() as u8).clamp(10, 255),
+        (mod_freq[1].round() as u8).clamp(10, 255),
+        (mod_freq[2].round() as u8).clamp(10, 255),
+        (mod_freq[3].round() as u8).clamp(10, 255),
+    ];
+    let int_out = [
+        (mod_int[0].round() as u8).clamp(0, 100),
+        (mod_int[1].round() as u8).clamp(0, 100),
+        (mod_int[2].round() as u8).clamp(0, 100),
+        (mod_int[3].round() as u8).clamp(0, 100),
+    ];
+
+    (freq_out, int_out)
+}
+
+fn build_wave(status: &CliStatus, cfg: &CliConfig, accums: &mut ModAccumulators, dt: f32) -> WaveformV3 {
     let sa = status.channel_a.strength;
     let sb = status.channel_b.strength;
 
     if sa == 0 && sb == 0 {
-        // No active contacts — idle, don't disturb device's internal state.
         WaveformV3::default()
     } else {
-        WaveformV3::new(
-            sa,
-            sb,
+        let (freq_a, int_a) = modulate_channel(
             cfg.channel_a.frequency,
             cfg.channel_a.intensity,
+            &cfg.channel_a,
+            &status.channel_a.kinematics,
+            &mut accums.freq_a,
+            &mut accums.int_a,
+            dt,
+        );
+        let (freq_b, int_b) = modulate_channel(
             cfg.channel_b.frequency,
             cfg.channel_b.intensity,
-        )
+            &cfg.channel_b,
+            &status.channel_b.kinematics,
+            &mut accums.freq_b,
+            &mut accums.int_b,
+            dt,
+        );
+        WaveformV3::new(sa, sb, freq_a, int_a, freq_b, int_b)
     }
 }
 
@@ -369,6 +433,19 @@ fn project_with_freshness(k: &ZoneKinematics, mode: ContactMode, norms: &MotionN
         0.0
     } else {
         project_kinematics(k, mode, norms)
+    }
+}
+
+fn kinematics_for_zone(k: &ZoneKinematics, norms: &MotionNorms, now: Instant) -> KinematicsInput {
+    if k.is_stale(now) {
+        KinematicsInput::default()
+    } else {
+        KinematicsInput {
+            depth: k.level.clamp(0.0, 1.0),
+            speed: (k.velocity.abs() / norms.speed).clamp(0.0, 1.0),
+            acc: (k.acceleration.abs() / norms.acc).clamp(0.0, 1.0),
+            recoil: (k.recoil / norms.recoil).clamp(0.0, 1.0),
+        }
     }
 }
 
@@ -382,6 +459,9 @@ fn compute_channel_status(
     let mut zone_levels: Vec<f32> = Vec::new();
     let mut seen: std::collections::HashSet<ZoneId> = std::collections::HashSet::new();
 
+    let mut kin_accum = KinematicsInput::default();
+    let mut kin_count = 0u32;
+
     for entry in &channel.zones {
         let pattern = &entry.id;
         if pattern.is_wildcard() {
@@ -391,6 +471,12 @@ fn compute_channel_status(
                     zone_levels.push(value);
                     if value > 0.0 {
                         active_zones.push((known_id.clone(), value));
+                        let ki = kinematics_for_zone(k, norms, now);
+                        kin_accum.depth = kin_accum.depth.max(ki.depth);
+                        kin_accum.speed = kin_accum.speed.max(ki.speed);
+                        kin_accum.acc = kin_accum.acc.max(ki.acc);
+                        kin_accum.recoil = kin_accum.recoil.max(ki.recoil);
+                        kin_count += 1;
                     }
                 }
             }
@@ -402,9 +488,19 @@ fn compute_channel_status(
             zone_levels.push(value);
             if value > 0.0 {
                 active_zones.push((pattern.clone(), value));
+                if let Some(k) = kinematics.get(pattern) {
+                    let ki = kinematics_for_zone(k, norms, now);
+                    kin_accum.depth = kin_accum.depth.max(ki.depth);
+                    kin_accum.speed = kin_accum.speed.max(ki.speed);
+                    kin_accum.acc = kin_accum.acc.max(ki.acc);
+                    kin_accum.recoil = kin_accum.recoil.max(ki.recoil);
+                    kin_count += 1;
+                }
             }
         }
     }
+
+    let _ = kin_count;
 
     let raw_level = channel.aggregate(&zone_levels);
     let strength = channel.limits.scale(raw_level);
@@ -412,6 +508,7 @@ fn compute_channel_status(
         raw_level,
         strength,
         active_zones,
+        kinematics: kin_accum,
     }
 }
 

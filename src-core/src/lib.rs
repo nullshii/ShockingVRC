@@ -4,6 +4,7 @@ pub mod codec;
 pub mod dsp;
 pub mod error;
 pub mod input_zone;
+pub mod modulation;
 pub mod osc;
 pub mod protocol;
 pub mod zone_type;

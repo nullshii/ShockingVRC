@@ -63,6 +63,19 @@ Power limits
   agg-a  max|sum|avg               Channel A aggregation mode
   agg-b  max|sum|avg               Channel B aggregation mode
 
+Dynamic modulation (per-segment mathematical functions driven by UKF)
+  mod-freq-a <seg> <func> <src> [key=val ...]   Set freq modulation on channel A
+  mod-freq-b <seg> <func> <src> [key=val ...]   Set freq modulation on channel B
+  mod-int-a  <seg> <func> <src> [key=val ...]   Set intensity modulation on channel A
+  mod-int-b  <seg> <func> <src> [key=val ...]   Set intensity modulation on channel B
+  mod-show / mod-show-a / mod-show-b            Show modulation config
+  mod-off-a  <seg|all> [freq|int|both]          Disable modulation on channel A
+  mod-off-b  <seg|all> [freq|int|both]          Disable modulation on channel B
+  Functions: sin cos tan sinh cosh tanh x2 x3 sqrt sigmoid triangle saw
+    perlin simplex fractal sin+noise sin*noise ... (use mod-freq-a for full list)
+  Sources: depth speed acc recoil
+  Params: sens=<f> dev=<f> phase=<f> fmul=<f> off=<f> pow=<f> min=<f> max=<f>
+
 Info / config
   zones                            List all avatar zones + which channel uses them
   status                           Current levels, strength and active zones

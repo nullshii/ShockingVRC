@@ -11,15 +11,26 @@ use shocking_vrc_core::{AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
 use shocking_vrc_cli::{
     app_state::AppState,
     commands::{
+        add_all_zones_command::AddAllZonesCommand,
         add_zone_command::AddZoneCommand,
-        channel_commands::{AggregationCommand, FreqCommand, IntensityCommand, LimitsCommand},
+        aggregation_command::AggregationCommand,
         clear_command::ClearCommand,
-        filter_commands::{NormsCommand, UkfCommand},
+        config_command::ConfigCommand,
+        freq_command::FreqCommand,
         help_command::HelpCommand,
-        info_commands::{ConfigCommand, StatusCommand, ZonesCommand},
+        intensity_command::IntensityCommand,
+        limits_command::LimitsCommand,
+        modulation_off_command::ModulationOffCommand,
+        modulation_set_command::ModulationSetCommand,
+        modulation_show_command::ModulationShowCommand,
         monitor_command::MonitorCommand,
+        norms_command::NormsCommand,
         quit_command::QuitCommand,
-        zone_commands::{AddAllZonesCommand, RemoveZoneCommand, ZoneModeCommand},
+        remove_zone_command::RemoveZoneCommand,
+        status_command::StatusCommand,
+        ukf_command::UkfCommand,
+        zone_mode_command::ZoneModeCommand,
+        zones_command::ZonesCommand,
     },
     display::{print_banner, print_config_summary, print_status_header, print_status_line},
     engine::{
@@ -73,12 +84,13 @@ fn default_config() -> CliConfig {
         channel_a: ChannelConfig {
             zones: vec![
                 ZoneEntry::new(ZoneId::new(OldZoneType::Orf, "Pussy"), ContactMode::Depth),
-                ZoneEntry::new(ZoneId::new(OldZoneType::Dgb, "TouchAreaA"), ContactMode::Depth),
+                ZoneEntry::new(ZoneId::new(OldZoneType::DGB, "TouchAreaA"), ContactMode::Depth),
             ],
             frequency: [30, 200, 30, 200],
             intensity: [100, 100, 100, 100],
             limits: PowerLimits::new(0, 30),
             aggregation: AggregationMode::Max,
+            ..ChannelConfig::default()
         },
         channel_b: ChannelConfig {
             zones: vec![ZoneEntry::new(
@@ -89,6 +101,7 @@ fn default_config() -> CliConfig {
             intensity: [100, 100, 100, 100],
             limits: PowerLimits::new(0, 30),
             aggregation: AggregationMode::Max,
+            ..ChannelConfig::default()
         },
         ..CliConfig::default()
     }
@@ -240,6 +253,9 @@ async fn main() {
         .add_command(Box::new(AggregationCommand))
         .add_command(Box::new(UkfCommand))
         .add_command(Box::new(NormsCommand))
+        .add_command(Box::new(ModulationSetCommand))
+        .add_command(Box::new(ModulationShowCommand))
+        .add_command(Box::new(ModulationOffCommand))
         .add_command(Box::new(ZonesCommand))
         .add_command(Box::new(StatusCommand))
         .add_command(Box::new(ConfigCommand))
