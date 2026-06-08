@@ -226,6 +226,7 @@ pub enum Action {
     SwitchTab(Tab),
     ToggleMonitor,
     StepOscPort(i32),
+    StartOscPortEdit,
 
     FocusZonesPane(ZonesPane),
     SelectConfigured(Channel, usize),
@@ -366,6 +367,8 @@ pub struct App {
     pub avatar_zones: Vec<ZoneEvent>,
     pub vrchat_found: bool,
     pub osc_port: u16,
+    pub osc_port_editing: bool,
+    pub osc_port_input: String,
     pub device_battery: Option<u8>,
 
     pub active_tab: Tab,
@@ -414,6 +417,8 @@ impl App {
             avatar_zones: Vec::new(),
             vrchat_found: false,
             osc_port: 9001,
+            osc_port_editing: false,
+            osc_port_input: String::new(),
             device_battery: None,
             active_tab: Tab::Status,
             should_quit: false,
@@ -481,6 +486,65 @@ impl App {
         self.config = self.state.engine.config().await;
     }
 
+    fn cancel_osc_port_edit(&mut self) {
+        self.osc_port_editing = false;
+        self.osc_port_input.clear();
+    }
+
+    async fn commit_osc_port_edit(&mut self) {
+        if self.osc_port_input.is_empty() {
+            self.cancel_osc_port_edit();
+            return;
+        }
+        let Ok(port) = self.osc_port_input.parse::<u16>() else {
+            log::warn!("[osc] Invalid port — use digits only (1024–65535)");
+            return;
+        };
+        if !(1024..=65535).contains(&port) {
+            log::warn!("[osc] Port {port} out of range (1024–65535)");
+            return;
+        }
+        self.set_osc_port(port).await;
+        self.cancel_osc_port_edit();
+    }
+
+    async fn set_osc_port(&mut self, new_port: u16) {
+        if new_port == self.osc_port {
+            return;
+        }
+        match self.state.scanner.set_port(new_port).await {
+            Ok(()) => {
+                self.osc_port = new_port;
+                log::info!("[osc] Listener restarted on UDP port {new_port}");
+            }
+            Err(e) => log::error!("[osc] Failed to change port: {e}"),
+        }
+    }
+
+    fn start_osc_port_edit(&mut self) {
+        self.osc_port_input = self.osc_port.to_string();
+        self.osc_port_editing = true;
+    }
+
+    async fn handle_osc_port_edit_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter => self.commit_osc_port_edit().await,
+            KeyCode::Backspace => {
+                self.osc_port_input.pop();
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                if self.osc_port_input.len() >= 5 {
+                    return;
+                }
+                self.osc_port_input.push(c);
+                if self.osc_port_input.parse::<u32>().unwrap_or(0) > 65535 {
+                    self.osc_port_input.pop();
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn push_click(&mut self, rect: Rect, action: Action) {
         self.clickables.push(Clickable {
             rect,
@@ -541,10 +605,39 @@ impl App {
                 self.should_quit = true;
                 return;
             }
-            KeyCode::Char('q') | KeyCode::Esc => {
+            KeyCode::Char('q') => {
                 self.should_quit = true;
                 return;
             }
+            KeyCode::Esc => {
+                if self.osc_port_editing {
+                    self.cancel_osc_port_edit();
+                    return;
+                }
+                self.should_quit = true;
+                return;
+            }
+            _ => {}
+        }
+
+        if self.osc_port_editing {
+            match key.code {
+                KeyCode::Tab => {
+                    self.switch_tab_relative(1);
+                    return;
+                }
+                KeyCode::BackTab => {
+                    self.switch_tab_relative(-1);
+                    return;
+                }
+                _ => {
+                    self.handle_osc_port_edit_key(key).await;
+                    return;
+                }
+            }
+        }
+
+        match key.code {
             KeyCode::Tab => {
                 self.switch_tab_relative(1);
                 return;
@@ -602,6 +695,7 @@ impl App {
     }
 
     fn switch_tab_relative(&mut self, delta: i32) {
+        self.cancel_osc_port_edit();
         let n = Tab::ALL.len() as i32;
         let idx = (self.active_tab.index() as i32 + delta).rem_euclid(n) as usize;
         self.active_tab = Tab::ALL[idx];
@@ -614,6 +708,9 @@ impl App {
                 _ => None,
             },
             Tab::Setup => match key.code {
+                KeyCode::Enter | KeyCode::Char('e') | KeyCode::Char('E') => {
+                    Some(Action::StartOscPortEdit)
+                }
                 KeyCode::Char('[') => Some(Action::StepOscPort(-1)),
                 KeyCode::Char(']') => Some(Action::StepOscPort(1)),
                 _ => None,
@@ -820,6 +917,7 @@ impl App {
         match action {
             Action::Quit => self.should_quit = true,
             Action::SwitchTab(t) => {
+                self.cancel_osc_port_edit();
                 self.active_tab = t;
                 self.channels_scroll = 0;
                 self.mod_slots_scroll = 0;
@@ -830,18 +928,12 @@ impl App {
                 self.monitor = !self.monitor;
                 self.state.monitor_enabled.store(self.monitor, Ordering::Relaxed);
             }
+            Action::StartOscPortEdit => self.start_osc_port_edit(),
             Action::StepOscPort(delta) => {
+                self.cancel_osc_port_edit();
                 let new_port =
                     (self.osc_port as i32 + delta).clamp(1024, 65535) as u16;
-                if new_port != self.osc_port {
-                    match self.state.scanner.set_port(new_port).await {
-                        Ok(()) => {
-                            self.osc_port = new_port;
-                            log::info!("[osc] Listener restarted on UDP port {new_port}");
-                        }
-                        Err(e) => log::error!("[osc] Failed to change port: {e}"),
-                    }
-                }
+                self.set_osc_port(new_port).await;
             }
 
             Action::FocusZonesPane(p) => self.zones_pane = p,

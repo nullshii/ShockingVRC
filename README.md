@@ -1,9 +1,12 @@
 # Shocking VRC
-Bridge gap with DG-LAB and VRC
 
-App is still in development, dev builds are not available yet but you can build yourself by grabbing latest source code and build using:
+Bridge gap with DG-Lab Coyote and VRChat via OSC.
+
+Terminal UI (ratatui):
+
 ```sh
-cargo build --release --all
+cargo build --release -p shocking_vrc_cli
+cargo run --release -p shocking_vrc_cli
 ```
 
-`Note: at the moment gui build is broken.`
+Optional flags: `--port <udp>` (default 9001), `--scan-timeout <secs>` (default 8).

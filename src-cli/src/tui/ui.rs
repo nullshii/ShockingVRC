@@ -89,7 +89,7 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let hint = match app.active_tab {
         Tab::Status => "  M — monitor  ·  Q/Esc — quit",
-        Tab::Setup => "  [ / ] OSC port  ·  click −/+  ·  Q/Esc — quit",
+        Tab::Setup => "  Enter — type port  ·  [ / ] ±1  ·  −/+  ·  Esc — cancel edit",
         Tab::Zones => "  ↑↓ select  ·  Enter — action  ·  X — remove  ·  click rows & buttons",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",

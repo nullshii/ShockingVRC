@@ -1,9 +1,8 @@
-[package]
+﻿[package]
 name = "shocking_vrc_cli"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-
 
 [dependencies]
 shocking_vrc_core.workspace = true
@@ -24,7 +23,5 @@ rand = { workspace = true }
 rosc = { workspace = true }
 mdns-sd = { workspace = true }
 reqwest = { workspace = true }
-rustyline-async = { workspace = true }
-clearscreen = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
