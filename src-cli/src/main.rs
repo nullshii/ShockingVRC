@@ -90,7 +90,7 @@ async fn main() {
 
     let args = parse_args();
 
-    log::info!("ShockingVRC CLI — Two-Channel OSC Controller (TUI)");
+    log::info!("ShockingVRC CLI — Hello DG-Lab Users");
 
     let config = if Path::new(CONFIG_FILE).exists() {
         match load_config_from_file(CONFIG_FILE) {

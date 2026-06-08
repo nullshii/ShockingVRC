@@ -6,7 +6,8 @@ use ratatui::widgets::Paragraph;
 use shocking_vrc_core::raw_to_hz;
 
 use crate::tui::app::{
-    agg_name, channel_controls, Action, App, Channel, ChannelControl, SliderKind,
+    agg_name, aggregation_modes, channel_controls, Action, App, Channel, ChannelControl,
+    SliderKind,
 };
 use crate::tui::theme;
 use crate::tui::ui;
@@ -111,20 +112,30 @@ fn render_channel(
                 focus == Some(ChannelControl::LimitMax(ch)),
             ),
             13 => {
-                let agg_cols =
-                    Layout::horizontal([Constraint::Length(16), Constraint::Length(14)]).split(rect);
+                let agg_cols = Layout::horizontal([
+                    Constraint::Length(10),
+                    Constraint::Length(5),
+                    Constraint::Length(5),
+                    Constraint::Length(5),
+                ])
+                .split(rect);
                 frame.render_widget(
                     Paragraph::new("Zone mix").style(Style::default().fg(theme::TEXT_DIM)),
                     agg_cols[0],
                 );
-                ui::button(
-                    frame,
-                    app,
-                    agg_cols[1],
-                    agg_name(&cfg.aggregation),
-                    focus == Some(ChannelControl::Aggregation(ch)),
-                    Action::CycleAggregation(ch),
-                );
+                let row_focused = focus == Some(ChannelControl::Aggregation(ch));
+                for (i, mode) in aggregation_modes().iter().enumerate() {
+                    let selected = cfg.aggregation == *mode;
+                    ui::choice_button(
+                        frame,
+                        app,
+                        agg_cols[i + 1],
+                        agg_name(mode),
+                        selected,
+                        row_focused && selected,
+                        Action::SetAggregation(ch, *mode),
+                    );
+                }
             }
             _ => {}
         }

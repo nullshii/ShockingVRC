@@ -175,7 +175,7 @@ impl PowerLimits {
 }
 
 /// Aggregation strategy when multiple zones are assigned to one channel.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AggregationMode {
     #[default]
     Max,

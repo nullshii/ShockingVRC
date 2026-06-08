@@ -245,6 +245,7 @@ pub enum Action {
     StepLimitMin(Channel, i32),
     StepLimitMax(Channel, i32),
     CycleAggregation(Channel),
+    SetAggregation(Channel, AggregationMode),
     SaveConfig,
     LoadConfig,
 
@@ -254,6 +255,10 @@ pub enum Action {
     ResetNorms,
 
     SelectModSlot(Channel, ModKind, usize),
+    OpenModFunctionPicker,
+    PickModFunction(usize),
+    CloseModFunctionPicker,
+    SetModSource(ModulationSource),
     CycleModFunction(i32),
     CycleModSource(i32),
     StepModParam(ModParam, i32),
@@ -342,6 +347,10 @@ const MOD_SOURCES: [ModulationSource; 4] = [
     ModulationSource::Recoil,
 ];
 
+pub fn mod_source_list() -> &'static [ModulationSource; 4] {
+    &MOD_SOURCES
+}
+
 fn default_status() -> CliStatus {
     use shocking_vrc_core::cli::ChannelStatus;
     let empty = || ChannelStatus {
@@ -391,6 +400,11 @@ pub struct App {
     pub mod_seg: usize,
     pub mod_editor: ModulationConfig,
 
+    pub mod_function_picker: bool,
+    pub mod_func_pick_ix: usize,
+    pub mod_func_pick_scroll: u16,
+    pub mod_func_pick_viewport: u16,
+
     pub log_scroll: usize,
 
     pub channels_scroll: u16,
@@ -435,6 +449,10 @@ impl App {
             mod_kind: ModKind::Freq,
             mod_seg: 0,
             mod_editor: ModulationConfig::default(),
+            mod_function_picker: false,
+            mod_func_pick_ix: 0,
+            mod_func_pick_scroll: 0,
+            mod_func_pick_viewport: 0,
             log_scroll: 0,
             channels_scroll: 0,
             channels_viewport_h: 0,
@@ -545,6 +563,70 @@ impl App {
         }
     }
 
+    fn close_mod_function_picker(&mut self) {
+        self.mod_function_picker = false;
+    }
+
+    fn open_mod_function_picker(&mut self) {
+        let list = mod_function_list_for(&self.mod_editor.function);
+        self.mod_func_pick_ix = list
+            .iter()
+            .position(|f| f == &self.mod_editor.function)
+            .unwrap_or(0);
+        self.mod_func_pick_scroll = 0;
+        self.mod_function_picker = true;
+        self.sync_mod_func_pick_scroll();
+    }
+
+    fn move_mod_func_pick(&mut self, delta: i32) {
+        let len = mod_function_list_for(&self.mod_editor.function).len();
+        if len == 0 {
+            return;
+        }
+        self.mod_func_pick_ix = step_index(self.mod_func_pick_ix, delta, len);
+        self.sync_mod_func_pick_scroll();
+    }
+
+    fn sync_mod_func_pick_scroll(&mut self) {
+        self.mod_func_pick_scroll = crate::tui::ui::scroll_to_row(
+            self.mod_func_pick_scroll,
+            self.mod_func_pick_viewport,
+            self.mod_func_pick_ix as u16,
+        );
+    }
+
+    fn pick_mod_function(&mut self, index: usize) {
+        let list = mod_function_list_for(&self.mod_editor.function);
+        if let Some(f) = list.get(index) {
+            self.mod_editor.function = f.clone();
+        }
+        self.close_mod_function_picker();
+    }
+
+    async fn handle_mod_function_picker_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => self.close_mod_function_picker(),
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                let ix = self.mod_func_pick_ix;
+                self.pick_mod_function(ix);
+            }
+            KeyCode::Up | KeyCode::Char('k') => self.move_mod_func_pick(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_mod_func_pick(1),
+            KeyCode::Home => {
+                self.mod_func_pick_ix = 0;
+                self.sync_mod_func_pick_scroll();
+            }
+            KeyCode::End => {
+                let len = mod_function_list_for(&self.mod_editor.function).len();
+                if len > 0 {
+                    self.mod_func_pick_ix = len - 1;
+                    self.sync_mod_func_pick_scroll();
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn push_click(&mut self, rect: Rect, action: Action) {
         self.clickables.push(Clickable {
             rect,
@@ -610,6 +692,10 @@ impl App {
                 return;
             }
             KeyCode::Esc => {
+                if self.mod_function_picker {
+                    self.close_mod_function_picker();
+                    return;
+                }
                 if self.osc_port_editing {
                     self.cancel_osc_port_edit();
                     return;
@@ -618,6 +704,11 @@ impl App {
                 return;
             }
             _ => {}
+        }
+
+        if self.mod_function_picker {
+            self.handle_mod_function_picker_key(key).await;
+            return;
         }
 
         if self.osc_port_editing {
@@ -647,6 +738,7 @@ impl App {
                 return;
             }
             KeyCode::Char(c @ '1'..='7') => {
+                self.close_mod_function_picker();
                 let idx = c as usize - '1' as usize;
                 if let Some(t) = Tab::ALL.get(idx) {
                     self.active_tab = *t;
@@ -696,6 +788,7 @@ impl App {
 
     fn switch_tab_relative(&mut self, delta: i32) {
         self.cancel_osc_port_edit();
+        self.close_mod_function_picker();
         let n = Tab::ALL.len() as i32;
         let idx = (self.active_tab.index() as i32 + delta).rem_euclid(n) as usize;
         self.active_tab = Tab::ALL[idx];
@@ -825,15 +918,19 @@ impl App {
                 self.tuning_scroll = crate::tui::ui::apply_scroll_delta(self.tuning_scroll, delta, 1);
             }
             Tab::Modulation => {
-                let scroll_editor = mouse_col
-                    .map(|c| c >= self.mod_split_x)
-                    .unwrap_or(true);
-                if scroll_editor {
-                    self.mod_editor_scroll =
-                        crate::tui::ui::apply_scroll_delta(self.mod_editor_scroll, delta, 1);
+                if self.mod_function_picker {
+                    self.move_mod_func_pick(delta);
                 } else {
-                    self.mod_slots_scroll =
-                        crate::tui::ui::apply_scroll_delta(self.mod_slots_scroll, delta, 1);
+                    let scroll_editor = mouse_col
+                        .map(|c| c >= self.mod_split_x)
+                        .unwrap_or(true);
+                    if scroll_editor {
+                        self.mod_editor_scroll =
+                            crate::tui::ui::apply_scroll_delta(self.mod_editor_scroll, delta, 1);
+                    } else {
+                        self.mod_slots_scroll =
+                            crate::tui::ui::apply_scroll_delta(self.mod_slots_scroll, delta, 1);
+                    }
                 }
             }
             _ => {}
@@ -918,6 +1015,7 @@ impl App {
             Action::Quit => self.should_quit = true,
             Action::SwitchTab(t) => {
                 self.cancel_osc_port_edit();
+                self.close_mod_function_picker();
                 self.active_tab = t;
                 self.channels_scroll = 0;
                 self.mod_slots_scroll = 0;
@@ -1071,6 +1169,20 @@ impl App {
                 log::info!("[ch-{}] Aggregation set to {name}", ch.label());
                 self.refresh_config().await;
             }
+            Action::SetAggregation(ch, mode) => {
+                let mut cfg = self.state.engine.config().await;
+                match ch {
+                    Channel::A => cfg.channel_a.aggregation = mode,
+                    Channel::B => cfg.channel_b.aggregation = mode,
+                };
+                self.state.engine.set_config(cfg).await;
+                log::info!(
+                    "[ch-{}] Aggregation set to {}",
+                    ch.label(),
+                    agg_name(&mode)
+                );
+                self.refresh_config().await;
+            }
             Action::SaveConfig => {
                 let cfg = self.state.engine.config().await;
                 match save_config(CONFIG_FILE, &cfg) {
@@ -1119,12 +1231,17 @@ impl App {
             }
 
             Action::SelectModSlot(ch, kind, seg) => {
+                self.close_mod_function_picker();
                 self.mod_channel = ch;
                 self.mod_kind = kind;
                 self.mod_seg = seg.min(3);
                 self.load_editor_from_config();
                 self.sync_mod_slots_scroll();
             }
+            Action::OpenModFunctionPicker => self.open_mod_function_picker(),
+            Action::PickModFunction(i) => self.pick_mod_function(i),
+            Action::CloseModFunctionPicker => self.close_mod_function_picker(),
+            Action::SetModSource(src) => self.mod_editor.source = src,
             Action::CycleModFunction(d) => {
                 let list = mod_function_list_for(&self.mod_editor.function);
                 let cur = list
@@ -1288,7 +1405,7 @@ impl App {
 
     fn mod_control_adjust(&self, focus: usize, d: i32) -> Option<Action> {
         match focus {
-            0 => Some(Action::CycleModFunction(d)),
+            0 => None,
             1 => Some(Action::CycleModSource(d)),
             f if (2..2 + ModParam::ALL.len()).contains(&f) => {
                 Some(Action::StepModParam(ModParam::ALL[f - 2], d))
@@ -1300,8 +1417,8 @@ impl App {
     fn mod_control_activate(&self, focus: usize) -> Option<Action> {
         let base = 2 + ModParam::ALL.len();
         match focus {
-            0 => Some(Action::CycleModFunction(1)),
-            1 => Some(Action::CycleModSource(1)),
+            0 => Some(Action::OpenModFunctionPicker),
+            1 => None,
             f if f == base => Some(Action::ApplyMod),
             f if f == base + 1 => Some(Action::ClearMod),
             f if f == base + 2 => Some(Action::ClearAllMod(self.mod_channel)),
@@ -1378,6 +1495,14 @@ pub fn agg_name(m: &AggregationMode) -> &'static str {
         AggregationMode::Sum => "sum",
         AggregationMode::Average => "avg",
     }
+}
+
+pub fn aggregation_modes() -> &'static [AggregationMode; 3] {
+    &[
+        AggregationMode::Max,
+        AggregationMode::Sum,
+        AggregationMode::Average,
+    ]
 }
 
 pub fn mod_kind_name(k: ModKind) -> &'static str {

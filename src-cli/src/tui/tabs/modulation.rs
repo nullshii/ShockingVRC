@@ -4,7 +4,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::widgets::Paragraph;
 
 use crate::tui::app::{
-    mod_controls_len, mod_kind_name, mod_slot_index, Action, App, Channel, ModKind, ModParam,
+    mod_controls_len, mod_function_list_for, mod_kind_name, mod_slot_index, mod_source_list,
+    Action, App, Channel, ModKind, ModParam,
 };
 use crate::tui::preview::{render_modulation_preview, sample_modulation_curve};
 use crate::tui::theme;
@@ -17,7 +18,11 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
         .split(area);
     app.mod_split_x = cols[1].x;
     render_slots(app, frame, cols[0]);
-    render_editor_panel(app, frame, cols[1]);
+    if app.mod_function_picker {
+        render_function_picker(app, frame, cols[1]);
+    } else {
+        render_editor_panel(app, frame, cols[1]);
+    }
 }
 
 fn render_slots(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -81,6 +86,56 @@ fn render_slots(app: &mut App, frame: &mut Frame, area: Rect) {
     }
 }
 
+fn render_function_picker(app: &mut App, frame: &mut Frame, area: Rect) {
+    let block = theme::panel_block("Function — pick from list");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    ui::clear_panel_inner(frame, inner);
+
+    let rows = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(inner);
+    frame.render_widget(
+        Paragraph::new(" ↑↓ move · Enter apply · Esc cancel · click row")
+            .style(Style::default().fg(theme::TEXT_DIM)),
+        rows[0],
+    );
+
+    let list = mod_function_list_for(&app.mod_editor.function);
+    let count = list.len() as u16;
+    app.mod_func_pick_viewport = rows[1].height;
+    app.mod_func_pick_scroll = ui::clamp_scroll(
+        app.mod_func_pick_scroll,
+        count,
+        app.mod_func_pick_viewport,
+    );
+    app.mod_func_pick_scroll = ui::scroll_to_row(
+        app.mod_func_pick_scroll,
+        app.mod_func_pick_viewport,
+        app.mod_func_pick_ix as u16,
+    );
+
+    let scroll = app.mod_func_pick_scroll;
+    for (i, func) in list.iter().enumerate() {
+        let Some(rect) = ui::scrolled_row_rect(rows[1], scroll, i as u16, 1) else {
+            continue;
+        };
+        let selected = i == app.mod_func_pick_ix;
+        let current = func == &app.mod_editor.function;
+        let prefix = if selected { "▸ " } else { "  " };
+        let label = format!("{prefix}{func}");
+        let style = if selected {
+            theme::focused_style()
+        } else if current {
+            Style::default()
+                .fg(theme::ACCENT)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme::TEXT)
+        };
+        frame.render_widget(Paragraph::new(label).style(style), rect);
+        app.push_click(rect, Action::PickModFunction(i));
+    }
+}
+
 fn render_editor_panel(app: &mut App, frame: &mut Frame, area: Rect) {
     if area.height > 12 {
         let preview_h = area.height.saturating_sub(12).min(18).max(6);
@@ -125,28 +180,10 @@ fn render_editor(app: &mut App, frame: &mut Frame, area: Rect) {
     let scroll = app.mod_editor_scroll;
 
     if let Some(rect) = ui::scrolled_row_rect(inner, scroll, 0, 1) {
-        cycler_row(
-            frame,
-            app,
-            rect,
-            "Function",
-            &editor.function.to_string(),
-            focus == 0,
-            Action::CycleModFunction(-1),
-            Action::CycleModFunction(1),
-        );
+        render_function_field(app, frame, rect, &editor, focus == 0);
     }
     if let Some(rect) = ui::scrolled_row_rect(inner, scroll, 1, 1) {
-        cycler_row(
-            frame,
-            app,
-            rect,
-            "Source",
-            &editor.source.to_string(),
-            focus == 1,
-            Action::CycleModSource(-1),
-            Action::CycleModSource(1),
-        );
+        render_source_field(app, frame, rect, &editor, focus == 1);
     }
 
     for (i, param) in ModParam::ALL.iter().enumerate() {
@@ -189,36 +226,79 @@ fn render_editor(app: &mut App, frame: &mut Frame, area: Rect) {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cycler_row(
-    frame: &mut Frame,
+fn render_function_field(
     app: &mut App,
+    frame: &mut Frame,
     area: Rect,
-    name: &str,
-    value: &str,
+    editor: &shocking_vrc_core::modulation::config::ModulationConfig,
     focused: bool,
-    prev: Action,
-    next: Action,
 ) {
     let cols = Layout::horizontal([
-        Constraint::Length(13),
-        Constraint::Length(4),
-        Constraint::Min(6),
-        Constraint::Length(4),
+        Constraint::Length(11),
+        Constraint::Min(8),
+        Constraint::Length(11),
+        Constraint::Length(1),
     ])
     .split(area);
+
     frame.render_widget(
-        Paragraph::new(name.to_string()).style(theme::label_style(focused)),
+        Paragraph::new("Function").style(theme::label_style(focused)),
         cols[0],
     );
-    ui::button(frame, app, cols[1], "◀", false, prev);
+
+    let value = editor.function.to_string();
     frame.render_widget(
-        Paragraph::new(value.to_string()).style(
+        Paragraph::new(value).style(
             Style::default()
                 .fg(theme::ACCENT)
                 .add_modifier(Modifier::BOLD),
         ),
-        cols[2],
+        cols[1],
     );
-    ui::button(frame, app, cols[3], "▶", false, next);
+    app.push_click(cols[1], Action::OpenModFunctionPicker);
+
+    ui::button(
+        frame,
+        app,
+        cols[2],
+        "Pick list",
+        focused,
+        Action::OpenModFunctionPicker,
+    );
+}
+
+fn render_source_field(
+    app: &mut App,
+    frame: &mut Frame,
+    area: Rect,
+    editor: &shocking_vrc_core::modulation::config::ModulationConfig,
+    focused: bool,
+) {
+    let cols = Layout::horizontal([
+        Constraint::Length(13),
+        Constraint::Length(9),
+        Constraint::Length(9),
+        Constraint::Length(9),
+        Constraint::Length(9),
+    ])
+    .split(area);
+
+    frame.render_widget(
+        Paragraph::new("Source").style(theme::label_style(focused)),
+        cols[0],
+    );
+
+    for (i, src) in mod_source_list().iter().enumerate() {
+        let label = src.to_string();
+        let selected = editor.source == *src;
+        ui::choice_button(
+            frame,
+            app,
+            cols[i + 1],
+            &label,
+            selected,
+            focused && selected,
+            Action::SetModSource(*src),
+        );
+    }
 }

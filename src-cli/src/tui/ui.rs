@@ -93,7 +93,7 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
         Tab::Zones => "  ↑↓ select  ·  Enter — action  ·  X — remove  ·  click rows & buttons",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",
-        Tab::Modulation => "  ↑↓ field  ·  ←→ tweak  ·  wheel — scroll  ·  Enter — apply",
+        Tab::Modulation => "  Enter — function list  ·  source buttons  ·  ↑↓ field  ·  wheel — scroll",
         Tab::Log => "  ↑↓ / wheel — scroll  ·  Q/Esc — quit",
     };
     let line = Line::from(vec![
@@ -108,6 +108,24 @@ pub fn button(frame: &mut Frame, app: &mut App, area: Rect, label: &str, focused
     frame.render_widget(
         Paragraph::new(format!(" {label} "))
             .style(theme::button_style(focused))
+            .alignment(Alignment::Center),
+        area,
+    );
+    app.push_click(area, action);
+}
+
+pub fn choice_button(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    label: &str,
+    selected: bool,
+    focused: bool,
+    action: Action,
+) {
+    frame.render_widget(
+        Paragraph::new(format!(" {label} "))
+            .style(theme::choice_button_style(selected, focused))
             .alignment(Alignment::Center),
         area,
     );

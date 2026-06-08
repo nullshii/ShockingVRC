@@ -85,6 +85,21 @@ pub fn button_style(focused: bool) -> Style {
     }
 }
 
+pub fn choice_button_style(selected: bool, focused: bool) -> Style {
+    match (selected, focused) {
+        (true, true) => focused_style(),
+        (true, false) => Style::default()
+            .fg(Color::Black)
+            .bg(SUCCESS)
+            .add_modifier(Modifier::BOLD),
+        (false, true) => Style::default()
+            .fg(HIGHLIGHT)
+            .bg(SURFACE_ELEVATED)
+            .add_modifier(Modifier::BOLD),
+        (false, false) => button_style(false),
+    }
+}
+
 pub fn section_header_style() -> Style {
     Style::default()
         .fg(ACCENT)

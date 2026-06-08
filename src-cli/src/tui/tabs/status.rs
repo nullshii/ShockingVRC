@@ -72,7 +72,15 @@ fn render_indicators(app: &mut App, frame: &mut Frame, area: Rect) {
     } else {
         "Monitor OFF"
     };
-    ui::button(frame, app, cols[4], label, app.monitor, Action::ToggleMonitor);
+    ui::choice_button(
+        frame,
+        app,
+        cols[4],
+        label,
+        app.monitor,
+        false,
+        Action::ToggleMonitor,
+    );
 }
 
 fn coyote_status(connected: bool) -> Line<'static> {
