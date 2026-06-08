@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use rosc::{OscMessage, OscPacket, OscType};
 use tokio::net::UdpSocket;
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{Mutex, RwLock, broadcast};
+use tokio::task::JoinHandle;
 
 use super::game_device::GameDevice;
 use super::oscquery::VrchatOscQuery;
@@ -19,7 +20,8 @@ struct ScannerState {
     /// Subscribers use this to know "avatar zones are now known".
     refresh_tx: broadcast::Sender<Vec<ZoneEvent>>,
     oscquery: RwLock<VrchatOscQuery>,
-    port: u16,
+    port: RwLock<u16>,
+    listener: Mutex<Option<JoinHandle<()>>>,
     ukf_params: RwLock<UkfParams>,
 }
 
@@ -43,10 +45,25 @@ impl AvatarScanner {
                 event_tx,
                 refresh_tx,
                 oscquery: RwLock::new(VrchatOscQuery::new()),
-                port,
+                port: RwLock::new(port),
+                listener: Mutex::new(None),
                 ukf_params: RwLock::new(UkfParams::default()),
             }),
         }
+    }
+
+    pub async fn port(&self) -> u16 {
+        *self.state.port.read().await
+    }
+
+    pub async fn set_port(&self, port: u16) -> Result<()> {
+        if !(1024..=65535).contains(&port) {
+            return Err(DGLabError::OscError(format!(
+                "Invalid OSC port {port} (use 1024–65535)"
+            )));
+        }
+        *self.state.port.write().await = port;
+        self.restart_listener().await
     }
 
     /// Currently configured UKF parameters (shared by all contacts).
@@ -75,18 +92,27 @@ impl AvatarScanner {
         self.state.refresh_tx.subscribe()
     }
 
-    /// Start the background **OSC UDP listener** only.
     ///
     /// VRChat discovery is intentionally *not* started here — call
     /// [`discover_wait`] once after `start()` to perform the first discovery.
     /// Subsequent avatar changes are handled automatically by the listener.
     pub async fn start(&self) -> Result<()> {
+        self.restart_listener().await
+    }
+
+    async fn restart_listener(&self) -> Result<()> {
+        if let Some(handle) = self.state.listener.lock().await.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+
         let me = self.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             if let Err(e) = me.run_listener().await {
                 log::error!("OSC listener stopped: {e}");
             }
         });
+        *self.state.listener.lock().await = Some(handle);
         Ok(())
     }
 
@@ -137,7 +163,8 @@ impl AvatarScanner {
 
     // Internal — OSC listener loop
     async fn run_listener(&self) -> Result<()> {
-        let bind_addr = format!("0.0.0.0:{}", self.state.port);
+        let port = *self.state.port.read().await;
+        let bind_addr = format!("0.0.0.0:{port}");
         let socket = UdpSocket::bind(&bind_addr).await?;
         log::info!("OSC listener bound to {bind_addr}");
 

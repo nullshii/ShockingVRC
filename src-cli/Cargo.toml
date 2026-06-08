@@ -26,3 +26,5 @@ mdns-sd = { workspace = true }
 reqwest = { workspace = true }
 rustyline-async = { workspace = true }
 clearscreen = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }

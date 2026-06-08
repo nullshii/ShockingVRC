@@ -22,6 +22,7 @@ const WATCHDOG_INTERVAL: Duration = Duration::from_millis(50);
 pub struct ChannelStatus {
     pub raw_level: f32,
     pub strength: u8,
+    pub frequency: [u8; 4],
     pub active_zones: Vec<(ZoneId, f32)>,
     pub kinematics: KinematicsInput,
 }
@@ -347,11 +348,49 @@ impl CliEngine {
             elapsed.min(0.5)
         };
 
-        let status = compute_status(&cfg, &kinematics, now, connected);
+        let mut status = compute_status(&cfg, &kinematics, now, connected);
+
+        let mut accums = self.state.mod_accums.lock().await;
+        let ModAccumulators {
+            ref mut freq_a,
+            ref mut int_a,
+            ref mut freq_b,
+            ref mut int_b,
+        } = *accums;
+        let (freq_a_out, int_a) = modulate_channel(
+            cfg.channel_a.frequency,
+            cfg.channel_a.intensity,
+            &cfg.channel_a,
+            &status.channel_a.kinematics,
+            freq_a,
+            int_a,
+            dt,
+        );
+        let (freq_b_out, int_b) = modulate_channel(
+            cfg.channel_b.frequency,
+            cfg.channel_b.intensity,
+            &cfg.channel_b,
+            &status.channel_b.kinematics,
+            freq_b,
+            int_b,
+            dt,
+        );
+        status.channel_a.frequency = freq_a_out;
+        status.channel_b.frequency = freq_b_out;
 
         if let Some(wave_now) = wave_arc {
-            let mut accums = self.state.mod_accums.lock().await;
-            let wave = build_wave(&status, &cfg, &mut accums, dt);
+            let wave = if status.channel_a.strength == 0 && status.channel_b.strength == 0 {
+                WaveformV3::default()
+            } else {
+                WaveformV3::new(
+                    status.channel_a.strength,
+                    status.channel_b.strength,
+                    freq_a_out,
+                    int_a,
+                    freq_b_out,
+                    int_b,
+                )
+            };
             *wave_now.lock().await = wave;
         }
 
@@ -397,35 +436,6 @@ fn modulate_channel(
     ];
 
     (freq_out, int_out)
-}
-
-fn build_wave(status: &CliStatus, cfg: &CliConfig, accums: &mut ModAccumulators, dt: f32) -> WaveformV3 {
-    let sa = status.channel_a.strength;
-    let sb = status.channel_b.strength;
-
-    if sa == 0 && sb == 0 {
-        WaveformV3::default()
-    } else {
-        let (freq_a, int_a) = modulate_channel(
-            cfg.channel_a.frequency,
-            cfg.channel_a.intensity,
-            &cfg.channel_a,
-            &status.channel_a.kinematics,
-            &mut accums.freq_a,
-            &mut accums.int_a,
-            dt,
-        );
-        let (freq_b, int_b) = modulate_channel(
-            cfg.channel_b.frequency,
-            cfg.channel_b.intensity,
-            &cfg.channel_b,
-            &status.channel_b.kinematics,
-            &mut accums.freq_b,
-            &mut accums.int_b,
-            dt,
-        );
-        WaveformV3::new(sa, sb, freq_a, int_a, freq_b, int_b)
-    }
 }
 
 fn project_with_freshness(k: &ZoneKinematics, mode: ContactMode, norms: &MotionNorms, now: Instant) -> f32 {
@@ -507,6 +517,7 @@ fn compute_channel_status(
     ChannelStatus {
         raw_level,
         strength,
+        frequency: channel.frequency,
         active_zones,
         kinematics: kin_accum,
     }

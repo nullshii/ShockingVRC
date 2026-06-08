@@ -33,7 +33,7 @@ impl Command for ModulationSetCommand {
                 writeln!(w, "    sigmoid, smoothstep, smootherstep, logistic, softsign,")?;
                 writeln!(w, "    perlin, simplex, fractal, valuenoise,")?;
                 writeln!(w, "    sin+noise, sin*noise, triangle+sin, square*sigmoid")?;
-                writeln!(w, "  Params: sens=1.0 dev=20.0 phase=0.0 fmul=1.0 off=0.0 pow=1.0 min=0.0 max=255.0")?;
+                writeln!(w, "  Params: sens=1.0 dev=20.0 phase=0.0 fmul=1.0 off=0.0 pow=1.0 min=10.0 max=255.0 (freq) or min=0 max=100 (int)")?;
                 return Ok(());
             }
 
@@ -68,10 +68,9 @@ impl Command for ModulationSetCommand {
             };
 
             if !is_freq {
-                config.clamp_min = 0.0;
-                config.clamp_max = 100.0;
                 config.max_deviation = 10.0;
             }
+            config.sanitise(!is_freq);
 
             for param in &args[3..] {
                 if let Some((key, val)) = param.split_once('=') {
@@ -99,6 +98,8 @@ impl Command for ModulationSetCommand {
                     }
                 }
             }
+
+            config.sanitise(!is_freq);
 
             let mut cfg = data.state.engine.config().await;
             let ch_cfg = if channel == "A" { &mut cfg.channel_a } else { &mut cfg.channel_b };

@@ -172,7 +172,7 @@ impl CoyoteDevice {
         let wave_now = Arc::clone(&self.wave_now);
 
         let handle = tokio::spawn(async move {
-            println!("[dglab] Waveform output loop started");
+            info!("[dglab] Waveform output loop started");
             let mut stop_rx = stop_rx;
             let mut last_log = String::new();
 
@@ -183,7 +183,7 @@ impl CoyoteDevice {
 
                 let connected = peripheral.is_connected().await.unwrap_or(false);
                 if !connected {
-                    eprintln!("[dglab] Device disconnected, stopping output loop");
+                    warn!("[dglab] Device disconnected, stopping output loop");
                     break;
                 }
 
@@ -224,7 +224,7 @@ impl CoyoteDevice {
                 }
             }
 
-            println!("[dglab] Waveform output loop ended");
+            info!("[dglab] Waveform output loop ended");
         });
 
         self.input_task = Some(handle);
@@ -256,9 +256,12 @@ impl CoyoteDevice {
 
         let characteristics: Vec<_> = peripheral.characteristics().into_iter().collect();
 
-        println!("[dglab] Discovered characteristics:");
+        debug!("[dglab] Discovered {} characteristics", characteristics.len());
         for ch in &characteristics {
-            println!("  service: {}  char: {}  props: {:?}", ch.service_uuid, ch.uuid, ch.properties);
+            debug!(
+                "[dglab]   service: {}  char: {}  props: {:?}",
+                ch.service_uuid, ch.uuid, ch.properties
+            );
         }
 
         let write_char = characteristics
@@ -268,7 +271,7 @@ impl CoyoteDevice {
             .cloned()
             .ok_or_else(|| DGLabError::CharacteristicNotFound(CHARACTERISTIC_WRITE))?;
 
-        println!(
+        info!(
             "[dglab] Write characteristic: {} in service {} (props: {:?})",
             write_char.uuid, write_char.service_uuid, write_char.properties
         );
@@ -276,7 +279,7 @@ impl CoyoteDevice {
         if let Some(ch) = characteristics.iter().find(|c| c.uuid == CHARACTERISTIC_BATTERY) {
             if let Ok(data) = peripheral.read(ch).await {
                 if !data.is_empty() {
-                    println!("[dglab] Battery read: {}%", data[0]);
+                    info!("[dglab] Battery read: {}%", data[0]);
                 }
             }
         }
@@ -367,16 +370,16 @@ impl CoyoteDevice {
 
         let bf = WaveformBF::new(200, 0, 0, 0, 0, 0);
         match device.set_wave_bf(&bf).await {
-            Ok(_) => println!("[dglab] Initial BF command sent OK"),
-            Err(e) => eprintln!("[dglab] WARNING: Failed to send initial BF command: {e}"),
+            Ok(_) => info!("[dglab] Initial BF command sent OK"),
+            Err(e) => warn!("[dglab] Failed to send initial BF command: {e}"),
         }
 
         tokio::time::sleep(Duration::from_millis(150)).await;
 
         let init_b0 = WaveformV3::waveform_only_a([10, 10, 10, 10], [0, 10, 20, 30]);
         match device.set_waveform(&init_b0).await {
-            Ok(_) => println!("[dglab] Initial B0 sent OK (device should show connected)"),
-            Err(e) => println!("[dglab] Initial B0 failed: {e}"),
+            Ok(_) => info!("[dglab] Initial B0 sent OK (device should show connected)"),
+            Err(e) => warn!("[dglab] Initial B0 failed: {e}"),
         }
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -553,7 +556,7 @@ impl CoyoteDevice {
         }
 
         self.peripheral.disconnect().await?;
-        println!("[dglab] Device disconnected");
+        info!("[dglab] Device disconnected");
         Ok(())
     }
 }
@@ -578,7 +581,7 @@ async fn find_coyote_peripherals(adapter: &Adapter) -> Result<Vec<Peripheral>> {
         if let Some(props) = p.properties().await? {
             if let Some(ref name) = props.local_name {
                 if name.trim() == DEVICE_NAME {
-                    println!("[dglab] Found Coyote V3: {name} (paired: {:?})", props.address);
+                    info!("[dglab] Found Coyote V3: {name} ({:?})", props.address);
                     found.push(p);
                 }
             }

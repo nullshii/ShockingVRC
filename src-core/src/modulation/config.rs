@@ -258,9 +258,34 @@ impl Default for ModulationConfig {
             frequency_multiplier: 1.0,
             offset: 0.0,
             power: 1.0,
-            clamp_min: 0.0,
+            clamp_min: 10.0,
             clamp_max: 255.0,
         }
+    }
+}
+
+impl ModulationConfig {
+    pub fn output_bounds(intensity: bool) -> (f32, f32) {
+        if intensity {
+            (0.0, 100.0)
+        } else {
+            (10.0, 255.0)
+        }
+    }
+
+    pub fn sanitise(&mut self, intensity: bool) {
+        let (lo_limit, hi_limit) = Self::output_bounds(intensity);
+        self.clamp_min = self.clamp_min.clamp(lo_limit, hi_limit);
+        self.clamp_max = self.clamp_max.clamp(lo_limit, hi_limit);
+        if self.clamp_max < self.clamp_min {
+            std::mem::swap(&mut self.clamp_min, &mut self.clamp_max);
+        }
+        self.base_speed = self.base_speed.max(0.0);
+        self.sensitivity = self.sensitivity.max(0.0);
+        self.max_deviation = self.max_deviation.max(0.0);
+        self.frequency_multiplier = self.frequency_multiplier.max(0.001);
+        self.power = self.power.max(0.001);
+        self.offset = self.offset.clamp(-hi_limit, hi_limit);
     }
 }
 

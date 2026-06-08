@@ -1,43 +1,15 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 use shocking_vrc_core::cli::{
     AggregationMode, ChannelConfig, CliConfig, ContactMode, PowerLimits, ZoneEntry, ZoneId,
 };
 use shocking_vrc_core::{AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
 
-use shocking_vrc_cli::{
-    app_state::AppState,
-    commands::{
-        add_all_zones_command::AddAllZonesCommand,
-        add_zone_command::AddZoneCommand,
-        aggregation_command::AggregationCommand,
-        clear_command::ClearCommand,
-        config_command::ConfigCommand,
-        freq_command::FreqCommand,
-        help_command::HelpCommand,
-        intensity_command::IntensityCommand,
-        limits_command::LimitsCommand,
-        modulation_off_command::ModulationOffCommand,
-        modulation_set_command::ModulationSetCommand,
-        modulation_show_command::ModulationShowCommand,
-        monitor_command::MonitorCommand,
-        norms_command::NormsCommand,
-        quit_command::QuitCommand,
-        remove_zone_command::RemoveZoneCommand,
-        status_command::StatusCommand,
-        ukf_command::UkfCommand,
-        zone_mode_command::ZoneModeCommand,
-        zones_command::ZonesCommand,
-    },
-    display::{print_banner, print_config_summary, print_status_header, print_status_line},
-    engine::{
-        cli_engine::CliEngine as CliShellEngine,
-        command_registry::CommandRegistry,
-    },
-};
+use shocking_vrc_cli::{app_state::AppState, tui, tui_logger};
 
 const CONFIG_FILE: &str = "cli_config.json";
 
@@ -114,53 +86,55 @@ fn load_config_from_file(path: &str) -> Result<CliConfig, Box<dyn std::error::Er
 
 #[tokio::main]
 async fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let log_buffer = tui_logger::init("info");
 
     let args = parse_args();
 
-    print_banner();
+    log::info!("ShockingVRC CLI — Two-Channel OSC Controller (TUI)");
 
     let config = if Path::new(CONFIG_FILE).exists() {
         match load_config_from_file(CONFIG_FILE) {
             Ok(c) => {
-                println!("[config] Loaded from {CONFIG_FILE}");
+                log::info!("[config] Loaded from {CONFIG_FILE}");
                 c
             }
             Err(e) => {
-                println!("[config] Failed to load {CONFIG_FILE}: {e} — using defaults");
+                log::warn!("[config] Failed to load {CONFIG_FILE}: {e} — using defaults");
                 default_config()
             }
         }
     } else {
-        println!("[config] No {CONFIG_FILE} found — using defaults (see 'save' command)");
+        log::info!("[config] No {CONFIG_FILE} found — using defaults (Channels ▸ Save to create)");
         default_config()
     };
 
-    print_config_summary(&config, &mut std::io::stdout()).unwrap();
-
-    println!("\n[osc] Starting OSC listener on UDP port {}...", args.port);
+    log::info!("[osc] Starting OSC listener on UDP port {}...", args.port);
     let scanner = AvatarScanner::new(args.port);
     scanner.start().await.expect("Failed to start OSC listener");
 
-    println!("[osc] Scanning for VRChat (up to 5 s)...");
+    log::info!("[osc] Scanning for VRChat...");
     match scanner.discover_wait().await {
         Ok(true) => {
             if let Some(addr) = scanner.vrchat_address().await {
-                println!(
+                log::info!(
                     "[osc] VRChat found → {} (OSC {}:{})",
-                    addr.http_addr, addr.osc_ip, addr.osc_port
+                    addr.http_addr,
+                    addr.osc_ip,
+                    addr.osc_port
                 );
             }
             let zones = scanner.zones().await;
-            println!("[osc] Avatar zones found: {}", zones.len());
+            log::info!("[osc] Avatar zones found: {}", zones.len());
             for z in &zones {
-                println!("      [{:<5}] {}", z.zone_type, z.id);
+                log::info!("      [{:<5}] {}", z.zone_type, z.id);
             }
         }
         Ok(false) => {
-            println!("[osc] VRChat not found — enable OSC in Settings → OSC. Retrying on avatar change.")
+            log::warn!(
+                "[osc] VRChat not found — enable OSC in Settings → OSC. Retrying on avatar change."
+            )
         }
-        Err(e) => println!("[osc] Discovery error: {e}"),
+        Err(e) => log::error!("[osc] Discovery error: {e}"),
     }
 
     let engine = CliEngine::new(config);
@@ -168,15 +142,16 @@ async fn main() {
     let _stop_handle = engine.start(&scanner).await;
 
     let monitor_enabled = Arc::new(AtomicBool::new(true));
+    let battery_level = Arc::new(RwLock::new(None));
 
-    println!("\n[cli] Engine started. Type 'help' for commands, 'quit' to exit.");
-    println!("[ble] Searching for DGLab Coyote V3 in background...\n");
-    print_status_header();
+    log::info!("[cli] Engine started.");
+    log::info!("[ble] Searching for DGLab Coyote V3 in background...");
 
     let state = Arc::new(AppState {
         engine,
         scanner,
         monitor_enabled: Arc::clone(&monitor_enabled),
+        battery_level: Arc::clone(&battery_level),
     });
 
     {
@@ -185,17 +160,46 @@ async fn main() {
         tokio::spawn(async move {
             loop {
                 log::debug!("[ble] Starting BLE scan ({}s)...", scan_timeout);
-                match CoyoteDevice::scan_first_with_timeout(Duration::from_secs(scan_timeout)).await {
+                match CoyoteDevice::scan_first_with_timeout(Duration::from_secs(scan_timeout)).await
+                {
                     Ok(Some(mut dev)) => {
-                        println!("\n[ble] Connected: {} ({})", dev.name(), dev.mac_address());
+                        log::info!("[ble] Connected: {} ({})", dev.name(), dev.mac_address());
                         dev.start();
                         let dev = Arc::new(dev);
                         state_ble.engine.connect_device(Arc::clone(&dev)).await;
 
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        match dev.battery_level().await {
+                            Ok(Some(lvl)) => {
+                                if let Ok(mut g) = state_ble.battery_level.write() {
+                                    *g = Some(lvl);
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(e) => log::debug!("[ble] Battery read failed: {e}"),
+                        }
+
+                        let mut last_battery = Instant::now();
                         loop {
+                            if last_battery.elapsed() >= Duration::from_secs(30) {
+                                match dev.battery_level().await {
+                                    Ok(Some(lvl)) => {
+                                        if let Ok(mut g) = state_ble.battery_level.write() {
+                                            *g = Some(lvl);
+                                        }
+                                    }
+                                    Ok(None) => {}
+                                    Err(e) => log::debug!("[ble] Battery read failed: {e}"),
+                                }
+                                last_battery = Instant::now();
+                            }
+
                             tokio::time::sleep(Duration::from_secs(2)).await;
                             if !dev.is_connected().await {
-                                println!("\n[ble] Device disconnected — rescanning...");
+                                log::warn!("[ble] Device disconnected — rescanning...");
+                                if let Ok(mut g) = state_ble.battery_level.write() {
+                                    *g = None;
+                                }
                                 state_ble.engine.disconnect_device().await;
                                 break;
                             }
@@ -214,57 +218,9 @@ async fn main() {
         });
     }
 
-    {
-        let monitor_enabled_bg = Arc::clone(&monitor_enabled);
-        tokio::spawn(async move {
-            let mut rx = status_rx;
-            loop {
-                match rx.recv().await {
-                    Ok(status) => {
-                        if !monitor_enabled_bg.load(Ordering::Relaxed) {
-                            continue;
-                        }
-                        let a = &status.channel_a;
-                        let b = &status.channel_b;
-                        if a.raw_level > 0.001 || b.raw_level > 0.001 {
-                            print_status_line(a.raw_level, a.strength, b.raw_level, b.strength);
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        log::debug!("Status receiver lagged {n}");
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        });
-    }
 
-    let registry = CommandRegistry::new()
-        .add_command(Box::new(HelpCommand))
-        .add_command(Box::new(ClearCommand))
-        .add_command(Box::new(QuitCommand))
-        .add_command(Box::new(AddZoneCommand))
-        .add_command(Box::new(RemoveZoneCommand))
-        .add_command(Box::new(ZoneModeCommand))
-        .add_command(Box::new(AddAllZonesCommand))
-        .add_command(Box::new(FreqCommand))
-        .add_command(Box::new(IntensityCommand))
-        .add_command(Box::new(LimitsCommand))
-        .add_command(Box::new(AggregationCommand))
-        .add_command(Box::new(UkfCommand))
-        .add_command(Box::new(NormsCommand))
-        .add_command(Box::new(ModulationSetCommand))
-        .add_command(Box::new(ModulationShowCommand))
-        .add_command(Box::new(ModulationOffCommand))
-        .add_command(Box::new(ZonesCommand))
-        .add_command(Box::new(StatusCommand))
-        .add_command(Box::new(ConfigCommand))
-        .add_command(Box::new(MonitorCommand))
-        .build();
-
-    let shell = CliShellEngine::new(registry, Arc::clone(&state));
-    if let Err(e) = shell.run().await {
-        log::error!("CLI error: {:?}", e);
+    if let Err(e) = tui::run(Arc::clone(&state), status_rx, log_buffer).await {
+        eprintln!("[cli] TUI error: {e}");
     }
 
     state.engine.disconnect_device().await;
