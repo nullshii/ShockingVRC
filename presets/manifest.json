@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "gentle-wave",
+      "name": "Gentle Wave",
+      "description": "Warm rolling sine waves — soft phase-shifted ripple",
+      "file": "gentle-wave.json"
+    },
+    {
+      "id": "heartbeat",
+      "name": "Heartbeat",
+      "description": "Realistic double-pulse heartbeat — thump-thump with pause",
+      "file": "heartbeat.json"
+    },
+    {
+      "id": "steady-hum",
+      "name": "Steady Hum",
+      "description": "Deep alternating drone — low rumble with triangle modulation",
+      "file": "steady-hum.json"
+    },
+    {
+      "id": "motion-pulse",
+      "name": "Motion Pulse",
+      "description": "Reactive to movement — speed-driven intensity bursts",
+      "file": "motion-pulse.json"
+    },
+    {
+      "id": "thunder-roll",
+      "name": "Thunder Roll",
+      "description": "Aggressive storm — fractal noise chaos with heavy saw",
+      "file": "thunder-roll.json"
+    },
+    {
+      "id": "electric-storm",
+      "name": "Electric Storm",
+      "description": "Full chaos — every segment different, fast and unpredictable",
+      "file": "electric-storm.json"
+    },
+    {
+      "id": "deep-throb",
+      "name": "Deep Throb",
+      "description": "Slow deep pounding — ultra-low freq, knees buckle guaranteed",
+      "file": "deep-throb.json"
+    },
+    {
+      "id": "neon-rush",
+      "name": "Neon Rush",
+      "description": "Hyper-fast rave — rapid square pulses with saw sweeps",
+      "file": "neon-rush.json"
+    },
+    {
+      "id": "earthquake",
+      "name": "Earthquake",
+      "description": "Tectonic bass — ultra-low freq perlin rumble, devastating",
+      "file": "earthquake.json"
+    },
+    {
+      "id": "silk-touch",
+      "name": "Silk Touch",
+      "description": "Delicate high-freq tease — barely-there then suddenly there",
+      "file": "silk-touch.json"
+    },
+    {
+      "id": "demons-whisper",
+      "name": "Demon's Whisper",
+      "description": "Sinister slow crawl — sin×noise, makes you shiver and moan",
+      "file": "demons-whisper.json"
+    },
+    {
+      "id": "overdrive",
+      "name": "Overdrive",
+      "description": "Maximum aggression — full intensity square+saw, no mercy",
+      "file": "overdrive.json"
+    },
+    {
+      "id": "pleasure-wave",
+      "name": "Pleasure Wave",
+      "description": "Building ecstasy — slow sine buildup with sigmoid crescendo",
+      "file": "pleasure-wave.json"
+    },
+    {
+      "id": "edge-rider",
+      "name": "Edge Rider",
+      "description": "Tease-and-deny — builds up then drops, keeps you on the edge",
+      "file": "edge-rider.json"
+    },
+    {
+      "id": "machine-gun",
+      "name": "Machine Gun",
+      "description": "Rapid-fire staccato — ultra-fast pulse bursts, relentless",
+      "file": "machine-gun.json"
+    },
+    {
+      "id": "warm-embrace",
+      "name": "Warm Embrace",
+      "description": "Gentle hug — slow sine waves, cozy and safe",
+      "file": "warm-embrace.json"
+    },
+    {
+      "id": "ocean-drift",
+      "name": "Ocean Drift",
+      "description": "Floating on waves — very slow triangle, meditative calm",
+      "file": "ocean-drift.json"
+    },
+    {
+      "id": "morning-dew",
+      "name": "Morning Dew",
+      "description": "Fresh and light — high-freq sparkle with delicate shimmer",
+      "file": "morning-dew.json"
+    },
+    {
+      "id": "velvet-purr",
+      "name": "Velvet Purr",
+      "description": "Cat-like purring — soft low-mid buzz with tanh warmth",
+      "file": "velvet-purr.json"
+    },
+    {
+      "id": "slow-burn",
+      "name": "Slow Burn",
+      "description": "Gradual heat — barely noticeable, logistic curve builds over time",
+      "file": "slow-burn.json"
+    },
+    {
+      "id": "cloud-nine",
+      "name": "Cloud Nine",
+      "description": "Floating bliss — airy high frequencies, soft noise texture",
+      "file": "cloud-nine.json"
+    },
+    {
+      "id": "lazy-sunday",
+      "name": "Lazy Sunday",
+      "description": "Relaxed rhythm — slow bounce with gentle triangle, chill",
+      "file": "lazy-sunday.json"
+    },
+    {
+      "id": "whisper-touch",
+      "name": "Whisper Touch",
+      "description": "Barely there — feather-light, slow sigmoidal fade in/out",
+      "file": "whisper-touch.json"
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "name": "Whisper Touch",
+  "description": "Barely there — feather-light intensity, slow sigmoidal fade in and out",
+  "author": "ShockingVRC",
+  "frequency": [60, 70, 55, 75],
+  "intensity": [15, 20, 12, 18],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.08,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 120.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sigmoid",
+      "base_speed": 0.06,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 120.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 12.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 120.0
+    },
+    {
+      "source": "Depth",
+      "function": "SoftSign",
+      "base_speed": 0.05,
+      "sensitivity": 1.0,
+      "max_deviation": 6.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 120.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sigmoid",
+      "base_speed": 0.04,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 3.0,
+      "clamp_max": 35.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.04,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 3.0,
+      "clamp_max": 35.0
+    },
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.03,
+      "sensitivity": 1.0,
+      "max_deviation": 6.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 3.0,
+      "clamp_max": 35.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.03,
+      "sensitivity": 1.0,
+      "max_deviation": 6.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 3.0,
+      "clamp_max": 35.0
+    }
+  ]
+}

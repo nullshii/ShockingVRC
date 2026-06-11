@@ -1,0 +1,115 @@
+{
+  "name": "Warm Embrace",
+  "description": "Gentle hug — slow sine waves with minimal deviation, cozy and safe",
+  "author": "ShockingVRC",
+  "frequency": [120, 130, 115, 125],
+  "intensity": [35, 40, 38, 42],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 80.0,
+      "clamp_max": 180.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 80.0,
+      "clamp_max": 180.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 80.0,
+      "clamp_max": 180.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 80.0,
+      "clamp_max": 180.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.05,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 60.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.05,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 60.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.05,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 60.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.05,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 60.0
+    }
+  ]
+}

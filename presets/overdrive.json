@@ -1,0 +1,115 @@
+{
+  "name": "Overdrive",
+  "description": "Maximum aggression — full intensity square+saw stacking, no mercy",
+  "author": "ShockingVRC",
+  "frequency": [35, 120, 20, 80],
+  "intensity": [100, 100, 100, 100],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 4.0,
+      "sensitivity": 1.0,
+      "max_deviation": 50.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Saw",
+      "base_speed": 5.0,
+      "sensitivity": 1.0,
+      "max_deviation": 70.0,
+      "phase": 0.15,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 6.0,
+      "sensitivity": 1.0,
+      "max_deviation": 55.0,
+      "phase": 0.4,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "ReverseSaw",
+      "base_speed": 3.5,
+      "sensitivity": 1.0,
+      "max_deviation": 60.0,
+      "phase": 0.7,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 3.0,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 40.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 2.0,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 40.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Triangle",
+      "base_speed": 4.0,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 40.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Saw",
+      "base_speed": 5.0,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 40.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

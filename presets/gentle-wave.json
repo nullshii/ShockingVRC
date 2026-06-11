@@ -1,0 +1,115 @@
+{
+  "name": "Gentle Wave",
+  "description": "Warm rolling sine waves — soft phase-shifted ripple across all segments",
+  "author": "ShockingVRC",
+  "frequency": [80, 95, 110, 70],
+  "intensity": [55, 65, 50, 60],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 20.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 18.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 22.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 16.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 200.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "name": "Motion Pulse",
+  "description": "Reactive to movement — speed-driven intensity bursts with frequency sweep",
+  "author": "ShockingVRC",
+  "frequency": [60, 120, 45, 100],
+  "intensity": [70, 55, 80, 65],
+  "freq_modulation": [
+    {
+      "source": "Speed",
+      "function": "Saw",
+      "base_speed": 0.8,
+      "sensitivity": 1.5,
+      "max_deviation": 35.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Speed",
+      "function": "ReverseSaw",
+      "base_speed": 0.8,
+      "sensitivity": 1.5,
+      "max_deviation": 30.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Speed",
+      "function": "Saw",
+      "base_speed": 1.0,
+      "sensitivity": 1.5,
+      "max_deviation": 40.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Speed",
+      "function": "ReverseSaw",
+      "base_speed": 1.0,
+      "sensitivity": 1.5,
+      "max_deviation": 25.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Speed",
+      "function": "Sin",
+      "base_speed": 1.5,
+      "sensitivity": 2.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Speed",
+      "function": "Cos",
+      "base_speed": 1.5,
+      "sensitivity": 2.0,
+      "max_deviation": 25.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Cos",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 10.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

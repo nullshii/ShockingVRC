@@ -3,6 +3,7 @@ pub mod event;
 pub mod preview;
 pub mod tabs;
 pub mod theme;
+pub mod tutorial;
 pub mod ui;
 
 use std::io::{self, Stdout};
@@ -29,22 +30,22 @@ use event::InputEvent;
 type Backend = CrosstermBackend<Stdout>;
 
 fn init_terminal() -> io::Result<Terminal<Backend>> {
-    enable_raw_mode()?;
+        enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     Terminal::new(CrosstermBackend::new(stdout))
 }
 
 fn restore_terminal(terminal: &mut Terminal<Backend>) -> io::Result<()> {
-    disable_raw_mode()?;
+        disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
-    Ok(())
-}
+        Ok(())
+    }
 
 fn restore_on_panic() {
     let _ = disable_raw_mode();
@@ -94,11 +95,7 @@ pub async fn run(
             st = status_rx.recv() => {
                 match st {
                     Ok(s) => {
-                        if app.monitor {
-                            app.status = s;
-                        } else {
-                            app.status.device_connected = s.device_connected;
-                        }
+                        app.status = s;
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(broadcast::error::RecvError::Closed) => {}

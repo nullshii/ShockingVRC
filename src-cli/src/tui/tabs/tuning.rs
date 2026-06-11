@@ -35,7 +35,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_ukf(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<TuningControl>) {
-    let block = theme::panel_block("UKF filter — motion smoothing");
+    let block = theme::panel_block("UKF — Unscented Kalman Filter");
     let inner = block.inner(area);
     frame.render_widget(block, area);
     ui::clear_panel_inner(frame, inner);
@@ -43,10 +43,10 @@ fn render_ukf(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Tuning
     let p = app.config.ukf;
     let scroll = app.tuning_scroll;
     let fields = [
-        (UkfField::Q, "Process noise (q)", format!("{:.4}", p.q)),
-        (UkfField::R, "Measure noise (r)", format!("{:.4}", p.r)),
-        (UkfField::Alpha, "Alpha", format!("{:.3}", p.alpha)),
-        (UkfField::Beta, "Beta", format!("{:.3}", p.beta)),
+        (UkfField::Q, "Q (process)", format!("{:.4}", p.q)),
+        (UkfField::R, "R (measure)", format!("{:.4}", p.r)),
+        (UkfField::Alpha, "Alpha (σ spread)", format!("{:.3}", p.alpha)),
+        (UkfField::Beta, "Beta (prior)", format!("{:.3}", p.beta)),
         (UkfField::Kappa, "Kappa", format!("{:.3}", p.kappa)),
     ];
 
@@ -83,7 +83,7 @@ fn render_ukf(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Tuning
 }
 
 fn render_norms(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<TuningControl>) {
-    let block = theme::panel_block("Motion scale — contact sensitivity");
+    let block = theme::panel_block("Normalization — contact sensitivity");
     let inner = block.inner(area);
     frame.render_widget(block, area);
     ui::clear_panel_inner(frame, inner);
@@ -91,9 +91,9 @@ fn render_norms(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Tuni
     let n = app.config.norms;
     let scroll = app.tuning_scroll;
     let fields = [
-        (NormField::Speed, "Speed divisor", format!("{:.3}", n.speed)),
-        (NormField::Acc, "Accel divisor", format!("{:.3}", n.acc)),
-        (NormField::Recoil, "Recoil divisor", format!("{:.3}", n.recoil)),
+        (NormField::Speed, "Speed ÷", format!("{:.3}", n.speed)),
+        (NormField::Acc, "Accel ÷", format!("{:.3}", n.acc)),
+        (NormField::Recoil, "Recoil ÷", format!("{:.3}", n.recoil)),
     ];
 
     for (i, (field, name, val)) in fields.into_iter().enumerate() {

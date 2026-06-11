@@ -1,0 +1,115 @@
+{
+  "name": "Demon's Whisper",
+  "description": "Sinister slow crawl — sin×noise undertones, makes you shiver and moan",
+  "author": "ShockingVRC",
+  "frequency": [160, 80, 140, 100],
+  "intensity": [80, 90, 85, 95],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "SinTimesNoise",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 50.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 230.0
+    },
+    {
+      "source": "Depth",
+      "function": "SinPlusNoise",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.2,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 230.0
+    },
+    {
+      "source": "Depth",
+      "function": "SinTimesNoise",
+      "base_speed": 0.25,
+      "sensitivity": 1.0,
+      "max_deviation": 55.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 230.0
+    },
+    {
+      "source": "Depth",
+      "function": "Simplex",
+      "base_speed": 0.35,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.7,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 230.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Tanh",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SoftSign",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.3,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sigmoid",
+      "base_speed": 0.25,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.18,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

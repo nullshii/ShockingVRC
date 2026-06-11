@@ -3,7 +3,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 
-use shocking_vrc_core::cli::ZoneId;
+use shocking_vrc_core::cli::{ContactMode, ZoneId};
 
 use crate::tui::app::{Action, App, Channel, ZonesPane};
 use crate::tui::theme;
@@ -44,7 +44,15 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         .channel_config(ch)
         .zones
         .iter()
-        .map(|e| (format!("{}  [{}]", e.id, e.mode), e.id.clone()))
+        .map(|e| {
+            let mode_str = match e.mode {
+                ContactMode::Depth => "depth",
+                ContactMode::Speed => "speed",
+                ContactMode::Acc => "acc",
+                ContactMode::Recoil => "recoil",
+            };
+            (format!("{} · {}", e.id, mode_str), e.id.clone())
+        })
         .collect();
 
     let selected = match ch {
@@ -88,7 +96,15 @@ fn render_avatar(app: &mut App, frame: &mut Frame, area: Rect) {
     let rows: Vec<String> = app
         .avatar_zones
         .iter()
-        .map(|z| format!("[{:<5}] {}  {:.0}%", z.zone_type, z.id, z.level * 100.0))
+        .map(|z| {
+            let pct = (z.level * 100.0) as u32;
+            let bar = if pct > 0 {
+                format!("  {pct:>3}%")
+            } else {
+                "     ".into()
+            };
+            format!("{:<6} {}{bar}", z.zone_type, z.id)
+        })
         .collect();
 
     render_rows(

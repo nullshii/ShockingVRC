@@ -58,22 +58,23 @@ fn render_slots(app: &mut App, frame: &mut Frame, area: Rect) {
                     logical_y += 1;
                     continue;
                 };
-                let status = match &arr[seg] {
-                    Some(c) => format!("{} · {}", c.function, c.source),
-                    None => "off".to_string(),
-                };
                 let selected =
                     app.mod_channel == ch && app.mod_kind == kind && app.mod_seg == seg;
+                let kind_label = match kind {
+                    ModKind::Freq => "freq",
+                    ModKind::Intensity => "int ",
+                };
+                let (status, active) = match &arr[seg] {
+                    Some(c) => (format!("{} → {}", c.function, c.source), true),
+                    None => ("—".to_string(), false),
+                };
                 let label = format!(
-                    " {}-{}[{}]: {}",
+                    " {} {kind_label}[{seg}]  {status}",
                     ch.label(),
-                    mod_kind_name(kind),
-                    seg,
-                    status
                 );
                 let style = if selected {
                     theme::focused_style()
-                } else if arr[seg].is_some() {
+                } else if active {
                     Style::default().fg(theme::SUCCESS)
                 } else {
                     Style::default().fg(theme::TEXT_DIM)
@@ -192,11 +193,19 @@ fn render_editor(app: &mut App, frame: &mut Frame, area: Rect) {
             continue;
         };
         let val = param.get(&editor);
+        let formatted = match param {
+            ModParam::BaseSpeed => format!("{:<14} {:.2} Hz", param.label(), val),
+            ModParam::Phase => format!("{:<14} {:.2}", param.label(), val),
+            ModParam::MaxDeviation => format!("{:<14} ±{:.1}", param.label(), val),
+            ModParam::Offset => format!("{:<14} {:.1}", param.label(), val),
+            ModParam::ClampMin | ModParam::ClampMax => format!("{:<14} {:.1}", param.label(), val),
+            _ => format!("{:<14} {:.3}", param.label(), val),
+        };
         ui::stepper_row(
             frame,
             app,
             rect,
-            &format!("{:<13} {:.3}", param.label(), val),
+            &formatted,
             focus == 2 + i,
             Action::StepModParam(*param, -1),
             Action::StepModParam(*param, 1),

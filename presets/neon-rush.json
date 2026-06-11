@@ -1,0 +1,115 @@
+{
+  "name": "Neon Rush",
+  "description": "Hyper-fast rave — rapid square pulses with saw sweeps, relentless energy",
+  "author": "ShockingVRC",
+  "frequency": [10, 50, 25, 70],
+  "intensity": [85, 95, 100, 80],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 6.0,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Saw",
+      "base_speed": 8.0,
+      "sensitivity": 1.0,
+      "max_deviation": 60.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 7.0,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "ReverseSaw",
+      "base_speed": 5.0,
+      "sensitivity": 1.0,
+      "max_deviation": 50.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 4.0,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Triangle",
+      "base_speed": 5.0,
+      "sensitivity": 1.0,
+      "max_deviation": 50.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Bounce",
+      "base_speed": 6.0,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 3.5,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

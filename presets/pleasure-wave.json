@@ -1,0 +1,115 @@
+{
+  "name": "Pleasure Wave",
+  "description": "Building ecstasy — slow sine buildup with sigmoid intensity crescendo",
+  "author": "ShockingVRC",
+  "frequency": [100, 130, 85, 110],
+  "intensity": [60, 75, 70, 80],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "SinPlusCos",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 25.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Cos",
+      "base_speed": 0.18,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "TrianglePlusSin",
+      "base_speed": 0.12,
+      "sensitivity": 1.0,
+      "max_deviation": 28.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 30.0,
+      "clamp_max": 200.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sigmoid",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.12,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.08,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 38.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

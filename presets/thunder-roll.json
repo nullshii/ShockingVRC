@@ -1,0 +1,115 @@
+{
+  "name": "Thunder Roll",
+  "description": "Aggressive storm — fractal noise frequency chaos with heavy saw intensity",
+  "author": "ShockingVRC",
+  "frequency": [30, 150, 60, 200],
+  "intensity": [90, 80, 95, 85],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Fractal",
+      "base_speed": 1.5,
+      "sensitivity": 1.0,
+      "max_deviation": 60.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    },
+    {
+      "source": "Depth",
+      "function": "Perlin",
+      "base_speed": 2.0,
+      "sensitivity": 1.0,
+      "max_deviation": 50.0,
+      "phase": 0.3,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    },
+    {
+      "source": "Depth",
+      "function": "Fractal",
+      "base_speed": 1.8,
+      "sensitivity": 1.0,
+      "max_deviation": 55.0,
+      "phase": 0.6,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    },
+    {
+      "source": "Depth",
+      "function": "ValueNoise",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.9,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Saw",
+      "base_speed": 2.5,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "ReverseSaw",
+      "base_speed": 2.5,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Saw",
+      "base_speed": 3.0,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 1.0,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

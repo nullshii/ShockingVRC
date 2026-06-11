@@ -55,11 +55,12 @@ fn render_channel(
             continue;
         };
         match row {
-            0 => ui::header(frame, rect, "Frequency — drag for smooth control"),
+            0 => ui::header(frame, rect, "Frequency (Hz) — drag slider or ←→"),
             1..=4 => {
                 let seg = (row - 1) as usize;
                 let v = cfg.frequency[seg] as i32;
-                let name = format!("Seg {seg}  {:>4.0} Hz", raw_to_hz(cfg.frequency[seg]));
+                let hz = raw_to_hz(cfg.frequency[seg]);
+                let name = format!("Seg {seg}  {:>4.0} Hz", hz);
                 ui::slider_row(
                     frame,
                     app,
@@ -72,7 +73,7 @@ fn render_channel(
                     focus == Some(ChannelControl::Freq(ch, seg)),
                 );
             }
-            5 => ui::header(frame, rect, "Intensity"),
+            5 => ui::header(frame, rect, "Intensity (%) — waveform amplitude"),
             6..=9 => {
                 let seg = (row - 6) as usize;
                 let v = cfg.intensity[seg] as i32;
@@ -80,7 +81,7 @@ fn render_channel(
                     frame,
                     app,
                     rect,
-                    &format!("Seg {seg}"),
+                    &format!("Seg {seg}  {:>3}%", v),
                     v,
                     0,
                     100,
@@ -88,12 +89,12 @@ fn render_channel(
                     focus == Some(ChannelControl::Intensity(ch, seg)),
                 );
             }
-            10 => ui::header(frame, rect, "Power limits & mix mode"),
+            10 => ui::header(frame, rect, "Power limits & aggregation"),
             11 => ui::slider_row(
                 frame,
                 app,
                 rect,
-                "Minimum",
+                &format!("Limit min  {:>3}", cfg.limits.min),
                 cfg.limits.min as i32,
                 0,
                 200,
@@ -104,7 +105,7 @@ fn render_channel(
                 frame,
                 app,
                 rect,
-                "Maximum",
+                &format!("Limit max  {:>3}", cfg.limits.max),
                 cfg.limits.max as i32,
                 0,
                 200,
@@ -113,10 +114,10 @@ fn render_channel(
             ),
             13 => {
                 let agg_cols = Layout::horizontal([
-                    Constraint::Length(10),
-                    Constraint::Length(5),
-                    Constraint::Length(5),
-                    Constraint::Length(5),
+                    Constraint::Length(12),
+                    Constraint::Length(6),
+                    Constraint::Length(6),
+                    Constraint::Length(6),
                 ])
                 .split(rect);
                 frame.render_widget(

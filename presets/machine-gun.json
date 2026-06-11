@@ -1,0 +1,115 @@
+{
+  "name": "Machine Gun",
+  "description": "Rapid-fire staccato — ultra-fast pulse bursts across all segments",
+  "author": "ShockingVRC",
+  "frequency": [25, 60, 40, 15],
+  "intensity": [90, 85, 95, 80],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 10.0,
+      "sensitivity": 1.0,
+      "max_deviation": 20.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 120.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 12.0,
+      "sensitivity": 1.0,
+      "max_deviation": 25.0,
+      "phase": 0.125,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 120.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 8.0,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.375,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 120.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 15.0,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.625,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 120.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 8.0,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 10.0,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 6.0,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 12.0,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 20.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

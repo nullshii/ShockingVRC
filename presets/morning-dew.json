@@ -1,0 +1,115 @@
+{
+  "name": "Morning Dew",
+  "description": "Fresh and light — high-freq sparkle with delicate sinPlusCos shimmer",
+  "author": "ShockingVRC",
+  "frequency": [20, 30, 15, 25],
+  "intensity": [25, 30, 20, 28],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "SinPlusCos",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 6.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 60.0
+    },
+    {
+      "source": "Depth",
+      "function": "Cos",
+      "base_speed": 0.25,
+      "sensitivity": 1.0,
+      "max_deviation": 5.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 60.0
+    },
+    {
+      "source": "Depth",
+      "function": "SinPlusCos",
+      "base_speed": 0.35,
+      "sensitivity": 1.0,
+      "max_deviation": 7.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 60.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 4.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 60.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 12.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 50.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.12,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 50.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.1,
+      "sensitivity": 1.0,
+      "max_deviation": 8.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 50.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmoothStep",
+      "base_speed": 0.18,
+      "sensitivity": 1.0,
+      "max_deviation": 14.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 50.0
+    }
+  ]
+}

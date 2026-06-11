@@ -10,17 +10,23 @@ use crate::tui::theme;
 
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
-    let block = theme::panel_block("Event log — scroll with wheel or ↑↓");
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let height = inner.height as usize;
     let lines: Vec<String> = {
         let buf = app.log_buffer.lock().unwrap_or_else(|e| e.into_inner());
         buf.iter().cloned().collect()
     };
-
     let total = lines.len();
+
+    let title = if total > 0 {
+        format!("Event log ({total} lines) — ↑↓ / wheel to scroll")
+    } else {
+        "Event log — waiting for events…".into()
+    };
+    let block = theme::panel_block(title);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let height = inner.height as usize;
+
     let max_scroll = total.saturating_sub(height);
     if app.log_scroll > max_scroll {
         app.log_scroll = max_scroll;

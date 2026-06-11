@@ -1,0 +1,115 @@
+{
+  "name": "Velvet Purr",
+  "description": "Cat-like purring — low-mid frequency soft buzz with tanh warmth",
+  "author": "ShockingVRC",
+  "frequency": [170, 165, 175, 160],
+  "intensity": [45, 50, 40, 48],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 120.0,
+      "clamp_max": 210.0
+    },
+    {
+      "source": "Depth",
+      "function": "Cos",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 120.0,
+      "clamp_max": 210.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 120.0,
+      "clamp_max": 210.0
+    },
+    {
+      "source": "Depth",
+      "function": "Cos",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 10.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 120.0,
+      "clamp_max": 210.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Tanh",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 12.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 65.0
+    },
+    {
+      "source": "Depth",
+      "function": "SoftSign",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 12.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 65.0
+    },
+    {
+      "source": "Depth",
+      "function": "Tanh",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 12.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 65.0
+    },
+    {
+      "source": "Depth",
+      "function": "SoftSign",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 12.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 15.0,
+      "clamp_max": 65.0
+    }
+  ]
+}

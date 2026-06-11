@@ -1,0 +1,103 @@
+{
+  "name": "Heartbeat",
+  "description": "Realistic double-pulse heartbeat — thump-thump with resting pause",
+  "author": "ShockingVRC",
+  "frequency": [40, 90, 40, 120],
+  "intensity": [95, 45, 90, 30],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 25.0,
+      "phase": 0.15,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 28.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 200.0
+    },
+    null
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 20.0,
+      "phase": 0.15,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "ExpNeg",
+      "base_speed": 0.6,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

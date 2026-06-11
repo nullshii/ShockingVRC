@@ -1,0 +1,115 @@
+{
+  "name": "Earthquake",
+  "description": "Tectonic bass — ultra-low freq perlin rumble, knees buckle guaranteed",
+  "author": "ShockingVRC",
+  "frequency": [240, 230, 245, 235],
+  "intensity": [100, 95, 100, 90],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Perlin",
+      "base_speed": 0.8,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    },
+    {
+      "source": "Depth",
+      "function": "Simplex",
+      "base_speed": 0.6,
+      "sensitivity": 1.0,
+      "max_deviation": 25.0,
+      "phase": 0.3,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    },
+    {
+      "source": "Depth",
+      "function": "Perlin",
+      "base_speed": 1.0,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.6,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    },
+    {
+      "source": "Depth",
+      "function": "Fractal",
+      "base_speed": 0.5,
+      "sensitivity": 1.0,
+      "max_deviation": 20.0,
+      "phase": 0.8,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 20.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SmootherStep",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.18,
+      "sensitivity": 1.0,
+      "max_deviation": 25.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.12,
+      "sensitivity": 1.0,
+      "max_deviation": 18.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

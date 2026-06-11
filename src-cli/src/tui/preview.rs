@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols::Marker;
-use ratatui::widgets::canvas::{Canvas, Line as CanvasLine, Rectangle};
+use ratatui::widgets::canvas::{Canvas, Line as CanvasLine};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 
 use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationSource};
@@ -148,25 +148,18 @@ pub fn render_modulation_preview(
     let n = series.samples.len().max(2);
     let x_max = (n - 1) as f64;
 
+    let base_y = series.base as f64;
     let canvas = Canvas::default()
         .marker(Marker::Braille)
         .x_bounds([-0.5, x_max + 0.5])
         .y_bounds([y_min, y_max])
         .paint(|ctx| {
-            ctx.draw(&Rectangle {
-                x: -0.5,
-                y: series.base as f64,
-                width: x_max + 1.0,
-                height: 0.001,
-                color: Color::DarkGray,
-            });
-
             ctx.draw(&CanvasLine {
                 x1: -0.5,
-                y1: series.base as f64,
+                y1: base_y,
                 x2: x_max + 0.5,
-                y2: series.base as f64,
-                color: Color::Rgb(90, 95, 110),
+                y2: base_y,
+                color: Color::Rgb(60, 65, 80),
             });
 
             for i in 1..series.samples.len() {

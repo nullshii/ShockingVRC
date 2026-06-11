@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, Gauge, Paragraph};
 use super::app::{Action, App, SliderKind, Tab};
 use super::tabs;
 use super::theme;
+use super::tutorial;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     app.clickables.clear();
@@ -29,10 +30,15 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         Tab::Tuning => tabs::tuning::render(app, frame, content),
         Tab::Modulation => tabs::modulation::render(app, frame, content),
         Tab::Log => tabs::logs::render(app, frame, content),
+        Tab::Presets => tabs::presets::render(app, frame, content),
         Tab::Setup => tabs::settings::render(app, frame, content),
     }
 
     render_status_bar(frame, app, rows[2]);
+
+    if app.tutorial_active {
+        tutorial::render_overlay(app, frame);
+    }
 }
 
 fn render_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -40,18 +46,19 @@ fn render_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let tab_labels: [(&str, Tab); 7] = [
+    let tab_labels: [(&str, Tab); 8] = [
         ("1 Status", Tab::Status),
         ("2 Zones", Tab::Zones),
         ("3 Channels", Tab::Channels),
         ("4 Tuning", Tab::Tuning),
         ("5 Modulation", Tab::Modulation),
         ("6 Log", Tab::Log),
-        ("7 Setup", Tab::Setup),
+        ("7 Presets", Tab::Presets),
+        ("8 Setup", Tab::Setup),
     ];
 
     let mut x = inner.x;
-    for (label, tab) in tab_labels {
+    for (i, (label, tab)) in tab_labels.iter().enumerate() {
         let text = format!(" {label} ");
         let w = text.chars().count() as u16;
         if x >= inner.x + inner.width {
@@ -64,14 +71,22 @@ fn render_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
             width: w.min(avail),
             height: 1,
         };
-        let style = if tab == app.active_tab {
+        let style = if *tab == app.active_tab {
             theme::active_tab_style()
         } else {
             theme::inactive_tab_style()
         };
         frame.render_widget(Paragraph::new(text).style(style), rect);
-        app.push_click(rect, Action::SwitchTab(tab));
-        x += w + 1;
+        app.push_click(rect, Action::SwitchTab(*tab));
+        x += w;
+        if i + 1 < tab_labels.len() && x < inner.x + inner.width {
+            let sep = Rect { x, y: inner.y, width: 1, height: 1 };
+            frame.render_widget(
+                Paragraph::new("│").style(Style::default().fg(theme::ACCENT_DIM)),
+                sep,
+            );
+            x += 1;
+        }
     }
 }
 
@@ -88,9 +103,10 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let hint = match app.active_tab {
-        Tab::Status => "  M — monitor  ·  Q/Esc — quit",
+        Tab::Status => "  Q/Esc — quit",
         Tab::Setup => "  Enter — type port  ·  [ / ] ±1  ·  −/+  ·  Esc — cancel edit",
-        Tab::Zones => "  ↑↓ select  ·  Enter — action  ·  X — remove  ·  click rows & buttons",
+        Tab::Presets => "  ↑↓ select  ·  × delete mine  ·  → A/B apply  ·  Save A/B  ·  R refresh",
+        Tab::Zones => "  ↑↓ select  ·  ←→ A / B / avatar  ·  Enter — action  ·  X — remove",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",
         Tab::Modulation => "  Enter — function list  ·  source buttons  ·  ↑↓ field  ·  wheel — scroll",
@@ -104,10 +120,36 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-pub fn button(frame: &mut Frame, app: &mut App, area: Rect, label: &str, focused: bool, action: Action) {
+pub fn button(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    label: &str,
+    keyboard_focus: bool,
+    action: Action,
+) {
+    let lit = app.button_lit(&action, keyboard_focus);
     frame.render_widget(
         Paragraph::new(format!(" {label} "))
-            .style(theme::button_style(focused))
+            .style(theme::button_style(lit))
+            .alignment(Alignment::Center),
+        area,
+    );
+    app.push_click(area, action);
+}
+
+pub fn icon_button(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    label: &str,
+    keyboard_focus: bool,
+    action: Action,
+) {
+    let lit = app.button_lit(&action, keyboard_focus);
+    frame.render_widget(
+        Paragraph::new(label)
+            .style(theme::button_style(lit))
             .alignment(Alignment::Center),
         area,
     );
@@ -120,12 +162,13 @@ pub fn choice_button(
     area: Rect,
     label: &str,
     selected: bool,
-    focused: bool,
+    row_focused: bool,
     action: Action,
 ) {
+    let emphasis = app.choice_emphasis(&action, selected, row_focused);
     frame.render_widget(
         Paragraph::new(format!(" {label} "))
-            .style(theme::choice_button_style(selected, focused))
+            .style(theme::choice_button_style(selected, emphasis))
             .alignment(Alignment::Center),
         area,
     );
@@ -146,18 +189,21 @@ pub fn slider_row(
 ) {
     let cols = Layout::horizontal([Constraint::Length(24), Constraint::Min(8)]).split(area);
     frame.render_widget(
-        Paragraph::new(format!("{name}: {value}")).style(theme::label_style(focused)),
+        Paragraph::new(name.to_string()).style(theme::label_style(focused)),
         cols[0],
     );
     let span = (max - min).max(1) as f64;
-    let ratio = (((value - min) as f64) / span).clamp(0.0, 1.0);
+    let mut ratio = (((value - min) as f64) / span).clamp(0.0, 1.0);
+    if kind.is_inverted() {
+        ratio = 1.0 - ratio;
+    }
     let bar_color = if focused {
         theme::HIGHLIGHT
     } else {
         theme::ACCENT
     };
     let gauge = Gauge::default()
-        .gauge_style(Style::default().fg(bar_color).bg(theme::SURFACE))
+        .gauge_style(Style::default().fg(bar_color).bg(theme::SURFACE_ELEVATED))
         .ratio(ratio)
         .label("");
     frame.render_widget(gauge, cols[1]);
