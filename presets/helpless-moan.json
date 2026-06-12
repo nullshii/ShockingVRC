@@ -1,0 +1,115 @@
+{
+  "name": "Helpless Moan",
+  "description": "Agonizingly slow 30-90Hz builds that suddenly drop into 5Hz torture. Escapes are impossible.",
+  "author": "ShockingVRC",
+  "frequency": [100, 100, 100, 100],
+  "intensity": [85, 90, 85, 95],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "SinTimesNoise",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 120.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    },
+    {
+      "source": "Depth",
+      "function": "Saw",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 120.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    },
+    {
+      "source": "Depth",
+      "function": "SinPlusNoise",
+      "base_speed": 0.15,
+      "sensitivity": 1.0,
+      "max_deviation": 120.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    },
+    {
+      "source": "Depth",
+      "function": "ReverseSaw",
+      "base_speed": 0.5,
+      "sensitivity": 1.0,
+      "max_deviation": 120.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 5.0,
+      "clamp_max": 240.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sigmoid",
+      "base_speed": 0.3,
+      "sensitivity": 1.0,
+      "max_deviation": 40.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "SoftSign",
+      "base_speed": 0.2,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.33,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Tanh",
+      "base_speed": 0.25,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.66,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.35,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.9,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 50.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

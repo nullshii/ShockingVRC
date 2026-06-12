@@ -1,0 +1,115 @@
+{
+  "name": "Knee Breaker",
+  "description": "Devastating ultra-low thumps (1-20Hz) with violent sudden spikes. Knees will buckle.",
+  "author": "ShockingVRC",
+  "frequency": [245, 235, 250, 240],
+  "intensity": [100, 100, 100, 100],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.5,
+      "sensitivity": 1.0,
+      "max_deviation": 50.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 2.0,
+      "sensitivity": 1.0,
+      "max_deviation": 60.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    },
+    {
+      "source": "Depth",
+      "function": "Pulse",
+      "base_speed": 1.2,
+      "sensitivity": 1.0,
+      "max_deviation": 45.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    },
+    {
+      "source": "Depth",
+      "function": "SquareWave",
+      "base_speed": 2.5,
+      "sensitivity": 1.0,
+      "max_deviation": 70.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 150.0,
+      "clamp_max": 255.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.5,
+      "sensitivity": 1.0,
+      "max_deviation": 30.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 70.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Perlin",
+      "base_speed": 0.8,
+      "sensitivity": 1.0,
+      "max_deviation": 20.0,
+      "phase": 0.3,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 80.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Logistic",
+      "base_speed": 0.4,
+      "sensitivity": 1.0,
+      "max_deviation": 35.0,
+      "phase": 0.6,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 70.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Perlin",
+      "base_speed": 1.0,
+      "sensitivity": 1.0,
+      "max_deviation": 15.0,
+      "phase": 0.9,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 80.0,
+      "clamp_max": 100.0
+    }
+  ]
+}

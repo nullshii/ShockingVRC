@@ -138,6 +138,24 @@
       "name": "Whisper Touch",
       "description": "Barely there — feather-light, slow sigmoidal fade in/out",
       "file": "whisper-touch.json"
+    },
+    {
+      "id": "knee-breaker",
+      "name": "Knee Breaker",
+      "description": "Devastating ultra-low thumps (1-20Hz) with violent sudden spikes",
+      "file": "knee-breaker.json"
+    },
+    {
+      "id": "spasm-inducer",
+      "name": "Spasm Inducer",
+      "description": "Violent switching between 1Hz and 100Hz. Pure muscle confusion and spasms.",
+      "file": "spasm-inducer.json"
+    },
+    {
+      "id": "helpless-moan",
+      "name": "Helpless Moan",
+      "description": "Agonizingly slow 30-90Hz builds that suddenly drop into 5Hz torture",
+      "file": "helpless-moan.json"
     }
   ]
 }
