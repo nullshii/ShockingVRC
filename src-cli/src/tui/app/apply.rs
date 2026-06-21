@@ -22,12 +22,6 @@ impl App {
                 self.mod_editor_scroll = 0;
                 self.tuning_scroll = 0;
                 self.preset_scroll = 0;
-                if t == super::Tab::Presets
-                    && self.preset_entries.is_empty()
-                    && !self.presets_loading
-                {
-                    self.refresh_presets().await;
-                }
             }
             Action::StartOscPortEdit => self.start_osc_port_edit(),
             Action::StepOscPort(delta) => {
@@ -334,7 +328,7 @@ impl App {
             }
             Action::ConfirmDeletePreset => self.confirm_preset_delete().await,
             Action::CancelDeletePreset => self.cancel_preset_delete_confirm(),
-            Action::RefreshPresets => self.refresh_presets().await,
+            Action::RefreshPresets => self.start_refresh_presets(),
             Action::FocusNext => self.move_focus(1),
             Action::FocusPrev => self.move_focus(-1),
             Action::AdjustFocused(_) => {}

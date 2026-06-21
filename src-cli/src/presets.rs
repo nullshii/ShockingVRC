@@ -51,8 +51,17 @@ pub async fn load_catalog() -> Result<CatalogLoadResult, String> {
         );
     }
 
+    sort_preset_entries(&mut entries);
     let source = sources.join(" + ");
     Ok(CatalogLoadResult { entries, source })
+}
+
+pub fn sort_preset_entries(entries: &mut [PresetEntry]) {
+    entries.sort_by(|a, b| {
+        b.user
+            .cmp(&a.user)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
 }
 
 pub fn save_user_preset(

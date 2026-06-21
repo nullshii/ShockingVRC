@@ -76,6 +76,7 @@ pub async fn run(
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     let result = loop {
+        app.poll_presets_load();
         if let Err(e) = terminal.draw(|f| ui::draw(f, &mut app)) {
             break Err(e);
         }
@@ -102,6 +103,7 @@ pub async fn run(
                 }
             }
             _ = tick.tick() => {
+                app.poll_presets_load();
                 app.maybe_refresh().await;
             }
         }

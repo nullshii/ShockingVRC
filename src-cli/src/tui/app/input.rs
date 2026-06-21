@@ -99,12 +99,10 @@ impl App {
         match key.code {
             KeyCode::Tab => {
                 self.switch_tab_relative(1);
-                self.maybe_load_presets().await;
                 return;
             }
             KeyCode::BackTab => {
                 self.switch_tab_relative(-1);
-                self.maybe_load_presets().await;
                 return;
             }
             KeyCode::Char(c @ '1'..='8') => {
@@ -117,7 +115,6 @@ impl App {
                     self.mod_editor_scroll = 0;
                     self.tuning_scroll = 0;
                     self.preset_scroll = 0;
-                    self.maybe_load_presets().await;
                 }
                 return;
             }

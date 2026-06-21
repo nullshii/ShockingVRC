@@ -19,6 +19,8 @@ pub use types::{
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use tokio::sync::mpsc;
+
 use shocking_vrc_core::cli::{ChannelConfig, CliConfig, CliStatus};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::PresetEntry;
@@ -89,7 +91,7 @@ pub struct App {
     pub presets_viewport_h: u16,
     pub presets_loading: bool,
     pub presets_error: Option<String>,
-    pub presets_source: Option<String>,
+    presets_load_rx: Option<mpsc::UnboundedReceiver<Result<crate::presets::CatalogLoadResult, String>>>,
 
     pub preset_save_editing: bool,
     pub preset_save_channel: Channel,
@@ -159,7 +161,7 @@ impl App {
             presets_viewport_h: 0,
             presets_loading: false,
             presets_error: None,
-            presets_source: None,
+            presets_load_rx: None,
             preset_save_editing: false,
             preset_save_channel: Channel::A,
             preset_save_input: String::new(),
@@ -180,6 +182,7 @@ impl App {
         if !p.has_seen_tutorial {
             app.start_tutorial();
         }
+        app.ensure_presets_loaded();
         app
     }
 
@@ -367,11 +370,7 @@ impl App {
                     ch.label()
                 );
                 self.cancel_preset_save_edit();
-                self.refresh_presets().await;
-                if let Some(i) = self.preset_entries.iter().position(|e| e.id == entry.id) {
-                    self.sel_preset = i;
-                    self.sync_presets_scroll();
-                }
+                self.insert_user_preset_entry(entry);
             }
             Err(e) => log::error!("[presets] Save failed: {e}"),
         }
@@ -417,31 +416,82 @@ impl App {
         match crate::presets::delete_user_preset(&id) {
             Ok(()) => {
                 log::info!("[presets] Deleted \"{name}\" from presets/user/");
-                self.refresh_presets().await;
-                if !self.preset_entries.is_empty() {
-                    self.sel_preset = self.sel_preset.min(self.preset_entries.len() - 1);
-                } else {
-                    self.sel_preset = 0;
-                }
-                self.sync_presets_scroll();
+                self.remove_user_preset_entry(&id);
             }
             Err(e) => log::error!("[presets] Delete failed: {e}"),
         }
     }
 
-    pub async fn refresh_presets(&mut self) {
+    fn insert_user_preset_entry(&mut self, entry: PresetEntry) {
+        let id = entry.id.clone();
+        if let Some(i) = self.preset_entries.iter().position(|e| e.id == id) {
+            self.preset_entries[i] = entry;
+        } else {
+            self.preset_entries.push(entry);
+        }
+        crate::presets::sort_preset_entries(&mut self.preset_entries);
+        if let Some(i) = self.preset_entries.iter().position(|e| e.id == id) {
+            self.sel_preset = i;
+            self.sync_presets_scroll();
+        }
+    }
+
+    fn remove_user_preset_entry(&mut self, id: &str) {
+        if let Some(i) = self.preset_entries.iter().position(|e| e.id == id) {
+            self.preset_entries.remove(i);
+        }
+        if !self.preset_entries.is_empty() {
+            self.sel_preset = self.sel_preset.min(self.preset_entries.len() - 1);
+        } else {
+            self.sel_preset = 0;
+        }
+        self.sync_presets_scroll();
+    }
+
+    pub fn start_refresh_presets(&mut self) {
+        if self.presets_loading {
+            return;
+        }
         self.presets_loading = true;
         self.presets_error = None;
-        match crate::presets::load_catalog().await {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.presets_load_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = crate::presets::load_catalog().await;
+            let _ = tx.send(result);
+        });
+    }
+
+    pub fn poll_presets_load(&mut self) {
+        let Some(rx) = &mut self.presets_load_rx else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.presets_load_rx = None;
+                self.apply_presets_result(result);
+                self.presets_loading = false;
+            }
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                self.presets_load_rx = None;
+                self.presets_loading = false;
+                self.presets_error = Some("Preset load interrupted".into());
+            }
+        }
+    }
+
+    fn apply_presets_result(&mut self, result: Result<crate::presets::CatalogLoadResult, String>) {
+        match result {
             Ok(result) => {
                 let count = result.entries.len();
                 self.preset_entries = result.entries;
-                self.presets_source = Some(result.source);
                 self.sel_preset = 0;
                 self.preset_scroll = 0;
                 if !self.preset_entries.is_empty() {
                     self.sel_preset = self.sel_preset.min(self.preset_entries.len() - 1);
                 }
+                self.sync_presets_scroll();
                 log::info!("[presets] Loaded {count} preset(s)");
             }
             Err(e) => {
@@ -449,15 +499,11 @@ impl App {
                 log::warn!("[presets] {e}");
             }
         }
-        self.presets_loading = false;
     }
 
-    async fn maybe_load_presets(&mut self) {
-        if self.active_tab == Tab::Presets
-            && self.preset_entries.is_empty()
-            && !self.presets_loading
-        {
-            self.refresh_presets().await;
+    pub fn ensure_presets_loaded(&mut self) {
+        if self.preset_entries.is_empty() && !self.presets_loading {
+            self.start_refresh_presets();
         }
     }
 

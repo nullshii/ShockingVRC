@@ -23,12 +23,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_list(app: &mut App, frame: &mut Frame, area: Rect) {
-    let source = app
-        .presets_source
-        .as_deref()
-        .map(|s| format!(" — {s}"))
-        .unwrap_or_default();
-    let block = theme::panel_block(&format!("Presets{source} — click to select"));
+    let block = theme::panel_block("Presets — click to select");
     let inner = block.inner(area);
     frame.render_widget(block, area);
     app.presets_viewport_h = inner.height;
