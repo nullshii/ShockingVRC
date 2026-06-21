@@ -288,6 +288,10 @@ pub enum Action {
     CancelDeletePreset,
     RefreshPresets,
 
+    ConfirmUpdate,
+    DismissUpdate,
+    SkipUpdateVersion,
+
     TutorialStart,
     TutorialNext,
     TutorialPrev,

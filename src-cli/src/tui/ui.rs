@@ -8,6 +8,7 @@ use super::app::{Action, App, SliderKind, Tab};
 use super::tabs;
 use super::theme;
 use super::tutorial;
+use super::update_overlay;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     app.clickables.clear();
@@ -35,6 +36,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     render_status_bar(frame, app, rows[2]);
+
+    if app.update_popup {
+        update_overlay::render(app, frame, area);
+    }
 
     if app.tutorial_active {
         tutorial::render_overlay(app, frame);

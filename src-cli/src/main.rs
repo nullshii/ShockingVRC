@@ -16,20 +16,23 @@ const CONFIG_FILE: &str = "cli_config.json";
 struct Args {
     port: u16,
     scan_timeout: u64,
+    skip_update_check: bool,
 }
 
 fn parse_args() -> Args {
     let args: Vec<String> = std::env::args().collect();
     let mut port = 9001u16;
     let mut scan_timeout = 8u64;
+    let mut skip_update_check = false;
     let mut i = 1;
 
     while i < args.len() {
         match args[i].as_str() {
             "--help" | "-h" => {
-                println!("Usage: shockingvrc-cli [--port <n>] [--scan-timeout <secs>]");
-                println!("  --port          UDP OSC port (default: 9001)");
-                println!("  --scan-timeout  BLE scan timeout in seconds (default: 8)");
+                println!("Usage: shockingvrc-cli [--port <n>] [--scan-timeout <secs>] [--skip-update-check]");
+                println!("  --port               UDP OSC port (default: 9001)");
+                println!("  --scan-timeout       BLE scan timeout in seconds (default: 8)");
+                println!("  --skip-update-check  Do not check GitHub for updates on startup");
                 std::process::exit(0);
             }
             "--port" => {
@@ -44,11 +47,18 @@ fn parse_args() -> Args {
                     i += 1;
                 }
             }
+            "--skip-update-check" => {
+                skip_update_check = true;
+            }
             _ => {}
         }
         i += 1;
     }
-    Args { port, scan_timeout }
+    Args {
+        port,
+        scan_timeout,
+        skip_update_check,
+    }
 }
 
 fn default_config() -> CliConfig {
@@ -86,11 +96,13 @@ fn load_config_from_file(path: &str) -> Result<CliConfig, Box<dyn std::error::Er
 
 #[tokio::main]
 async fn main() {
+    shocking_vrc_core::update::cleanup_staging_files();
+
     let log_buffer = tui_logger::init("info");
 
     let args = parse_args();
 
-    log::info!("ShockingVRC CLI — Hello DG-Lab Users");
+    log::info!("ShockingVRC CLI v{} — Hello DG-Lab Users", shocking_vrc_core::VERSION);
 
     let config = if Path::new(CONFIG_FILE).exists() {
         match load_config_from_file(CONFIG_FILE) {
@@ -139,7 +151,7 @@ async fn main() {
 
     let engine = CliEngine::new(config);
     let status_rx = engine.subscribe_status();
-    let _stop_handle = engine.start(&scanner).await;
+    let stop_handle = engine.start(&scanner).await;
 
     let monitor_enabled = Arc::new(AtomicBool::new(true));
     let battery_level = Arc::new(RwLock::new(None));
@@ -219,11 +231,36 @@ async fn main() {
     }
 
 
-    if let Err(e) = tui::run(Arc::clone(&state), status_rx, log_buffer).await {
-        eprintln!("[cli] TUI error: {e}");
+    let pending_update = match tui::run(
+        Arc::clone(&state),
+        status_rx,
+        log_buffer,
+        args.skip_update_check,
+    )
+    .await
+    {
+        Ok(pending) => pending,
+        Err(e) => {
+            eprintln!("[cli] TUI error: {e}");
+            None
+        }
+    };
+
+    stop_handle.stop();
+    state.engine.disconnect_device().await;
+    state.scanner.stop().await;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+
+    if let Some((downloaded, restart_args)) = pending_update {
+        match shocking_vrc_core::update::apply_self_update(&downloaded, &restart_args) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&downloaded);
+                return;
+            }
+            Err(e) => eprintln!("[update] install failed: {e}"),
+        }
     }
 
-    state.engine.disconnect_device().await;
     tokio::time::sleep(Duration::from_millis(150)).await;
     println!("[cli] Stopped. Goodbye.");
 }

@@ -13,6 +13,8 @@ pub(super) struct UiPrefs {
     pub has_seen_tutorial: bool,
     #[serde(default)]
     pub nickname: String,
+    #[serde(default)]
+    pub skipped_update_version: Option<String>,
 }
 
 fn default_auto_save() -> bool {
@@ -27,6 +29,7 @@ pub(super) fn load_ui_prefs() -> UiPrefs {
             auto_save: default_auto_save(),
             has_seen_tutorial: false,
             nickname: String::new(),
+            skipped_update_version: None,
         })
 }
 

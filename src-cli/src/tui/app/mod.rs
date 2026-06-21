@@ -107,7 +107,29 @@ pub struct App {
     tutorial_saved_config: Option<CliConfig>,
     tutorial_saved_zones: Vec<ZoneEvent>,
 
+    pub update_available: Option<shocking_vrc_core::ReleaseInfo>,
+    pub update_popup: bool,
+    pub update_downloading: bool,
+    pub update_progress: Option<shocking_vrc_core::DownloadProgress>,
+    pub update_error: Option<String>,
+    pub pending_self_update: Option<(std::path::PathBuf, Vec<String>)>,
+    update_check_rx: Option<
+        tokio::sync::mpsc::UnboundedReceiver<
+            Result<Option<shocking_vrc_core::ReleaseInfo>, String>,
+        >,
+    >,
+    update_download_rx: Option<
+        tokio::sync::mpsc::UnboundedReceiver<UpdateDownloadEvent>,
+    >,
+    update_download_task: Option<tokio::task::JoinHandle<()>>,
+    update_last_progress_at: Instant,
+
     last_refresh: Instant,
+}
+
+enum UpdateDownloadEvent {
+    Progress(shocking_vrc_core::DownloadProgress),
+    Done(Result<std::path::PathBuf, String>),
 }
 
 impl App {
@@ -173,6 +195,16 @@ impl App {
             tutorial_saved_tab: Tab::Status,
             tutorial_saved_config: None,
             tutorial_saved_zones: Vec::new(),
+            update_available: None,
+            update_popup: false,
+            update_downloading: false,
+            update_progress: None,
+            update_error: None,
+            pending_self_update: None,
+            update_check_rx: None,
+            update_download_rx: None,
+            update_download_task: None,
+            update_last_progress_at: Instant::now(),
             last_refresh: Instant::now(),
         };
         app.load_editor_from_config();
@@ -209,6 +241,179 @@ impl App {
 
     pub(super) async fn refresh_config(&mut self) {
         self.config = self.state.engine.config().await;
+    }
+
+    pub fn spawn_update_check(&mut self) {
+        if self.update_check_rx.is_some() {
+            return;
+        }
+        let skipped = load_ui_prefs().skipped_update_version;
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        self.update_check_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = shocking_vrc_core::update::check_for_update().await;
+            let _ = tx.send(match result {
+                Ok(release) => {
+                    if let Some(ref info) = release {
+                        if skipped.as_deref() == Some(info.tag.as_str()) {
+                            Ok(None)
+                        } else {
+                            Ok(release)
+                        }
+                    } else {
+                        Ok(None)
+                    }
+                }
+                Err(e) => Err(e),
+            });
+        });
+    }
+
+    pub fn poll_update_check(&mut self) {
+        let Some(rx) = self.update_check_rx.as_mut() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Ok(Some(release))) => {
+                self.update_check_rx = None;
+                self.update_available = Some(release);
+                self.update_popup = true;
+                log::info!("[update] New version available");
+            }
+            Ok(Ok(None)) => {
+                self.update_check_rx = None;
+            }
+            Ok(Err(e)) => {
+                self.update_check_rx = None;
+                log::debug!("[update] check failed: {e}");
+            }
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {}
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                self.update_check_rx = None;
+            }
+        }
+    }
+
+    pub fn poll_update_download(&mut self) {
+        let events: Vec<UpdateDownloadEvent> = {
+            let Some(rx) = self.update_download_rx.as_mut() else {
+                return;
+            };
+            let mut events = Vec::new();
+            while let Ok(event) = rx.try_recv() {
+                events.push(event);
+            }
+            events
+        };
+
+        for event in events {
+            match event {
+                UpdateDownloadEvent::Progress(progress) => {
+                    self.update_last_progress_at = Instant::now();
+                    self.update_progress = Some(progress);
+                }
+                UpdateDownloadEvent::Done(result) => {
+                    if !self.update_downloading {
+                        continue;
+                    }
+                    self.update_download_rx = None;
+                    self.update_download_task = None;
+                    self.update_downloading = false;
+                    match result {
+                        Ok(path) => {
+                            let args: Vec<String> = std::env::args().skip(1).collect();
+                            log::info!("[update] Download complete — shutting down to install");
+                            self.pending_self_update = Some((path, args));
+                            self.should_quit = true;
+                        }
+                        Err(e) => {
+                            self.fail_update_download(e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn check_update_download_stall(&mut self) {
+        if !self.update_downloading || self.update_error.is_some() {
+            return;
+        }
+        if self.update_last_progress_at.elapsed() < Duration::from_secs(20) {
+            return;
+        }
+        let at_start = self
+            .update_progress
+            .as_ref()
+            .is_none_or(|p| p.downloaded == 0);
+        let reason = if at_start {
+            "Download did not start — check your internet connection".to_string()
+        } else {
+            "Download stalled — connection may have been lost".to_string()
+        };
+        self.fail_update_download(reason);
+    }
+
+    fn cancel_update_download(&mut self) {
+        self.update_download_rx = None;
+        if let Some(handle) = self.update_download_task.take() {
+            handle.abort();
+        }
+        self.update_downloading = false;
+    }
+
+    fn fail_update_download(&mut self, reason: String) {
+        log::warn!("[update] {reason}");
+        self.cancel_update_download();
+        self.update_error = Some(reason);
+        self.update_progress = None;
+    }
+
+    pub fn dismiss_update_popup(&mut self) {
+        self.update_popup = false;
+        self.update_error = None;
+        self.update_progress = None;
+    }
+
+    pub fn skip_update_version(&mut self) {
+        if let Some(release) = self.update_available.take() {
+            let mut prefs = load_ui_prefs();
+            prefs.skipped_update_version = Some(release.tag.clone());
+            if let Err(e) = save_ui_prefs_full(&prefs) {
+                log::warn!("[update] failed to save skip preference: {e}");
+            }
+            log::info!("[update] Skipped version {}", release.tag);
+        }
+        self.dismiss_update_popup();
+    }
+
+    pub fn start_update_download(&mut self) {
+        let Some(release) = self.update_available.clone() else {
+            return;
+        };
+        if self.update_downloading || self.update_download_rx.is_some() {
+            return;
+        }
+        self.update_downloading = true;
+        self.update_error = None;
+        self.update_last_progress_at = Instant::now();
+        self.update_progress = Some(shocking_vrc_core::DownloadProgress {
+            downloaded: 0,
+            total: (release.asset_size > 0).then_some(release.asset_size),
+        });
+        log::info!("[update] Downloading {}…", release.tag);
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        self.update_download_rx = Some(rx);
+        let handle = tokio::spawn(async move {
+            let result =
+                shocking_vrc_core::update::download_release(&release, |progress| {
+                    let _ = tx.send(UpdateDownloadEvent::Progress(progress));
+                })
+                .await;
+            let _ = tx.send(UpdateDownloadEvent::Done(result));
+        });
+        self.update_download_task = Some(handle);
     }
 }
 

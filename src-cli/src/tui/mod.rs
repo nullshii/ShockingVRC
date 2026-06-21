@@ -4,9 +4,11 @@ pub mod preview;
 pub mod tabs;
 pub mod theme;
 pub mod tutorial;
+pub mod update_overlay;
 pub mod ui;
 
 use std::io::{self, Stdout};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -64,12 +66,16 @@ pub async fn run(
     state: Arc<AppState>,
     mut status_rx: broadcast::Receiver<CliStatus>,
     log_buffer: LogBuffer,
-) -> io::Result<()> {
+    skip_update_check: bool,
+) -> io::Result<Option<(PathBuf, Vec<String>)>> {
     install_panic_hook();
     let mut terminal = init_terminal()?;
 
     let mut app = App::new(state, log_buffer);
     app.refresh_all().await;
+    if !skip_update_check {
+        app.spawn_update_check();
+    }
 
     let mut input_rx = event::spawn_input_thread();
     let mut tick = tokio::time::interval(Duration::from_millis(33));
@@ -77,11 +83,14 @@ pub async fn run(
 
     let result = loop {
         app.poll_presets_load();
+        app.poll_update_check();
+        app.poll_update_download();
+        app.check_update_download_stall();
         if let Err(e) = terminal.draw(|f| ui::draw(f, &mut app)) {
             break Err(e);
         }
         if app.should_quit {
-            break Ok(());
+            break Ok(app.pending_self_update.take());
         }
 
         tokio::select! {
@@ -104,6 +113,9 @@ pub async fn run(
             }
             _ = tick.tick() => {
                 app.poll_presets_load();
+                app.poll_update_check();
+                app.poll_update_download();
+                app.check_update_download_stall();
                 app.maybe_refresh().await;
             }
         }

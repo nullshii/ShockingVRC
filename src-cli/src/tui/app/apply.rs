@@ -329,6 +329,9 @@ impl App {
             Action::ConfirmDeletePreset => self.confirm_preset_delete().await,
             Action::CancelDeletePreset => self.cancel_preset_delete_confirm(),
             Action::RefreshPresets => self.start_refresh_presets(),
+            Action::ConfirmUpdate => self.start_update_download(),
+            Action::DismissUpdate => self.dismiss_update_popup(),
+            Action::SkipUpdateVersion => self.skip_update_version(),
             Action::FocusNext => self.move_focus(1),
             Action::FocusPrev => self.move_focus(-1),
             Action::AdjustFocused(_) => {}

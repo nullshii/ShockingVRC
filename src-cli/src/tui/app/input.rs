@@ -9,6 +9,39 @@ use super::helpers::{point_in, slider_value_action, step_multiplier, HitResult};
 
 impl App {
     pub async fn handle_key(&mut self, key: KeyEvent) {
+        if self.update_popup {
+            if self.update_downloading {
+                return;
+            }
+            if self.update_error.is_some() {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                        self.dismiss_update_popup();
+                    }
+                    KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        self.flash_button(Action::ConfirmUpdate);
+                        self.start_update_download();
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                    self.dismiss_update_popup();
+                }
+                KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    self.flash_button(Action::ConfirmUpdate);
+                    self.start_update_download();
+                }
+                KeyCode::Char('s') | KeyCode::Char('S') => {
+                    self.skip_update_version();
+                }
+                _ => {}
+            }
+            return;
+        }
+
         if self.tutorial_active {
             match key.code {
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -47,6 +80,10 @@ impl App {
                 }
                 if self.osc_port_editing {
                     self.cancel_osc_port_edit();
+                    return;
+                }
+                if self.update_popup {
+                    self.dismiss_update_popup();
                     return;
                 }
                 self.should_quit = true;

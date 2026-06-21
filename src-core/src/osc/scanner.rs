@@ -100,6 +100,13 @@ impl AvatarScanner {
         self.restart_listener().await
     }
 
+    pub async fn stop(&self) {
+        if let Some(handle) = self.state.listener.lock().await.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+    }
+
     async fn restart_listener(&self) -> Result<()> {
         if let Some(handle) = self.state.listener.lock().await.take() {
             handle.abort();
