@@ -142,6 +142,24 @@ impl App {
                 self.switch_tab_relative(-1);
                 return;
             }
+            KeyCode::Char(c @ '1'..='9') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let idx = c as usize - '1' as usize;
+                if idx < self.device_infos.len() {
+                    self.flash_button(Action::SwitchDevice(idx));
+                    self.apply(Action::SwitchDevice(idx)).await;
+                }
+                return;
+            }
+            KeyCode::Char('[') => {
+                self.flash_button(Action::CycleDevice(-1));
+                self.apply(Action::CycleDevice(-1)).await;
+                return;
+            }
+            KeyCode::Char(']') => {
+                self.flash_button(Action::CycleDevice(1));
+                self.apply(Action::CycleDevice(1)).await;
+                return;
+            }
             KeyCode::Char(c @ '1'..='8') => {
                 self.close_mod_function_picker();
                 let idx = c as usize - '1' as usize;
@@ -292,6 +310,33 @@ impl App {
                     ZonesPane::ConfiguredB => Action::RemoveZone(Channel::B, self.sel_conf_b),
                     ZonesPane::Avatar => Action::AddAvatarZone(Channel::B, self.sel_avatar),
                 }),
+                KeyCode::Char('-') | KeyCode::Char('_') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::StepZoneScale(
+                        Channel::A, self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { -1 } else { -5 },
+                    )),
+                    ZonesPane::ConfiguredB => Some(Action::StepZoneScale(
+                        Channel::B, self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { -1 } else { -5 },
+                    )),
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char('+') | KeyCode::Char('=') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::StepZoneScale(
+                        Channel::A, self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { 1 } else { 5 },
+                    )),
+                    ZonesPane::ConfiguredB => Some(Action::StepZoneScale(
+                        Channel::B, self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { 1 } else { 5 },
+                    )),
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char('r') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::SetZoneScale(Channel::A, self.sel_conf_a, 100)),
+                    ZonesPane::ConfiguredB => Some(Action::SetZoneScale(Channel::B, self.sel_conf_b, 100)),
+                    ZonesPane::Avatar => None,
+                },
                 KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ActivateFocused),
                 _ => None,
             },

@@ -231,7 +231,7 @@ impl CliEngine {
         drop(cfg);
 
         match device.set_wave_bf(&bf).await {
-            Ok(_) => info!("[cli] BF limits sent to device"),
+            Ok(_) => info!("[cli] BF limits sent to device {}", device.mac_address()),
             Err(e) => warn!("[cli] Failed to send BF limits: {e}"),
         }
 
@@ -307,7 +307,6 @@ impl CliEngine {
                 }
             }
 
-            // On stop: send idle wave to device if still connected
             engine.disconnect_device().await;
             info!("[cli] Engine stopped");
         });
@@ -474,10 +473,12 @@ fn compute_channel_status(
 
     for entry in &channel.zones {
         let pattern = &entry.id;
+        let zone_scale = entry.scale as f32 / 100.0;
+
         if pattern.is_wildcard() {
             for (known_id, k) in kinematics {
                 if pattern.matches(known_id) && seen.insert(known_id.clone()) {
-                    let value = project_with_freshness(k, entry.mode, norms, now);
+                    let value = (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0);
                     zone_levels.push(value);
                     if value > 0.0 {
                         active_zones.push((known_id.clone(), value));
@@ -493,7 +494,7 @@ fn compute_channel_status(
         } else if seen.insert(pattern.clone()) {
             let value = kinematics
                 .get(pattern)
-                .map(|k| project_with_freshness(k, entry.mode, norms, now))
+                .map(|k| (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0))
                 .unwrap_or(0.0);
             zone_levels.push(value);
             if value > 0.0 {

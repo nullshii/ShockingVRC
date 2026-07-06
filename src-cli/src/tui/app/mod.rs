@@ -1,5 +1,6 @@
 mod apply;
 mod controls;
+mod device_ui;
 mod helpers;
 mod input;
 mod prefs;
@@ -16,18 +17,21 @@ pub use types::{
     SliderKind, Tab, UkfField, ZonesPane,
 };
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 use shocking_vrc_core::cli::{ChannelConfig, CliConfig, CliStatus};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::PresetEntry;
 use shocking_vrc_core::ZoneEvent;
 
-use crate::app_state::AppState;
+use crate::app_state::{AppState, DeviceSlotInfo};
 use crate::tui_logger::LogBuffer;
+
+use device_ui::{DeviceUiState, DeviceUiStateMap};
 
 use helpers::default_status;
 use prefs::{load_ui_prefs, save_ui_prefs_full};
@@ -43,7 +47,10 @@ pub struct App {
     pub osc_port: u16,
     pub osc_port_editing: bool,
     pub osc_port_input: String,
-    pub device_battery: Option<u8>,
+    pub device_infos: Vec<DeviceSlotInfo>,
+    pub active_device: usize,
+    device_ui_states: DeviceUiStateMap,
+    pub(super) status_rx: Option<broadcast::Receiver<CliStatus>>,
 
     pub active_tab: Tab,
     pub should_quit: bool,
@@ -146,7 +153,10 @@ impl App {
             osc_port: 9001,
             osc_port_editing: false,
             osc_port_input: String::new(),
-            device_battery: None,
+            device_infos: Vec::new(),
+            active_device: 0,
+            device_ui_states: HashMap::new(),
+            status_rx: None,
             active_tab: Tab::Status,
             should_quit: false,
             clickables: Vec::new(),
@@ -219,28 +229,180 @@ impl App {
     }
 
     pub async fn refresh_all(&mut self) {
-        self.config = self.state.engine.config().await;
-        self.status = self.state.engine.current_status().await;
+        self.sync_device_list();
+        self.ensure_active_device_valid();
+        if let Some(engine) = self.active_engine() {
+            self.config = engine.config().await;
+            self.status = engine.current_status().await;
+            self.status_rx = Some(engine.subscribe_status());
+            let ukf = self.config.ukf;
+            self.state.scanner.set_ukf_params(ukf.into()).await;
+        }
         self.avatar_zones = self.state.scanner.zones().await;
         self.vrchat_found = self.state.scanner.vrchat_address().await.is_some();
         self.osc_port = self.state.scanner.port().await;
-        self.device_battery = self.state.battery_level.read().ok().and_then(|g| *g);
         self.last_refresh = Instant::now();
         self.load_editor_from_config();
     }
 
     pub async fn maybe_refresh(&mut self) {
         if self.last_refresh.elapsed() >= Duration::from_millis(800) {
-            self.config = self.state.engine.config().await;
+            let prev_count = self.device_infos.len();
+            self.sync_device_list();
+            self.ensure_active_device_valid();
+            if self.device_infos.len() != prev_count && self.status_rx.is_none() {
+                if let Some(engine) = self.active_engine() {
+                    self.config = engine.config().await;
+                    self.status = engine.current_status().await;
+                    self.status_rx = Some(engine.subscribe_status());
+                }
+            }
+            if let Some(engine) = self.active_engine() {
+                self.config = engine.config().await;
+                self.status = engine.current_status().await;
+            }
             self.avatar_zones = self.state.scanner.zones().await;
             self.vrchat_found = self.state.scanner.vrchat_address().await.is_some();
-            self.device_battery = self.state.battery_level.read().ok().and_then(|g| *g);
             self.last_refresh = Instant::now();
         }
     }
 
     pub(super) async fn refresh_config(&mut self) {
-        self.config = self.state.engine.config().await;
+        if let Some(engine) = self.active_engine() {
+            self.config = engine.config().await;
+        }
+    }
+
+    pub fn active_engine(&self) -> Option<shocking_vrc_core::CliEngine> {
+        self.state.engine_at(self.active_device)
+    }
+
+    pub(super) fn active_mac(&self) -> Option<String> {
+        self.device_infos.get(self.active_device).map(|d| d.mac.clone())
+    }
+
+    fn sync_device_list(&mut self) {
+        self.device_infos = self.state.slot_infos();
+    }
+
+    fn ensure_active_device_valid(&mut self) {
+        if self.device_infos.is_empty() {
+            self.active_device = 0;
+            return;
+        }
+        if self.active_device >= self.device_infos.len() {
+            self.active_device = self.device_infos.len() - 1;
+        }
+    }
+
+    pub async fn switch_device(&mut self, index: usize) {
+        if index >= self.device_infos.len() || index == self.active_device {
+            return;
+        }
+        self.save_active_device_state().await;
+        self.active_device = index;
+        self.load_active_device_state().await;
+    }
+
+    async fn save_active_device_state(&mut self) {
+        if let Some(mac) = self.active_mac() {
+            self.device_ui_states.insert(mac.clone(), self.capture_ui_state());
+            if let Some(engine) = self.active_engine() {
+                engine.set_config(self.config.clone()).await;
+                if self.auto_save && !self.tutorial_active {
+                    if let Err(e) = crate::device_config::save_device_config(&mac, &self.config) {
+                        log::error!("[config] Auto-save failed for {mac}: {e}");
+                    }
+                }
+            }
+        }
+    }
+
+    async fn load_active_device_state(&mut self) {
+        let Some(mac) = self.active_mac() else {
+            return;
+        };
+        if let Some(engine) = self.active_engine() {
+            self.config = engine.config().await;
+            self.status = engine.current_status().await;
+            self.status_rx = Some(engine.subscribe_status());
+            let ukf = self.config.ukf;
+            self.state.scanner.set_ukf_params(ukf.into()).await;
+        }
+        if let Some(ui) = self.device_ui_states.remove(&mac) {
+            self.apply_ui_state(ui);
+        } else {
+            self.reset_ui_state();
+        }
+        self.load_editor_from_config();
+    }
+
+    fn capture_ui_state(&self) -> DeviceUiState {
+        DeviceUiState {
+            zones_pane: self.zones_pane,
+            sel_conf_a: self.sel_conf_a,
+            sel_conf_b: self.sel_conf_b,
+            sel_avatar: self.sel_avatar,
+            channel_focus: self.channel_focus,
+            tuning_focus: self.tuning_focus,
+            mod_focus: self.mod_focus,
+            mod_channel: self.mod_channel,
+            mod_kind: self.mod_kind,
+            mod_seg: self.mod_seg,
+            mod_editor: self.mod_editor.clone(),
+            mod_function_picker: self.mod_function_picker,
+            mod_func_pick_ix: self.mod_func_pick_ix,
+            mod_func_pick_scroll: self.mod_func_pick_scroll,
+            mod_func_pick_viewport: self.mod_func_pick_viewport,
+            channels_scroll: self.channels_scroll,
+            mod_slots_scroll: self.mod_slots_scroll,
+            mod_editor_scroll: self.mod_editor_scroll,
+            tuning_scroll: self.tuning_scroll,
+        }
+    }
+
+    fn apply_ui_state(&mut self, ui: DeviceUiState) {
+        self.zones_pane = ui.zones_pane;
+        self.sel_conf_a = ui.sel_conf_a;
+        self.sel_conf_b = ui.sel_conf_b;
+        self.sel_avatar = ui.sel_avatar;
+        self.channel_focus = ui.channel_focus;
+        self.tuning_focus = ui.tuning_focus;
+        self.mod_focus = ui.mod_focus;
+        self.mod_channel = ui.mod_channel;
+        self.mod_kind = ui.mod_kind;
+        self.mod_seg = ui.mod_seg;
+        self.mod_editor = ui.mod_editor;
+        self.mod_function_picker = ui.mod_function_picker;
+        self.mod_func_pick_ix = ui.mod_func_pick_ix;
+        self.mod_func_pick_scroll = ui.mod_func_pick_scroll;
+        self.mod_func_pick_viewport = ui.mod_func_pick_viewport;
+        self.channels_scroll = ui.channels_scroll;
+        self.mod_slots_scroll = ui.mod_slots_scroll;
+        self.mod_editor_scroll = ui.mod_editor_scroll;
+        self.tuning_scroll = ui.tuning_scroll;
+    }
+
+    fn reset_ui_state(&mut self) {
+        self.zones_pane = ZonesPane::ConfiguredA;
+        self.sel_conf_a = 0;
+        self.sel_conf_b = 0;
+        self.sel_avatar = 0;
+        self.channel_focus = 0;
+        self.tuning_focus = 0;
+        self.mod_focus = 0;
+        self.mod_channel = Channel::A;
+        self.mod_kind = ModKind::Freq;
+        self.mod_seg = 0;
+        self.channels_scroll = 0;
+        self.mod_slots_scroll = 0;
+        self.mod_editor_scroll = 0;
+        self.tuning_scroll = 0;
+        self.mod_function_picker = false;
+    }
+
+    pub fn active_battery(&self) -> Option<u8> {
+        self.device_infos.get(self.active_device).and_then(|d| d.battery)
     }
 
     pub fn spawn_update_check(&mut self) {
@@ -718,13 +880,19 @@ impl App {
             log::warn!("[presets] No preset selected");
             return;
         };
-        let mut cfg = self.state.engine.config().await;
+        let mut cfg = if let Some(engine) = self.active_engine() {
+            engine.config().await
+        } else {
+            return;
+        };
         let ch_cfg = match ch {
             Channel::A => &mut cfg.channel_a,
             Channel::B => &mut cfg.channel_b,
         };
         entry.preset.apply_to(ch_cfg);
-        self.state.engine.set_config(cfg).await;
+        if let Some(engine) = self.active_engine() {
+            engine.set_config(cfg).await;
+        }
         log::info!("[ch-{}] Preset applied: {} (limits unchanged)", ch.label(), entry.name);
         self.refresh_config().await;
         self.load_editor_from_config();
@@ -740,7 +908,13 @@ impl App {
         self.config = sandbox::demo_config();
         self.avatar_zones = sandbox::demo_avatar_zones();
         self.vrchat_found = true;
-        self.device_battery = Some(75);
+        self.device_infos = vec![DeviceSlotInfo {
+            name: "DG-Lab Coyote V3".to_string(),
+            mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            battery: Some(75),
+            connected: true,
+            reconnecting: false,
+        }];
         self.status.device_connected = true;
         self.tutorial_active = true;
         self.tutorial_step = TutorialStep::Welcome;

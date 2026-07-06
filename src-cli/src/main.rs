@@ -9,7 +9,9 @@ use shocking_vrc_core::cli::{
 };
 use shocking_vrc_core::{AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
 
-use shocking_vrc_cli::{app_state::AppState, tui, tui_logger};
+use shocking_vrc_cli::app_state::{AppState, DeviceSlot};
+use shocking_vrc_cli::device_config;
+use shocking_vrc_cli::{tui, tui_logger};
 
 const CONFIG_FILE: &str = "cli_config.json";
 
@@ -94,6 +96,185 @@ fn load_config_from_file(path: &str) -> Result<CliConfig, Box<dyn std::error::Er
     Ok(serde_json::from_str(&json)?)
 }
 
+async fn attach_device_to_slot(state: &Arc<AppState>, mac: &str, mut dev: CoyoteDevice) -> Arc<CoyoteDevice> {
+    dev.start();
+    let arc = Arc::new(dev);
+    if let Some(engine) = state.engine_for_mac(mac) {
+        engine.connect_device(Arc::clone(&arc)).await;
+    }
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    if let Ok(Some(lvl)) = arc.battery_level().await {
+        state.update_slot(mac, |s| s.battery = Some(lvl));
+    }
+
+    state.update_slot(mac, |s| {
+        s.connected = true;
+        s.reconnecting = false;
+    });
+    arc
+}
+
+async fn add_device_slot(state: &Arc<AppState>, mut dev: CoyoteDevice, scanner: &AvatarScanner) {
+    let mac = dev.mac_address().to_uppercase();
+    if state.find_slot_index(&mac).is_some() {
+        let _ = dev.disconnect().await;
+        return;
+    }
+
+    let name = dev.name().to_string();
+    let cfg = device_config::load_device_config(&mac, &state.default_config);
+    let engine = CliEngine::new(cfg);
+    let stop_handle = engine.start(scanner).await;
+
+    dev.start();
+    let arc_dev = Arc::new(dev);
+    engine.connect_device(Arc::clone(&arc_dev)).await;
+
+    let mut battery = None;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    if let Ok(Some(lvl)) = arc_dev.battery_level().await {
+        battery = Some(lvl);
+    }
+
+    let slot = DeviceSlot {
+        mac: mac.clone(),
+        name,
+        engine,
+        stop_handle,
+        battery,
+        connected: true,
+        reconnecting: false,
+    };
+
+    if let Ok(mut slots) = state.device_slots.write() {
+        slots.push(slot);
+    }
+
+    log::info!("[ble] Device slot created for {mac}");
+    spawn_device_monitor(Arc::clone(state), mac, arc_dev);
+}
+
+async fn reconnect_to_slot(state: &Arc<AppState>, mac: String, dev: CoyoteDevice) {
+    log::info!("[ble] Re-attaching device {mac}");
+    let arc = attach_device_to_slot(state, &mac, dev).await;
+    spawn_device_monitor(Arc::clone(state), mac.clone(), arc);
+}
+
+async fn handle_scanned_device(state: &Arc<AppState>, dev: CoyoteDevice, scanner: &AvatarScanner) {
+    let mac = dev.mac_address().to_uppercase();
+    if state.find_slot_index(&mac).is_some() {
+        let needs_reconnect = state
+            .device_slots
+            .read()
+            .ok()
+            .and_then(|slots| {
+                slots
+                    .iter()
+                    .find(|s| s.mac.eq_ignore_ascii_case(&mac))
+                    .map(|s| !s.connected || s.reconnecting)
+            })
+            .unwrap_or(false);
+        if needs_reconnect {
+            reconnect_to_slot(state, mac, dev).await;
+        } else {
+            log::debug!("[ble] Ignoring duplicate scan result for {mac}");
+            let _ = dev.disconnect().await;
+        }
+    } else {
+        add_device_slot(state, dev, scanner).await;
+    }
+}
+
+async fn try_reconnect_pending(state: &Arc<AppState>) {
+    let pending: Vec<String> = state
+        .device_slots
+        .read()
+        .ok()
+        .map(|slots| {
+            slots
+                .iter()
+                .filter(|s| s.reconnecting || !s.connected)
+                .map(|s| s.mac.clone())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    for mac in pending {
+        log::debug!("[ble] Targeted reconnect attempt for {mac}");
+        match tokio::time::timeout(
+            Duration::from_secs(25),
+            CoyoteDevice::connect_by_mac(&mac, Duration::from_secs(12)),
+        )
+        .await
+        {
+            Ok(Ok(Some(dev))) => reconnect_to_slot(state, mac, dev).await,
+            Ok(Ok(None)) => log::debug!("[ble] {mac} not found during targeted reconnect"),
+            Ok(Err(e)) => log::warn!("[ble] Targeted reconnect error for {mac}: {e}"),
+            Err(_) => log::warn!("[ble] Targeted reconnect timed out for {mac}"),
+        }
+    }
+}
+
+fn spawn_device_monitor(state: Arc<AppState>, mac: String, dev: Arc<CoyoteDevice>) {
+    tokio::spawn(async move {
+        let mut last_battery = Instant::now();
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+
+            if dev.is_connected().await {
+                if last_battery.elapsed() >= Duration::from_secs(30) {
+                    if let Ok(Some(lvl)) = dev.battery_level().await {
+                        state.update_slot(&mac, |s| s.battery = Some(lvl));
+                    }
+                    last_battery = Instant::now();
+                }
+                continue;
+            }
+
+            log::warn!("[ble] Device {mac} disconnected — coordinator will reconnect");
+            state.update_slot(&mac, |s| {
+                s.connected = false;
+                s.reconnecting = true;
+            });
+
+            if let Some(engine) = state.engine_for_mac(&mac) {
+                engine.disconnect_device().await;
+            }
+            return;
+        }
+    });
+}
+
+fn spawn_ble_coordinator(state: Arc<AppState>, scanner: AvatarScanner, scan_timeout: u64) {
+    tokio::spawn(async move {
+        loop {
+            try_reconnect_pending(&state).await;
+
+            log::debug!("[ble] Scanning for devices ({}s)...", scan_timeout);
+            match CoyoteDevice::scan_all_with_timeout(Duration::from_secs(scan_timeout)).await {
+                Ok(devices) => {
+                    for dev in devices {
+                        handle_scanned_device(&state, dev, &scanner).await;
+                    }
+                }
+                Err(e) => log::warn!("[ble] Scan error: {e}"),
+            }
+
+            let interval = if state
+                .slot_infos()
+                .iter()
+                .any(|s| s.reconnecting || !s.connected)
+            {
+                Duration::from_secs(5)
+            } else {
+                Duration::from_secs(15)
+            };
+            tokio::time::sleep(interval).await;
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() {
     shocking_vrc_core::update::cleanup_staging_files();
@@ -104,10 +285,10 @@ async fn main() {
 
     log::info!("ShockingVRC CLI v{} — Hello DG-Lab Users", shocking_vrc_core::VERSION);
 
-    let config = if Path::new(CONFIG_FILE).exists() {
+    let default_config = if Path::new(CONFIG_FILE).exists() {
         match load_config_from_file(CONFIG_FILE) {
             Ok(c) => {
-                log::info!("[config] Loaded from {CONFIG_FILE}");
+                log::info!("[config] Loaded default from {CONFIG_FILE}");
                 c
             }
             Err(e) => {
@@ -116,7 +297,7 @@ async fn main() {
             }
         }
     } else {
-        log::info!("[config] No {CONFIG_FILE} found — using defaults (Channels ▸ Save to create)");
+        log::info!("[config] No {CONFIG_FILE} found — using defaults");
         default_config()
     };
 
@@ -149,91 +330,22 @@ async fn main() {
         Err(e) => log::error!("[osc] Discovery error: {e}"),
     }
 
-    let engine = CliEngine::new(config);
-    let status_rx = engine.subscribe_status();
-    let stop_handle = engine.start(&scanner).await;
-
     let monitor_enabled = Arc::new(AtomicBool::new(true));
-    let battery_level = Arc::new(RwLock::new(None));
-
-    log::info!("[cli] Engine started.");
-    log::info!("[ble] Searching for DGLab Coyote V3 in background...");
 
     let state = Arc::new(AppState {
-        engine,
-        scanner,
+        scanner: scanner.clone(),
         monitor_enabled: Arc::clone(&monitor_enabled),
-        battery_level: Arc::clone(&battery_level),
+        default_config,
+        device_slots: Arc::new(RwLock::new(Vec::new())),
     });
 
-    {
-        let state_ble = Arc::clone(&state);
-        let scan_timeout = args.scan_timeout;
-        tokio::spawn(async move {
-            loop {
-                log::debug!("[ble] Starting BLE scan ({}s)...", scan_timeout);
-                match CoyoteDevice::scan_first_with_timeout(Duration::from_secs(scan_timeout)).await
-                {
-                    Ok(Some(mut dev)) => {
-                        log::info!("[ble] Connected: {} ({})", dev.name(), dev.mac_address());
-                        dev.start();
-                        let dev = Arc::new(dev);
-                        state_ble.engine.connect_device(Arc::clone(&dev)).await;
+    log::info!("[cli] Ready.");
+    log::info!("[ble] Searching for DGLab Coyote V3 in background...");
 
-                        tokio::time::sleep(Duration::from_millis(500)).await;
-                        match dev.battery_level().await {
-                            Ok(Some(lvl)) => {
-                                if let Ok(mut g) = state_ble.battery_level.write() {
-                                    *g = Some(lvl);
-                                }
-                            }
-                            Ok(None) => {}
-                            Err(e) => log::debug!("[ble] Battery read failed: {e}"),
-                        }
-
-                        let mut last_battery = Instant::now();
-                        loop {
-                            if last_battery.elapsed() >= Duration::from_secs(30) {
-                                match dev.battery_level().await {
-                                    Ok(Some(lvl)) => {
-                                        if let Ok(mut g) = state_ble.battery_level.write() {
-                                            *g = Some(lvl);
-                                        }
-                                    }
-                                    Ok(None) => {}
-                                    Err(e) => log::debug!("[ble] Battery read failed: {e}"),
-                                }
-                                last_battery = Instant::now();
-                            }
-
-                            tokio::time::sleep(Duration::from_secs(2)).await;
-                            if !dev.is_connected().await {
-                                log::warn!("[ble] Device disconnected — rescanning...");
-                                if let Ok(mut g) = state_ble.battery_level.write() {
-                                    *g = None;
-                                }
-                                state_ble.engine.disconnect_device().await;
-                                break;
-                            }
-                        }
-                    }
-                    Ok(None) => {
-                        log::debug!("[ble] No device found, retrying in 10 s");
-                        tokio::time::sleep(Duration::from_secs(10)).await;
-                    }
-                    Err(e) => {
-                        log::warn!("[ble] Scan error: {e}, retrying in 10 s");
-                        tokio::time::sleep(Duration::from_secs(10)).await;
-                    }
-                }
-            }
-        });
-    }
-
+    spawn_ble_coordinator(Arc::clone(&state), scanner.clone(), args.scan_timeout);
 
     let pending_update = match tui::run(
         Arc::clone(&state),
-        status_rx,
         log_buffer,
         args.skip_update_check,
     )
@@ -246,8 +358,7 @@ async fn main() {
         }
     };
 
-    stop_handle.stop();
-    state.engine.disconnect_device().await;
+    state.disconnect_all();
     state.scanner.stop().await;
     tokio::time::sleep(Duration::from_millis(600)).await;
 

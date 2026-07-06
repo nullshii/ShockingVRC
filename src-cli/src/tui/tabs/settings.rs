@@ -126,6 +126,12 @@ fn render_connection(app: &mut App, frame: &mut Frame, area: Rect) {
     );
 
     let (dev_badge, dev_text) = if app.status.device_connected {
+        let count = app.device_infos.len();
+        let label = if count > 1 {
+            format!(" {count} Coyotes connected")
+        } else {
+            " Coyote connected".to_string()
+        };
         (
             Span::styled(
                 " OK ",
@@ -134,7 +140,7 @@ fn render_connection(app: &mut App, frame: &mut Frame, area: Rect) {
                     .bg(theme::SUCCESS)
                     .add_modifier(ratatui::style::Modifier::BOLD),
             ),
-            " Coyote connected",
+            label,
         )
     } else {
         (
@@ -145,7 +151,7 @@ fn render_connection(app: &mut App, frame: &mut Frame, area: Rect) {
                     .bg(theme::WARNING)
                     .add_modifier(ratatui::style::Modifier::BOLD),
             ),
-            " Coyote searching…",
+            " Coyote searching…".to_string(),
         )
     };
     frame.render_widget(

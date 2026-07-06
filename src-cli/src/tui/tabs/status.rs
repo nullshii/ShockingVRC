@@ -2,22 +2,41 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Gauge, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Gauge, List, ListItem, Paragraph};
 
 use shocking_vrc_core::cli::ChannelStatus;
 use shocking_vrc_core::raw_to_hz;
 
-use crate::tui::app::App;
+use crate::app_state::DeviceSlotInfo;
+use crate::tui::app::{Action, App};
 use crate::tui::theme;
 use crate::tui::ui;
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
-    let rows = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
+    let multi_device = app.device_infos.len() > 1;
+    let rows = if multi_device {
+        let dev_panel_h = (app.device_infos.len() as u16 * 3 + 2).min(12);
+        Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Length(dev_panel_h),
+            Constraint::Min(0),
+        ])
+        .split(area)
+    } else {
+        Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area)
+    };
+
     render_indicators(app, frame, rows[0]);
 
-    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[1]);
+    let channel_area = if multi_device {
+        render_device_list(app, frame, rows[1]);
+        rows[2]
+    } else {
+        rows[1]
+    };
 
+    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(channel_area);
     let a = app.status.channel_a.clone();
     let b = app.status.channel_b.clone();
     let lim_a = app.config.channel_a.limits.max;
@@ -31,21 +50,30 @@ fn render_indicators(app: &mut App, frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    let active = app.device_infos.get(app.active_device);
+    let connected = active.map(|d| d.connected).unwrap_or(app.status.device_connected);
+
     let cols = Layout::horizontal([
         Constraint::Length(18),
         Constraint::Min(14),
         Constraint::Length(18),
-        Constraint::Length(14),
+        Constraint::Length(10),
     ])
     .split(inner);
 
-    frame.render_widget(Paragraph::new(coyote_status(app.status.device_connected)), cols[0]);
+    frame.render_widget(
+        Paragraph::new(coyote_status(connected, active.map(|d| d.name.as_str()))),
+        cols[0],
+    );
 
-    if app.status.device_connected {
-        ui::battery_gauge(frame, cols[1], app.device_battery);
+    if connected {
+        ui::battery_gauge(frame, cols[1], app.active_battery());
     } else {
         frame.render_widget(
-            Paragraph::new(Span::styled("—", Style::default().fg(theme::TEXT_DIM))),
+            Paragraph::new(Line::from(vec![
+                Span::styled("Battery ", Style::default().fg(theme::TEXT_DIM)),
+                Span::styled("—", Style::default().fg(theme::TEXT_DIM)),
+            ])),
             cols[1],
         );
     }
@@ -64,22 +92,144 @@ fn render_indicators(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(zones), cols[3]);
 }
 
-fn coyote_status(connected: bool) -> Line<'static> {
-    let (text, bg) = if connected {
+fn coyote_status(connected: bool, name: Option<&str>) -> Line<'static> {
+    if connected {
+        let text = name
+            .map(|n| format!(" {n} "))
+            .unwrap_or_else(|| " online ".to_string());
+        Line::from(vec![
+            Span::styled("Coyote ", Style::default().fg(theme::TEXT_DIM)),
+            Span::styled(
+                text,
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(theme::SUCCESS)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("Coyote ", Style::default().fg(theme::TEXT_DIM)),
+            Span::styled(
+                " offline ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(theme::ERROR)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+    }
+}
+
+fn render_device_list(app: &mut App, frame: &mut Frame, area: Rect) {
+    let block = theme::panel_block("Devices");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if app.device_infos.is_empty() {
+        return;
+    }
+
+    let devices: Vec<DeviceSlotInfo> = app.device_infos.clone();
+    let row_constraints: Vec<Constraint> = devices
+        .iter()
+        .map(|_| Constraint::Length(3))
+        .collect();
+    let rows = Layout::vertical(row_constraints).split(inner);
+
+    for (i, (row_area, dev)) in rows.iter().zip(devices.iter()).enumerate() {
+        render_device_row(app, frame, *row_area, i, dev);
+    }
+}
+
+fn render_device_row(
+    app: &mut App,
+    frame: &mut Frame,
+    area: Rect,
+    index: usize,
+    dev: &DeviceSlotInfo,
+) {
+    let active = index == app.active_device;
+    let border_color = if active {
+        theme::ACCENT
+    } else {
+        theme::ACCENT_DIM
+    };
+
+    let row_block = Block::default()
+        .borders(ratatui::widgets::Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(if active {
+            theme::SURFACE_ELEVATED
+        } else {
+            theme::SURFACE
+        }));
+    let inner = row_block.inner(area);
+    frame.render_widget(row_block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let cols = Layout::horizontal([
+        Constraint::Length(4),
+        Constraint::Length(16),
+        Constraint::Length(11),
+        Constraint::Min(16),
+        Constraint::Length(13),
+    ])
+    .split(inner);
+
+    let badge_style = if active {
+        theme::active_tab_style()
+    } else {
+        Style::default().fg(theme::TEXT_DIM)
+    };
+    frame.render_widget(
+        Paragraph::new(format!("D{}", index + 1)).style(badge_style),
+        cols[0],
+    );
+
+    let name_style = if active {
+        Style::default()
+            .fg(theme::HIGHLIGHT)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT).add_modifier(Modifier::BOLD)
+    };
+    frame.render_widget(
+        Paragraph::new(dev.name.clone()).style(name_style),
+        cols[1],
+    );
+
+    let short_mac = &dev.mac[dev.mac.len().saturating_sub(8)..];
+    frame.render_widget(
+        Paragraph::new(short_mac).style(Style::default().fg(theme::TEXT_DIM)),
+        cols[2],
+    );
+
+    ui::battery_bar(frame, cols[3], dev.battery);
+
+    let (status_text, status_bg) = if dev.reconnecting {
+        (" reconnect ", theme::WARNING)
+    } else if dev.connected {
         (" online ", theme::SUCCESS)
     } else {
         (" offline ", theme::ERROR)
     };
-    Line::from(vec![
-        Span::styled("Coyote ", Style::default().fg(theme::TEXT_DIM)),
-        Span::styled(
-            text,
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            status_text,
             Style::default()
                 .fg(Color::Black)
-                .bg(bg)
+                .bg(status_bg)
                 .add_modifier(Modifier::BOLD),
-        ),
-    ])
+        ))),
+        cols[4],
+    );
+
+    app.push_click(area, Action::SwitchDevice(index));
 }
 
 fn indicator_line(name: &str, on: bool) -> Line<'static> {

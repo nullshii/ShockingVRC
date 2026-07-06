@@ -183,30 +183,45 @@ pub enum AggregationMode {
     Average,
 }
 
+fn default_zone_scale() -> u8 {
+    100
+}
+
+fn is_default_zone_scale(v: &u8) -> bool {
+    *v == 100
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ZoneEntry {
     #[serde(flatten)]
     pub id: ZoneId,
     #[serde(default)]
     pub mode: ContactMode,
+    #[serde(default = "default_zone_scale", skip_serializing_if = "is_default_zone_scale")]
+    pub scale: u8,
 }
 
 impl ZoneEntry {
     pub fn new(id: ZoneId, mode: ContactMode) -> Self {
-        Self { id, mode }
+        Self { id, mode, scale: 100 }
     }
 
     pub fn with_default_mode(id: ZoneId) -> Self {
         Self {
             id,
             mode: ContactMode::default(),
+            scale: 100,
         }
     }
 }
 
 impl fmt::Display for ZoneEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}[{}]", self.id, self.mode)
+        if self.scale != 100 {
+            write!(f, "{}[{}@{}%]", self.id, self.mode, self.scale)
+        } else {
+            write!(f, "{}[{}]", self.id, self.mode)
+        }
     }
 }
 

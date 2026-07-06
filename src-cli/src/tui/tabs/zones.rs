@@ -1,11 +1,12 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use shocking_vrc_core::cli::{ContactMode, ZoneId};
+use shocking_vrc_core::cli::ContactMode;
 
-use crate::tui::app::{Action, App, Channel, ZonesPane};
+use crate::tui::app::{Action, App, Channel, SliderKind, ZonesPane};
 use crate::tui::theme;
 use crate::tui::ui;
 
@@ -36,11 +37,22 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let layout = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(inner);
+    let layout = Layout::vertical([
+        Constraint::Min(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(inner);
     let list_area = layout[0];
-    let footer = layout[1];
+    let btn_row = layout[1];
+    let slider_row_area = layout[2];
 
-    let entries: Vec<(String, ZoneId)> = app
+    let selected = match ch {
+        Channel::A => app.sel_conf_a,
+        Channel::B => app.sel_conf_b,
+    };
+
+    let entries: Vec<(String, u8)> = app
         .channel_config(ch)
         .zones
         .iter()
@@ -51,14 +63,14 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
                 ContactMode::Acc => "acc",
                 ContactMode::Recoil => "recoil",
             };
-            (format!("{} · {}", e.id, mode_str), e.id.clone())
+            let scale_badge = if e.scale != 100 {
+                format!(" ·{}%", e.scale)
+            } else {
+                String::new()
+            };
+            (format!("{} · {}{}", e.id, mode_str, scale_badge), e.scale)
         })
         .collect();
-
-    let selected = match ch {
-        Channel::A => app.sel_conf_a,
-        Channel::B => app.sel_conf_b,
-    };
 
     render_rows(
         frame,
@@ -70,10 +82,68 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         &|i| Action::SelectConfigured(ch, i),
     );
 
-    let btns = Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
-        .split(footer);
+    let btns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(btn_row);
     ui::button(frame, app, btns[0], "Cycle mode", false, Action::CycleMode(ch, selected));
     ui::button(frame, app, btns[1], "Remove", false, Action::RemoveZone(ch, selected));
+
+
+    let current_scale = entries.get(selected).map(|(_, s)| *s).unwrap_or(100);
+
+    let label_cols = Layout::horizontal([
+        Constraint::Length(7),
+        Constraint::Min(8),
+        Constraint::Length(5),
+    ])
+    .split(slider_row_area);
+
+    let label_style = if focused {
+        Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_DIM)
+    };
+
+    frame.render_widget(
+        Paragraph::new("Scale ").style(label_style),
+        label_cols[0],
+    );
+
+    let ratio = current_scale as f64 / 100.0;
+    let bar_color = scale_bar_color(current_scale);
+    let gauge = ratatui::widgets::Gauge::default()
+        .gauge_style(Style::default().fg(bar_color).bg(theme::SURFACE_ELEVATED))
+        .ratio(ratio)
+        .label("");
+    frame.render_widget(gauge, label_cols[1]);
+    app.push_slider(label_cols[1], SliderKind::ZoneScale(ch, selected));
+
+    let val_style = if current_scale != 100 {
+        Style::default()
+            .fg(bar_color)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_DIM)
+    };
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!("{:>3}%", current_scale),
+            val_style,
+        ))),
+        label_cols[2],
+    );
+}
+
+fn scale_bar_color(scale: u8) -> ratatui::style::Color {
+    use ratatui::style::Color;
+    match scale {
+        0 => Color::DarkGray,
+        1..=29 => theme::ERROR,
+        30..=59 => theme::WARNING,
+        60..=89 => Color::Rgb(160, 210, 100),
+        90..=99 => Color::Rgb(100, 200, 160),
+        100 => theme::ACCENT,
+        _ => theme::ACCENT,
+    }
 }
 
 fn render_avatar(app: &mut App, frame: &mut Frame, area: Rect) {

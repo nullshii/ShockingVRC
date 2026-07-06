@@ -216,6 +216,7 @@ pub enum SliderKind {
     Intensity(Channel, usize),
     LimitMin(Channel),
     LimitMax(Channel),
+    ZoneScale(Channel, usize),
 }
 
 impl SliderKind {
@@ -224,6 +225,7 @@ impl SliderKind {
             SliderKind::Freq(..) => (10, 255),
             SliderKind::Intensity(..) => (0, 100),
             SliderKind::LimitMin(..) | SliderKind::LimitMax(..) => (0, 200),
+            SliderKind::ZoneScale(..) => (0, 100),
         }
     }
 
@@ -244,6 +246,10 @@ pub enum Action {
     SelectAvatar(usize),
     RemoveZone(Channel, usize),
     CycleMode(Channel, usize),
+    StepZoneScale(Channel, usize, i32),
+    SetZoneScale(Channel, usize, u8),
+    SwitchDevice(usize),
+    CycleDevice(i32),
     AddAvatarZone(Channel, usize),
     AddAllZones(Channel),
 

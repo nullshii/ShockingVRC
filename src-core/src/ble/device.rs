@@ -392,6 +392,10 @@ impl CoyoteDevice {
     }
 
     pub async fn scan_all_with_timeout(timeout: Duration) -> Result<Vec<CoyoteDevice>> {
+        adapter::with_scan_lock(|| Self::scan_all_with_timeout_inner(timeout)).await
+    }
+
+    async fn scan_all_with_timeout_inner(timeout: Duration) -> Result<Vec<CoyoteDevice>> {
         let known = KnownDeviceList::load();
         let adapter = adapter::get_adapter().await?;
         adapter::start_scan(&adapter).await?;
@@ -537,6 +541,48 @@ impl CoyoteDevice {
             return Ok(Some(dev));
         }
         Ok(None)
+    }
+
+    pub async fn connect_by_mac(mac: &str, timeout: Duration) -> Result<Option<Self>> {
+        adapter::with_scan_lock(|| Self::connect_by_mac_inner(mac, timeout)).await
+    }
+
+    async fn connect_by_mac_inner(mac: &str, timeout: Duration) -> Result<Option<Self>> {
+        let target = mac.to_uppercase();
+        let adapter = adapter::get_adapter().await?;
+        adapter::start_scan(&adapter).await?;
+
+        let result = async {
+            let step = Duration::from_millis(500);
+            let steps = (timeout.as_millis() / step.as_millis()).max(1) as u32;
+            for _ in 0..steps {
+                tokio::time::sleep(step).await;
+                for p in adapter.peripherals().await.unwrap_or_default() {
+                    if let Ok(Some(props)) = p.properties().await {
+                        let addr = props.address.to_string().to_uppercase();
+                        if addr == target {
+                            let connect_timeout = Duration::from_secs(12);
+                            match tokio::time::timeout(connect_timeout, Self::from_peripheral(p)).await
+                            {
+                                Ok(Ok(dev)) => {
+                                    info!("Reconnected to {} ({target})", dev.name());
+                                    return Ok(Some(dev));
+                                }
+                                Ok(Err(e)) => return Err(e),
+                                Err(_) => {
+                                    warn!("Reconnect to {target} timed out during GATT connect");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(None)
+        }
+        .await;
+
+        let _ = adapter::stop_scan(&adapter).await;
+        result
     }
 
     pub async fn disconnect(mut self) -> Result<()> {

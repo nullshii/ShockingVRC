@@ -1,4 +1,4 @@
-use shocking_vrc_core::cli::{CliConfig, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
+use shocking_vrc_core::cli::{MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
 
 use super::App;
 use super::{Action, Channel, ModKind};
@@ -23,6 +23,15 @@ impl App {
                 self.tuning_scroll = 0;
                 self.preset_scroll = 0;
             }
+            Action::SwitchDevice(i) => self.switch_device(i).await,
+            Action::CycleDevice(delta) => {
+                if self.device_infos.is_empty() {
+                    return;
+                }
+                let n = self.device_infos.len() as i32;
+                let next = (self.active_device as i32 + delta).rem_euclid(n) as usize;
+                self.switch_device(next).await;
+            }
             Action::StartOscPortEdit => self.start_osc_port_edit(),
             Action::StepOscPort(delta) => {
                 self.cancel_osc_port_edit();
@@ -45,11 +54,12 @@ impl App {
                 self.sel_avatar = i;
             }
             Action::RemoveZone(ch, i) => {
+                let Some(engine) = self.active_engine() else { return };
                 let id = self.channel_config(ch).zones.get(i).map(|e| e.id.clone());
                 if let Some(id) = id {
                     match ch {
-                        Channel::A => { self.state.engine.remove_zone_a(&id).await; }
-                        Channel::B => { self.state.engine.remove_zone_b(&id).await; }
+                        Channel::A => { engine.remove_zone_a(&id).await; }
+                        Channel::B => { engine.remove_zone_b(&id).await; }
                     }
                     log::info!("[ch-{}] Zone removed: {id}", ch.label());
                     self.refresh_config().await;
@@ -57,12 +67,13 @@ impl App {
                 }
             }
             Action::CycleMode(ch, i) => {
+                let Some(engine) = self.active_engine() else { return };
                 let entry = self.channel_config(ch).zones.get(i).cloned();
                 if let Some(entry) = entry {
                     let next = cycle_mode(entry.mode);
                     let found = match ch {
-                        Channel::A => self.state.engine.set_zone_mode_a(&entry.id, next).await,
-                        Channel::B => self.state.engine.set_zone_mode_b(&entry.id, next).await,
+                        Channel::A => engine.set_zone_mode_a(&entry.id, next).await,
+                        Channel::B => engine.set_zone_mode_b(&entry.id, next).await,
                     };
                     if found {
                         log::info!("[ch-{}] Mode for {} set to {next}", ch.label(), entry.id);
@@ -70,19 +81,74 @@ impl App {
                     self.refresh_config().await;
                 }
             }
+            Action::StepZoneScale(ch, i, delta) => {
+                let Some(engine) = self.active_engine() else { return };
+                let new_scale = {
+                    let cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &cfg.channel_a.zones,
+                        Channel::B => &cfg.channel_b.zones,
+                    };
+                    if let Some(entry) = zones.get(i) {
+                        let next = (entry.scale as i32 + delta).clamp(0, 100) as u8;
+                        Some((entry.id.clone(), next))
+                    } else {
+                        None
+                    }
+                };
+                if let Some((id, scale)) = new_scale {
+                    let mut cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &mut cfg.channel_a.zones,
+                        Channel::B => &mut cfg.channel_b.zones,
+                    };
+                    if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+                        e.scale = scale;
+                    }
+                    engine.set_config(cfg).await;
+                    log::info!("[ch-{}] Zone {id} scale set to {scale}%", ch.label());
+                    self.refresh_config().await;
+                }
+            }
+            Action::SetZoneScale(ch, i, scale) => {
+                let Some(engine) = self.active_engine() else { return };
+                let entry_id = {
+                    let cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &cfg.channel_a.zones,
+                        Channel::B => &cfg.channel_b.zones,
+                    };
+                    zones.get(i).map(|e| e.id.clone())
+                };
+                if let Some(id) = entry_id {
+                    let mut cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &mut cfg.channel_a.zones,
+                        Channel::B => &mut cfg.channel_b.zones,
+                    };
+                    if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+                        e.scale = scale.clamp(0, 100);
+                    }
+                    engine.set_config(cfg).await;
+                    log::info!("[ch-{}] Zone {id} scale set to {scale}%", ch.label());
+                    self.refresh_config().await;
+                }
+            }
             Action::AddAvatarZone(ch, i) => {
+                let Some(engine) = self.active_engine() else { return };
                 if let Some(z) = self.avatar_zones.get(i) {
                     let id = ZoneId::new(z.zone_type, &z.id);
                     let entry = ZoneEntry::with_default_mode(id.clone());
                     match ch {
-                        Channel::A => self.state.engine.add_zone_entry_a(entry).await,
-                        Channel::B => self.state.engine.add_zone_entry_b(entry).await,
+                        Channel::A => engine.add_zone_entry_a(entry).await,
+                        Channel::B => engine.add_zone_entry_b(entry).await,
                     }
                     log::info!("[ch-{}] Zone added: {id} [depth]", ch.label());
                     self.refresh_config().await;
                 }
             }
             Action::AddAllZones(ch) => {
+                let Some(engine) = self.active_engine() else { return };
                 let zones = self.avatar_zones.clone();
                 let mut added = 0usize;
                 for z in &zones {
@@ -95,8 +161,8 @@ impl App {
                     if !already {
                         let entry = ZoneEntry::with_default_mode(id.clone());
                         match ch {
-                            Channel::A => self.state.engine.add_zone_entry_a(entry).await,
-                            Channel::B => self.state.engine.add_zone_entry_b(entry).await,
+                            Channel::A => engine.add_zone_entry_a(entry).await,
+                            Channel::B => engine.add_zone_entry_b(entry).await,
                         }
                         added += 1;
                         self.refresh_config().await;
@@ -143,7 +209,8 @@ impl App {
                 self.set_limits(ch, PowerLimits::new(cur.min, v)).await;
             }
             Action::CycleAggregation(ch) => {
-                let mut cfg = self.state.engine.config().await;
+                let Some(engine) = self.active_engine() else { return };
+                let mut cfg = engine.config().await;
                 let target = match ch {
                     Channel::A => &mut cfg.channel_a.aggregation,
                     Channel::B => &mut cfg.channel_b.aggregation,
@@ -153,42 +220,43 @@ impl App {
                     Channel::A => &cfg.channel_a.aggregation,
                     Channel::B => &cfg.channel_b.aggregation,
                 });
-                self.state.engine.set_config(cfg).await;
+                engine.set_config(cfg).await;
                 log::info!("[ch-{}] Aggregation set to {name}", ch.label());
                 self.refresh_config().await;
             }
             Action::SetAggregation(ch, mode) => {
-                let mut cfg = self.state.engine.config().await;
+                let Some(engine) = self.active_engine() else { return };
+                let mut cfg = engine.config().await;
                 match ch {
                     Channel::A => cfg.channel_a.aggregation = mode,
                     Channel::B => cfg.channel_b.aggregation = mode,
                 };
-                self.state.engine.set_config(cfg).await;
+                engine.set_config(cfg).await;
                 log::info!("[ch-{}] Aggregation set to {}", ch.label(), agg_name(&mode));
                 self.refresh_config().await;
             }
             Action::SaveConfig => {
-                let cfg = self.state.engine.config().await;
-                match save_config(CONFIG_FILE, &cfg) {
-                    Ok(_) => log::info!("[config] Saved to {CONFIG_FILE}"),
+                let Some(mac) = self.active_mac() else { return };
+                let cfg = self.config.clone();
+                match crate::device_config::save_device_config(&mac, &cfg) {
+                    Ok(_) => log::info!("[config] Saved device config for {mac}"),
                     Err(e) => log::error!("[config] Save failed: {e}"),
+                }
+                match save_config(CONFIG_FILE, &cfg) {
+                    Ok(_) => log::info!("[config] Saved default to {CONFIG_FILE}"),
+                    Err(e) => log::error!("[config] Default save failed: {e}"),
                 }
             }
             Action::LoadConfig => {
-                match std::fs::read_to_string(CONFIG_FILE)
-                    .map_err(|e| e.to_string())
-                    .and_then(|j| serde_json::from_str::<CliConfig>(&j).map_err(|e| e.to_string()))
-                {
-                    Ok(cfg) => {
-                        self.state.engine.set_config(cfg).await;
-                        self.state.engine.sync_hardware_limits().await;
-                        log::info!("[config] Loaded from {CONFIG_FILE}");
-                        self.refresh_config().await;
-                        self.clamp_selections();
-                        self.load_editor_from_config();
-                    }
-                    Err(e) => log::error!("[config] Load failed: {e}"),
-                }
+                let Some(mac) = self.active_mac() else { return };
+                let Some(engine) = self.active_engine() else { return };
+                let cfg = crate::device_config::load_device_config(&mac, &self.state.default_config);
+                engine.set_config(cfg).await;
+                engine.sync_hardware_limits().await;
+                log::info!("[config] Loaded device config for {mac}");
+                self.refresh_config().await;
+                self.clamp_selections();
+                self.load_editor_from_config();
             }
             Action::SetAutoSave(on) => {
                 self.auto_save = on;
@@ -203,24 +271,28 @@ impl App {
                 }
             }
             Action::StepUkf(field, d) => {
-                let mut p = self.state.engine.ukf_params().await;
+                let Some(engine) = self.active_engine() else { return };
+                let mut p = engine.ukf_params().await;
                 apply_ukf_step(&mut p, field, d);
-                self.state.engine.set_ukf_params(p).await;
+                engine.set_ukf_params(p).await;
                 self.refresh_config().await;
             }
             Action::ResetUkf => {
-                self.state.engine.set_ukf_params(UkfConfig::default()).await;
+                let Some(engine) = self.active_engine() else { return };
+                engine.set_ukf_params(UkfConfig::default()).await;
                 log::info!("[ukf] Reset to defaults");
                 self.refresh_config().await;
             }
             Action::StepNorm(field, d) => {
-                let mut n = self.state.engine.norms().await;
+                let Some(engine) = self.active_engine() else { return };
+                let mut n = engine.norms().await;
                 apply_norm_step(&mut n, field, d);
-                self.state.engine.set_norms(n).await;
+                engine.set_norms(n).await;
                 self.refresh_config().await;
             }
             Action::ResetNorms => {
-                self.state.engine.set_norms(MotionNorms::default()).await;
+                let Some(engine) = self.active_engine() else { return };
+                engine.set_norms(MotionNorms::default()).await;
                 log::info!("[norms] Reset to defaults");
                 self.refresh_config().await;
             }
@@ -257,8 +329,9 @@ impl App {
                 self.sanitise_mod_editor();
             }
             Action::ApplyMod => {
+                let Some(engine) = self.active_engine() else { return };
                 self.sanitise_mod_editor();
-                let mut cfg = self.state.engine.config().await;
+                let mut cfg = engine.config().await;
                 let ch_cfg = match self.mod_channel {
                     Channel::A => &mut cfg.channel_a,
                     Channel::B => &mut cfg.channel_b,
@@ -268,7 +341,7 @@ impl App {
                     ModKind::Intensity => &mut ch_cfg.intensity_modulation,
                 };
                 target[self.mod_seg] = Some(self.mod_editor.clone());
-                self.state.engine.set_config(cfg).await;
+                engine.set_config(cfg).await;
                 log::info!(
                     "[ch-{}] {}[{}] modulation set: {}",
                     self.mod_channel.label(),
@@ -279,7 +352,8 @@ impl App {
                 self.refresh_config().await;
             }
             Action::ClearMod => {
-                let mut cfg = self.state.engine.config().await;
+                let Some(engine) = self.active_engine() else { return };
+                let mut cfg = engine.config().await;
                 let ch_cfg = match self.mod_channel {
                     Channel::A => &mut cfg.channel_a,
                     Channel::B => &mut cfg.channel_b,
@@ -288,7 +362,7 @@ impl App {
                     ModKind::Freq => ch_cfg.freq_modulation[self.mod_seg] = None,
                     ModKind::Intensity => ch_cfg.intensity_modulation[self.mod_seg] = None,
                 }
-                self.state.engine.set_config(cfg).await;
+                engine.set_config(cfg).await;
                 log::info!(
                     "[ch-{}] Modulation seg[{}] disabled ({})",
                     self.mod_channel.label(),
@@ -298,7 +372,8 @@ impl App {
                 self.refresh_config().await;
             }
             Action::ClearAllMod(ch) => {
-                let mut cfg = self.state.engine.config().await;
+                let Some(engine) = self.active_engine() else { return };
+                let mut cfg = engine.config().await;
                 let ch_cfg = match ch {
                     Channel::A => &mut cfg.channel_a,
                     Channel::B => &mut cfg.channel_b,
@@ -307,7 +382,7 @@ impl App {
                     ch_cfg.freq_modulation[i] = None;
                     ch_cfg.intensity_modulation[i] = None;
                 }
-                self.state.engine.set_config(cfg).await;
+                engine.set_config(cfg).await;
                 log::info!("[ch-{}] All modulation disabled (both)", ch.label());
                 self.refresh_config().await;
             }
@@ -346,37 +421,42 @@ impl App {
             self.auto_save_config().await;
         }
     }
+
     pub(super) async fn auto_save_config(&mut self) {
         if !self.auto_save || self.tutorial_active {
             return;
         }
-        let cfg = self.state.engine.config().await;
-        match save_config(CONFIG_FILE, &cfg) {
-            Ok(()) => log::debug!("[config] Auto-saved to {CONFIG_FILE}"),
+        let Some(mac) = self.active_mac() else { return };
+        let cfg = self.config.clone();
+        match crate::device_config::save_device_config(&mac, &cfg) {
+            Ok(()) => log::debug!("[config] Auto-saved device config for {mac}"),
             Err(e) => log::error!("[config] Auto-save failed: {e}"),
         }
     }
 
     pub(super) async fn set_freq(&mut self, ch: Channel, f: [u8; 4]) {
+        let Some(engine) = self.active_engine() else { return };
         match ch {
-            Channel::A => self.state.engine.set_frequency_a(f).await,
-            Channel::B => self.state.engine.set_frequency_b(f).await,
+            Channel::A => engine.set_frequency_a(f).await,
+            Channel::B => engine.set_frequency_b(f).await,
         }
         self.refresh_config().await;
     }
 
     pub(super) async fn set_intensity(&mut self, ch: Channel, it: [u8; 4]) {
+        let Some(engine) = self.active_engine() else { return };
         match ch {
-            Channel::A => self.state.engine.set_intensity_a(it).await,
-            Channel::B => self.state.engine.set_intensity_b(it).await,
+            Channel::A => engine.set_intensity_a(it).await,
+            Channel::B => engine.set_intensity_b(it).await,
         }
         self.refresh_config().await;
     }
 
     pub(super) async fn set_limits(&mut self, ch: Channel, lim: PowerLimits) {
+        let Some(engine) = self.active_engine() else { return };
         match ch {
-            Channel::A => self.state.engine.set_limits_a(lim).await,
-            Channel::B => self.state.engine.set_limits_b(lim).await,
+            Channel::A => engine.set_limits_a(lim).await,
+            Channel::B => engine.set_limits_b(lim).await,
         }
         self.refresh_config().await;
     }

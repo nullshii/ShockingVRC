@@ -19,10 +19,6 @@ use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use tokio::sync::broadcast;
-
-use shocking_vrc_core::cli::CliStatus;
-
 use crate::app_state::AppState;
 use crate::tui_logger::LogBuffer;
 
@@ -64,7 +60,6 @@ fn install_panic_hook() {
 
 pub async fn run(
     state: Arc<AppState>,
-    mut status_rx: broadcast::Receiver<CliStatus>,
     log_buffer: LogBuffer,
     skip_update_check: bool,
 ) -> io::Result<Option<(PathBuf, Vec<String>)>> {
@@ -102,16 +97,12 @@ pub async fn run(
                     None => app.should_quit = true,
                 }
             }
-            st = status_rx.recv() => {
-                match st {
-                    Ok(s) => {
+            _ = tick.tick() => {
+                if let Some(rx) = app.status_rx.as_mut() {
+                    while let Ok(s) = rx.try_recv() {
                         app.status = s;
                     }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {}
-                    Err(broadcast::error::RecvError::Closed) => {}
                 }
-            }
-            _ = tick.tick() => {
                 app.poll_presets_load();
                 app.poll_update_check();
                 app.poll_update_download();

@@ -43,6 +43,7 @@ pub(super) fn slider_value_action(kind: SliderKind, rect: Rect, col: u16) -> Act
         SliderKind::Intensity(ch, seg) => Action::SetIntensity(ch, seg, val.clamp(min, max) as u8),
         SliderKind::LimitMin(ch) => Action::SetLimitMin(ch, val.clamp(min, max) as u8),
         SliderKind::LimitMax(ch) => Action::SetLimitMax(ch, val.clamp(min, max) as u8),
+        SliderKind::ZoneScale(ch, i) => Action::SetZoneScale(ch, i, val.clamp(min, max) as u8),
     }
 }
 
