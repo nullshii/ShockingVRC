@@ -17,6 +17,22 @@ pub use types::{
     SliderKind, Tab, UkfField, ZonesPane,
 };
 
+#[derive(Debug, Clone)]
+pub struct OscStartupPrefs {
+    pub discovery_mode: shocking_vrc_core::DiscoveryMode,
+    pub osc_port: u16,
+    pub osc_avatars_dir: String,
+}
+
+pub fn load_osc_startup_prefs() -> OscStartupPrefs {
+    let p = prefs::load_ui_prefs();
+    OscStartupPrefs {
+        discovery_mode: p.discovery_mode,
+        osc_port: p.osc_port,
+        osc_avatars_dir: p.osc_avatars_dir,
+    }
+}
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,7 +42,7 @@ use tokio::sync::{broadcast, mpsc};
 use shocking_vrc_core::cli::{ChannelConfig, CliConfig, CliStatus};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::PresetEntry;
-use shocking_vrc_core::ZoneEvent;
+use shocking_vrc_core::{DEFAULT_OSC_PORT, DiscoveryMode, ZoneEvent, default_vrchat_osc_root_display};
 
 use crate::app_state::{AppState, DeviceSlotInfo};
 use crate::tui_logger::LogBuffer;
@@ -34,7 +50,7 @@ use crate::tui_logger::LogBuffer;
 use device_ui::{DeviceUiState, DeviceUiStateMap};
 
 use helpers::default_status;
-use prefs::{load_ui_prefs, save_ui_prefs_full};
+use prefs::{load_ui_prefs, persist_osc_prefs, save_ui_prefs_full};
 
 pub struct App {
     pub state: Arc<AppState>,
@@ -47,6 +63,10 @@ pub struct App {
     pub osc_port: u16,
     pub osc_port_editing: bool,
     pub osc_port_input: String,
+    pub discovery_mode: DiscoveryMode,
+    pub osc_avatars_dir: String,
+    pub osc_avatars_dir_editing: bool,
+    pub osc_avatars_dir_input: String,
     pub device_infos: Vec<DeviceSlotInfo>,
     pub active_device: usize,
     device_ui_states: DeviceUiStateMap,
@@ -150,9 +170,13 @@ impl App {
             status: default_status(),
             avatar_zones: Vec::new(),
             vrchat_found: false,
-            osc_port: 9001,
+            osc_port: DEFAULT_OSC_PORT,
             osc_port_editing: false,
             osc_port_input: String::new(),
+            discovery_mode: DiscoveryMode::default(),
+            osc_avatars_dir: String::new(),
+            osc_avatars_dir_editing: false,
+            osc_avatars_dir_input: String::new(),
             device_infos: Vec::new(),
             active_device: 0,
             device_ui_states: HashMap::new(),
@@ -221,6 +245,9 @@ impl App {
         let p = load_ui_prefs();
         app.auto_save = p.auto_save;
         app.preset_save_nickname = p.nickname;
+        app.discovery_mode = p.discovery_mode;
+        app.osc_port = p.osc_port;
+        app.osc_avatars_dir = p.osc_avatars_dir;
         if !p.has_seen_tutorial {
             app.start_tutorial();
         }
@@ -241,6 +268,7 @@ impl App {
         self.avatar_zones = self.state.scanner.zones().await;
         self.vrchat_found = self.state.scanner.vrchat_address().await.is_some();
         self.osc_port = self.state.scanner.port().await;
+        self.discovery_mode = self.state.scanner.discovery_mode().await;
         self.last_refresh = Instant::now();
         self.load_editor_from_config();
     }
@@ -990,13 +1018,117 @@ impl App {
     }
 
     async fn set_osc_port(&mut self, new_port: u16) {
-        if new_port == self.osc_port { return; }
+        if new_port == self.osc_port {
+            return;
+        }
         match self.state.scanner.set_port(new_port).await {
             Ok(()) => {
                 self.osc_port = new_port;
                 log::info!("[osc] Listener restarted on UDP port {new_port}");
+                if let Err(e) = persist_osc_prefs(
+                    self.discovery_mode,
+                    self.osc_port,
+                    &self.osc_avatars_dir,
+                ) {
+                    log::error!("[prefs] Failed to save OSC port: {e}");
+                }
             }
             Err(e) => log::error!("[osc] Failed to change port: {e}"),
+        }
+    }
+
+    async fn set_discovery_mode(&mut self, mode: DiscoveryMode) {
+        if mode == self.discovery_mode {
+            return;
+        }
+        self.discovery_mode = mode;
+        self.state.scanner.set_discovery_mode(mode).await;
+        if let Err(e) = persist_osc_prefs(
+            self.discovery_mode,
+            self.osc_port,
+            &self.osc_avatars_dir,
+        ) {
+            log::error!("[prefs] Failed to save discovery mode: {e}");
+        }
+        log::info!("[osc] Discovery mode → {mode:?}; re-scanning in background…");
+        self.state.scanner.rediscover_background();
+    }
+
+    pub(super) fn cancel_osc_avatars_dir_edit(&mut self) {
+        self.osc_avatars_dir_editing = false;
+        self.osc_avatars_dir_input.clear();
+    }
+
+    fn start_osc_avatars_dir_edit(&mut self) {
+        self.osc_avatars_dir_input = if self.osc_avatars_dir.is_empty() {
+            default_vrchat_osc_root_display()
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            self.osc_avatars_dir.clone()
+        };
+        self.osc_avatars_dir_editing = true;
+    }
+
+    async fn commit_osc_avatars_dir_edit(&mut self) {
+        let trimmed = self.osc_avatars_dir_input.trim().to_string();
+        if trimmed.is_empty() {
+            self.set_osc_avatars_dir(String::new()).await;
+            self.cancel_osc_avatars_dir_edit();
+            return;
+        }
+        let path = std::path::Path::new(&trimmed);
+        if !path.is_dir() {
+            log::warn!("[osc] Avatars folder does not exist: {trimmed}");
+            return;
+        }
+        self.set_osc_avatars_dir(trimmed).await;
+        self.cancel_osc_avatars_dir_edit();
+    }
+
+    async fn set_osc_avatars_dir(&mut self, dir: String) {
+        let dir = dir.trim().to_string();
+        if dir == self.osc_avatars_dir {
+            return;
+        }
+        self.osc_avatars_dir = dir.clone();
+        let path = if dir.is_empty() {
+            None
+        } else {
+            Some(std::path::PathBuf::from(&dir))
+        };
+        self.state.scanner.set_osc_avatars_dir(path).await;
+        if let Err(e) = persist_osc_prefs(
+            self.discovery_mode,
+            self.osc_port,
+            &self.osc_avatars_dir,
+        ) {
+            log::error!("[prefs] Failed to save OSC avatars dir: {e}");
+        }
+        if dir.is_empty() {
+            log::info!("[osc] Avatars folder → default LocalLow path");
+        } else {
+            log::info!("[osc] Avatars folder → {dir}");
+        }
+        if self.discovery_mode == DiscoveryMode::Osc {
+            self.state.scanner.rediscover_background();
+        }
+    }
+
+    async fn handle_osc_avatars_dir_edit_key(&mut self, key: ratatui::crossterm::event::KeyEvent) {
+        use ratatui::crossterm::event::KeyCode;
+        match key.code {
+            KeyCode::Enter => self.commit_osc_avatars_dir_edit().await,
+            KeyCode::Esc => self.cancel_osc_avatars_dir_edit(),
+            KeyCode::Backspace => {
+                self.osc_avatars_dir_input.pop();
+            }
+            KeyCode::Char(c) => {
+                if self.osc_avatars_dir_input.len() < 512 {
+                    self.osc_avatars_dir_input.push(c);
+                }
+            }
+            _ => {}
         }
     }
 

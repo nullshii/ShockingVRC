@@ -82,6 +82,10 @@ impl App {
                     self.cancel_osc_port_edit();
                     return;
                 }
+                if self.osc_avatars_dir_editing {
+                    self.cancel_osc_avatars_dir_edit();
+                    return;
+                }
                 if self.update_popup {
                     self.dismiss_update_popup();
                     return;
@@ -128,6 +132,23 @@ impl App {
                 }
                 _ => {
                     self.handle_osc_port_edit_key(key).await;
+                    return;
+                }
+            }
+        }
+
+        if self.osc_avatars_dir_editing {
+            match key.code {
+                KeyCode::Tab => {
+                    self.switch_tab_relative(1);
+                    return;
+                }
+                KeyCode::BackTab => {
+                    self.switch_tab_relative(-1);
+                    return;
+                }
+                _ => {
+                    self.handle_osc_avatars_dir_edit_key(key).await;
                     return;
                 }
             }
@@ -337,6 +358,76 @@ impl App {
                     ZonesPane::ConfiguredB => Some(Action::SetZoneScale(Channel::B, self.sel_conf_b, 100)),
                     ZonesPane::Avatar => None,
                 },
+                KeyCode::Char('[') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::StepZoneThresholdMin(
+                        Channel::A,
+                        self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { -5 } else { -1 },
+                    )),
+                    ZonesPane::ConfiguredB => Some(Action::StepZoneThresholdMin(
+                        Channel::B,
+                        self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { -5 } else { -1 },
+                    )),
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char(']') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::StepZoneThresholdMin(
+                        Channel::A,
+                        self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { 5 } else { 1 },
+                    )),
+                    ZonesPane::ConfiguredB => Some(Action::StepZoneThresholdMin(
+                        Channel::B,
+                        self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { 5 } else { 1 },
+                    )),
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char(',') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::StepZoneThresholdMax(
+                        Channel::A,
+                        self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { -5 } else { -1 },
+                    )),
+                    ZonesPane::ConfiguredB => Some(Action::StepZoneThresholdMax(
+                        Channel::B,
+                        self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { -5 } else { -1 },
+                    )),
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char('.') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => Some(Action::StepZoneThresholdMax(
+                        Channel::A,
+                        self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { 5 } else { 1 },
+                    )),
+                    ZonesPane::ConfiguredB => Some(Action::StepZoneThresholdMax(
+                        Channel::B,
+                        self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) { 5 } else { 1 },
+                    )),
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char('t') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => {
+                        Some(Action::SetZoneThresholdMin(Channel::A, self.sel_conf_a, 1))
+                    }
+                    ZonesPane::ConfiguredB => {
+                        Some(Action::SetZoneThresholdMin(Channel::B, self.sel_conf_b, 1))
+                    }
+                    ZonesPane::Avatar => None,
+                },
+                KeyCode::Char('y') => match self.zones_pane {
+                    ZonesPane::ConfiguredA => {
+                        Some(Action::SetZoneThresholdMax(Channel::A, self.sel_conf_a, 100))
+                    }
+                    ZonesPane::ConfiguredB => {
+                        Some(Action::SetZoneThresholdMax(Channel::B, self.sel_conf_b, 100))
+                    }
+                    ZonesPane::Avatar => None,
+                },
                 KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ActivateFocused),
                 _ => None,
             },
@@ -481,6 +572,7 @@ impl App {
 
     pub(super) fn switch_tab_relative(&mut self, delta: i32) {
         self.cancel_osc_port_edit();
+        self.cancel_osc_avatars_dir_edit();
         self.cancel_preset_save_edit();
         self.cancel_preset_delete_confirm();
         self.close_mod_function_picker();

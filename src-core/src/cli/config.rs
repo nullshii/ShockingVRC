@@ -143,6 +143,9 @@ impl fmt::Display for ZoneId {
     }
 }
 
+
+pub const ZONE_ACTIVATION_THRESHOLD: f32 = 0.01;
+
 /// Minimum and maximum strength values (0–200) for a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PowerLimits {
@@ -165,7 +168,7 @@ impl PowerLimits {
     }
 
     pub fn scale(&self, level: f32) -> u8 {
-        if level <= 0.0 {
+        if level < ZONE_ACTIVATION_THRESHOLD {
             return 0;
         }
         let level = level.clamp(0.0, 1.0);
@@ -191,7 +194,39 @@ fn is_default_zone_scale(v: &u8) -> bool {
     *v == 100
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+fn default_zone_activation_threshold() -> f32 {
+    ZONE_ACTIVATION_THRESHOLD
+}
+
+fn is_default_zone_activation_threshold(v: &f32) -> bool {
+    (*v - ZONE_ACTIVATION_THRESHOLD).abs() < 1e-6
+}
+
+fn default_zone_activation_threshold_max() -> f32 {
+    1.0
+}
+
+fn is_default_zone_activation_threshold_max(v: &f32) -> bool {
+    (*v - 1.0).abs() < 1e-6
+}
+
+pub fn clamp_zone_activation_threshold(v: f32) -> f32 {
+    v.clamp(ZONE_ACTIVATION_THRESHOLD, 1.0)
+}
+
+pub fn apply_zone_activation_range(value: f32, min: f32, max: f32) -> f32 {
+    let min = clamp_zone_activation_threshold(min);
+    let max = clamp_zone_activation_threshold(max).max(min);
+    if value < min {
+        return 0.0;
+    }
+    if max <= min + f32::EPSILON {
+        return 1.0;
+    }
+    ((value - min) / (max - min)).clamp(0.0, 1.0)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZoneEntry {
     #[serde(flatten)]
     pub id: ZoneId,
@@ -199,11 +234,27 @@ pub struct ZoneEntry {
     pub mode: ContactMode,
     #[serde(default = "default_zone_scale", skip_serializing_if = "is_default_zone_scale")]
     pub scale: u8,
+    #[serde(
+        default = "default_zone_activation_threshold",
+        skip_serializing_if = "is_default_zone_activation_threshold"
+    )]
+    pub activation_threshold: f32,
+    #[serde(
+        default = "default_zone_activation_threshold_max",
+        skip_serializing_if = "is_default_zone_activation_threshold_max"
+    )]
+    pub activation_threshold_max: f32,
 }
 
 impl ZoneEntry {
     pub fn new(id: ZoneId, mode: ContactMode) -> Self {
-        Self { id, mode, scale: 100 }
+        Self {
+            id,
+            mode,
+            scale: 100,
+            activation_threshold: ZONE_ACTIVATION_THRESHOLD,
+            activation_threshold_max: 1.0,
+        }
     }
 
     pub fn with_default_mode(id: ZoneId) -> Self {
@@ -211,7 +262,15 @@ impl ZoneEntry {
             id,
             mode: ContactMode::default(),
             scale: 100,
+            activation_threshold: ZONE_ACTIVATION_THRESHOLD,
+            activation_threshold_max: 1.0,
         }
+    }
+
+    pub fn activation_range(&self) -> (f32, f32) {
+        let min = clamp_zone_activation_threshold(self.activation_threshold);
+        let max = clamp_zone_activation_threshold(self.activation_threshold_max).max(min);
+        (min, max)
     }
 }
 

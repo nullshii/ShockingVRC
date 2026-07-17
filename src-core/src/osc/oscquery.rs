@@ -2,10 +2,28 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::types::OscValue;
 use crate::error::{DGLabError, Result};
+
+const MDNS_BROWSE_SECS: u64 = 15;
+
+const OSCQUERY_HTTP_TIMEOUT: Duration = Duration::from_secs(3);
+const OSCQUERY_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+
+pub const DEFAULT_OSC_PORT: u16 = 9001;
+
+const VRCHAT_DEFAULT_OSC_PORT: u16 = 9000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum DiscoveryMode {
+    #[default]
+    #[serde(rename = "oscquery")]
+    OscQuery,
+    #[serde(rename = "osc")]
+    Osc,
+}
 
 // Public address info
 /// Addresses needed to talk to VRChat's OSC / OSCQuery endpoints.
@@ -46,18 +64,30 @@ struct MdnsCandidate {
     http_addr: SocketAddr,
 }
 
+fn build_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(OSCQUERY_HTTP_TIMEOUT)
+        .connect_timeout(OSCQUERY_CONNECT_TIMEOUT)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 // VrchatOscQuery
 /// Discovers VRChat over mDNS + OSCQuery and fetches avatar parameter trees.
 pub struct VrchatOscQuery {
     client: reqwest::Client,
     address: Option<VrchatAddress>,
+    mode: DiscoveryMode,
+    fallback_port: u16,
 }
 
 impl VrchatOscQuery {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: build_http_client(),
             address: None,
+            mode: DiscoveryMode::default(),
+            fallback_port: DEFAULT_OSC_PORT,
         }
     }
 
@@ -65,57 +95,112 @@ impl VrchatOscQuery {
         self.address.as_ref()
     }
 
-    /// Scan mDNS for `_oscjson._tcp.local.` services, probe each via
-    /// `HOST_INFO`, and keep the first that identifies itself as VRChat.
-    /// Falls back to `localhost:9001` if mDNS yields nothing.
-    /// Returns `true` when VRChat was successfully located.
-    pub async fn discover(&mut self) -> Result<bool> {
-        let candidates = tokio::task::spawn_blocking(scan_mdns)
-            .await
-            .map_err(|e| DGLabError::OscError(format!("spawn_blocking failed: {e}")))?;
-
-        for candidate in candidates {
-            match self.check_candidate(&candidate).await {
-                Ok(Some(addr)) => {
-                    log::info!(
-                        "VRChat OSCQuery found at {} (OSC {}:{})",
-                        candidate.http_addr,
-                        addr.osc_ip,
-                        addr.osc_port
-                    );
-                    self.address = Some(addr);
-                    return Ok(true);
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    log::debug!("OSCQuery candidate {} rejected: {}", candidate.http_addr, e);
-                }
-            }
-        }
-
-        Ok(false)
+    pub fn set_address(&mut self, address: Option<VrchatAddress>) {
+        self.address = address;
     }
 
-    async fn check_candidate(&self, candidate: &MdnsCandidate) -> Result<Option<VrchatAddress>> {
-        let url = format!("http://{}/?HOST_INFO", candidate.http_addr);
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| DGLabError::OscError(e.to_string()))?;
+    pub fn discovery_mode(&self) -> DiscoveryMode {
+        self.mode
+    }
 
-        let info: HostInfo = resp.json().await.map_err(|e| DGLabError::OscError(e.to_string()))?;
+    pub fn set_discovery_mode(&mut self, mode: DiscoveryMode) {
+        self.mode = mode;
+    }
 
-        if !info.name.starts_with("VRChat-Client-") {
-            return Ok(None);
+    pub fn fallback_port(&self) -> u16 {
+        self.fallback_port
+    }
+
+    pub fn set_fallback_port(&mut self, port: u16) {
+        self.fallback_port = port;
+    }
+
+    pub fn client(&self) -> reqwest::Client {
+        self.client.clone()
+    }
+
+    pub async fn locate(
+        client: &reqwest::Client,
+        mode: DiscoveryMode,
+        fallback_port: u16,
+    ) -> Result<Option<VrchatAddress>> {
+        match mode {
+            DiscoveryMode::Osc => {
+                log::info!(
+                    "OSC mode: listening for UDP avatar params (send → 127.0.0.1:{VRCHAT_DEFAULT_OSC_PORT})"
+                );
+                return Ok(Some(VrchatAddress {
+                    osc_ip: "127.0.0.1".to_string(),
+                    osc_port: VRCHAT_DEFAULT_OSC_PORT,
+                    http_addr: SocketAddr::from(([127, 0, 0, 1], fallback_port)),
+                }));
+            }
+            DiscoveryMode::OscQuery => {
+                // Prefer localhost before a long mDNS browse — common when VRChat is local.
+                let local = localhost_candidate(fallback_port);
+                match check_candidate(client, &local).await {
+                    Ok(Some(addr)) => {
+                        log::info!(
+                            "VRChat OSCQuery found at {} (OSC {}:{})",
+                            local.http_addr,
+                            addr.osc_ip,
+                            addr.osc_port
+                        );
+                        return Ok(Some(addr));
+                    }
+                    Ok(None) => {
+                        log::debug!(
+                            "localhost:{} is not VRChat OSCQuery; trying mDNS...",
+                            fallback_port
+                        );
+                    }
+                    Err(e) => {
+                        log::debug!(
+                            "localhost:{} OSCQuery probe failed ({e}); trying mDNS...",
+                            fallback_port
+                        );
+                    }
+                }
+
+                let candidates = tokio::task::spawn_blocking(move || scan_mdns(fallback_port))
+                    .await
+                    .map_err(|e| DGLabError::OscError(format!("spawn_blocking failed: {e}")))?;
+
+                for candidate in candidates {
+                    match check_candidate(client, &candidate).await {
+                        Ok(Some(addr)) => {
+                            log::info!(
+                                "VRChat OSCQuery found at {} (OSC {}:{})",
+                                candidate.http_addr,
+                                addr.osc_ip,
+                                addr.osc_port
+                            );
+                            return Ok(Some(addr));
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            log::debug!(
+                                "OSCQuery candidate {} rejected: {}",
+                                candidate.http_addr,
+                                e
+                            );
+                        }
+                    }
+                }
+
+                Ok(None)
+            }
         }
+    }
 
-        Ok(Some(VrchatAddress {
-            osc_ip: info.osc_ip,
-            osc_port: info.osc_port,
-            http_addr: candidate.http_addr,
-        }))
+    pub async fn discover(&mut self) -> Result<bool> {
+        match Self::locate(&self.client, self.mode, self.fallback_port).await? {
+            Some(addr) => {
+                self.address = Some(addr);
+                Ok(true)
+            }
+            None => Ok(false),
+        }
     }
 
     /// Fetch the full `/avatar/parameters` tree from VRChat's OSCQuery server
@@ -148,11 +233,38 @@ impl Default for VrchatOscQuery {
     }
 }
 
-// mDNS scanning (blocking, intended for spawn_blocking)
-/// Scan mDNS for `_oscjson._tcp.local.` for up to 5 seconds.
-/// If nothing is found, appends the VRChat default `localhost:9001` as a
-/// fallback so basic local testing works without a working mDNS stack.
-fn scan_mdns() -> Vec<MdnsCandidate> {
+fn localhost_candidate(port: u16) -> MdnsCandidate {
+    MdnsCandidate {
+        http_addr: SocketAddr::from(([127, 0, 0, 1], port)),
+    }
+}
+
+async fn check_candidate(
+    client: &reqwest::Client,
+    candidate: &MdnsCandidate,
+) -> Result<Option<VrchatAddress>> {
+    let url = format!("http://{}/?HOST_INFO", candidate.http_addr);
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| DGLabError::OscError(e.to_string()))?;
+
+    let info: HostInfo = resp.json().await.map_err(|e| DGLabError::OscError(e.to_string()))?;
+
+    if !info.name.starts_with("VRChat-Client-") {
+        return Ok(None);
+    }
+
+    Ok(Some(VrchatAddress {
+        osc_ip: info.osc_ip,
+        osc_port: info.osc_port,
+        http_addr: candidate.http_addr,
+    }))
+}
+
+
+fn scan_mdns(fallback_port: u16) -> Vec<MdnsCandidate> {
     let mut candidates = Vec::new();
 
     match try_scan_mdns(&mut candidates) {
@@ -161,13 +273,17 @@ fn scan_mdns() -> Vec<MdnsCandidate> {
     }
 
     if candidates.is_empty() {
-        log::debug!("mDNS found nothing; falling back to localhost:9001");
-        if let Ok(addr) = "127.0.0.1:9001".parse() {
-            candidates.push(MdnsCandidate { http_addr: addr });
-        }
+        log::debug!(
+            "mDNS found nothing after {}s (localhost:{} already probed)",
+            MDNS_BROWSE_SECS,
+            fallback_port
+        );
     }
 
     candidates
+        .into_iter()
+        .filter(|c| c.http_addr != SocketAddr::from(([127, 0, 0, 1], fallback_port)))
+        .collect()
 }
 
 fn try_scan_mdns(out: &mut Vec<MdnsCandidate>) -> std::result::Result<(), String> {
@@ -176,11 +292,14 @@ fn try_scan_mdns(out: &mut Vec<MdnsCandidate>) -> std::result::Result<(), String
     let mdns = ServiceDaemon::new().map_err(|e| e.to_string())?;
     let receiver = mdns.browse("_oscjson._tcp.local.").map_err(|e| e.to_string())?;
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let deadline = std::time::Instant::now() + Duration::from_secs(MDNS_BROWSE_SECS);
 
     loop {
         let now = std::time::Instant::now();
         if now >= deadline {
+            break;
+        }
+        if !out.is_empty() {
             break;
         }
         let remaining = deadline - now;
@@ -202,7 +321,7 @@ fn try_scan_mdns(out: &mut Vec<MdnsCandidate>) -> std::result::Result<(), String
                 }
             }
             Ok(_) => {}
-            Err(_) => break,
+            Err(_) => {}
         }
     }
 

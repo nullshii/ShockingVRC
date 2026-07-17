@@ -16,14 +16,14 @@ use shocking_vrc_cli::{tui, tui_logger};
 const CONFIG_FILE: &str = "cli_config.json";
 
 struct Args {
-    port: u16,
+    port: Option<u16>,
     scan_timeout: u64,
     skip_update_check: bool,
 }
 
 fn parse_args() -> Args {
     let args: Vec<String> = std::env::args().collect();
-    let mut port = 9001u16;
+    let mut port = None;
     let mut scan_timeout = 8u64;
     let mut skip_update_check = false;
     let mut i = 1;
@@ -39,7 +39,7 @@ fn parse_args() -> Args {
             }
             "--port" => {
                 if let Some(v) = args.get(i + 1) {
-                    port = v.parse().unwrap_or(port);
+                    port = v.parse().ok();
                     i += 1;
                 }
             }
@@ -282,6 +282,8 @@ async fn main() {
     let log_buffer = tui_logger::init("info");
 
     let args = parse_args();
+    let osc_prefs = shocking_vrc_cli::tui::app::load_osc_startup_prefs();
+    let osc_port = args.port.unwrap_or(osc_prefs.osc_port);
 
     log::info!("ShockingVRC CLI v{} — Hello DG-Lab Users", shocking_vrc_core::VERSION);
 
@@ -301,34 +303,30 @@ async fn main() {
         default_config()
     };
 
-    log::info!("[osc] Starting OSC listener on UDP port {}...", args.port);
-    let scanner = AvatarScanner::new(args.port);
+    log::info!("[osc] Starting OSC listener on UDP port {osc_port}...");
+    let scanner = AvatarScanner::new(osc_port);
+    scanner
+        .set_discovery_mode(osc_prefs.discovery_mode)
+        .await;
+    if !osc_prefs.osc_avatars_dir.is_empty() {
+        let path = std::path::PathBuf::from(&osc_prefs.osc_avatars_dir);
+        if path.is_dir() {
+            log::info!("[osc] Using custom avatars folder: {}", path.display());
+            scanner.set_osc_avatars_dir(Some(path)).await;
+        } else {
+            log::warn!(
+                "[osc] Saved avatars folder missing ({}) — using default",
+                osc_prefs.osc_avatars_dir
+            );
+        }
+    }
     scanner.start().await.expect("Failed to start OSC listener");
 
-    log::info!("[osc] Scanning for VRChat...");
-    match scanner.discover_wait().await {
-        Ok(true) => {
-            if let Some(addr) = scanner.vrchat_address().await {
-                log::info!(
-                    "[osc] VRChat found → {} (OSC {}:{})",
-                    addr.http_addr,
-                    addr.osc_ip,
-                    addr.osc_port
-                );
-            }
-            let zones = scanner.zones().await;
-            log::info!("[osc] Avatar zones found: {}", zones.len());
-            for z in &zones {
-                log::info!("      [{:<5}] {}", z.zone_type, z.id);
-            }
-        }
-        Ok(false) => {
-            log::warn!(
-                "[osc] VRChat not found — enable OSC in Settings → OSC. Retrying on avatar change."
-            )
-        }
-        Err(e) => log::error!("[osc] Discovery error: {e}"),
-    }
+    log::info!(
+        "[osc] Scanning for VRChat in background (mode={:?})...",
+        osc_prefs.discovery_mode
+    );
+    scanner.rediscover_background();
 
     let monitor_enabled = Arc::new(AtomicBool::new(true));
 

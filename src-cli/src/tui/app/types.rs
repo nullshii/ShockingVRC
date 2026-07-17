@@ -1,6 +1,7 @@
 use ratatui::layout::Rect;
 use shocking_vrc_core::cli::AggregationMode;
 use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationSource};
+use shocking_vrc_core::DiscoveryMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
@@ -217,6 +218,8 @@ pub enum SliderKind {
     LimitMin(Channel),
     LimitMax(Channel),
     ZoneScale(Channel, usize),
+    ZoneThresholdMin(Channel, usize),
+    ZoneThresholdMax(Channel, usize),
 }
 
 impl SliderKind {
@@ -226,6 +229,7 @@ impl SliderKind {
             SliderKind::Intensity(..) => (0, 100),
             SliderKind::LimitMin(..) | SliderKind::LimitMax(..) => (0, 200),
             SliderKind::ZoneScale(..) => (0, 100),
+            SliderKind::ZoneThresholdMin(..) | SliderKind::ZoneThresholdMax(..) => (1, 100),
         }
     }
 
@@ -240,6 +244,9 @@ pub enum Action {
     SwitchTab(Tab),
     StepOscPort(i32),
     StartOscPortEdit,
+    SetDiscoveryMode(DiscoveryMode),
+    StartOscAvatarsDirEdit,
+    ResetOscAvatarsDir,
 
     FocusZonesPane(ZonesPane),
     SelectConfigured(Channel, usize),
@@ -248,6 +255,10 @@ pub enum Action {
     CycleMode(Channel, usize),
     StepZoneScale(Channel, usize, i32),
     SetZoneScale(Channel, usize, u8),
+    StepZoneThresholdMin(Channel, usize, i32),
+    SetZoneThresholdMin(Channel, usize, u8),
+    StepZoneThresholdMax(Channel, usize, i32),
+    SetZoneThresholdMax(Channel, usize, u8),
     SwitchDevice(usize),
     CycleDevice(i32),
     AddAvatarZone(Channel, usize),

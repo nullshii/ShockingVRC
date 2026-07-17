@@ -1,16 +1,21 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use rosc::{OscMessage, OscPacket, OscType};
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 use tokio::task::JoinHandle;
 
+use super::avatar_config::{load_avatar_param_paths, load_latest_avatar_param_paths};
 use super::game_device::GameDevice;
-use super::oscquery::VrchatOscQuery;
+use super::oscquery::{DiscoveryMode, VrchatOscQuery};
 use super::types::{OldZoneType, OscValue, ZoneEvent};
 use crate::dsp::UkfParams;
 use crate::error::{DGLabError, Result};
+
+const OSCQUERY_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 // Internal shared state
 struct ScannerState {
@@ -21,8 +26,12 @@ struct ScannerState {
     refresh_tx: broadcast::Sender<Vec<ZoneEvent>>,
     oscquery: RwLock<VrchatOscQuery>,
     port: RwLock<u16>,
+    osc_avatars_dir: RwLock<Option<PathBuf>>,
     listener: Mutex<Option<JoinHandle<()>>>,
+    poller: Mutex<Option<JoinHandle<()>>>,
+    discovery: Mutex<Option<JoinHandle<()>>>,
     ukf_params: RwLock<UkfParams>,
+    last_bulk_zones: Mutex<HashSet<(OldZoneType, String)>>,
 }
 
 // AvatarScanner — public handle
@@ -44,16 +53,32 @@ impl AvatarScanner {
                 devices: RwLock::new(HashMap::new()),
                 event_tx,
                 refresh_tx,
-                oscquery: RwLock::new(VrchatOscQuery::new()),
+                oscquery: RwLock::new({
+                    let mut q = VrchatOscQuery::new();
+                    q.set_fallback_port(port);
+                    q
+                }),
                 port: RwLock::new(port),
+                osc_avatars_dir: RwLock::new(None),
                 listener: Mutex::new(None),
+                poller: Mutex::new(None),
+                discovery: Mutex::new(None),
                 ukf_params: RwLock::new(UkfParams::default()),
+                last_bulk_zones: Mutex::new(HashSet::new()),
             }),
         }
     }
 
     pub async fn port(&self) -> u16 {
         *self.state.port.read().await
+    }
+
+    pub async fn osc_avatars_dir(&self) -> Option<PathBuf> {
+        self.state.osc_avatars_dir.read().await.clone()
+    }
+
+    pub async fn set_osc_avatars_dir(&self, dir: Option<PathBuf>) {
+        *self.state.osc_avatars_dir.write().await = dir.filter(|p| !p.as_os_str().is_empty());
     }
 
     pub async fn set_port(&self, port: u16) -> Result<()> {
@@ -63,7 +88,23 @@ impl AvatarScanner {
             )));
         }
         *self.state.port.write().await = port;
-        self.restart_listener().await
+        self.state.oscquery.write().await.set_fallback_port(port);
+        if self.discovery_mode().await == DiscoveryMode::Osc {
+            self.restart_listener().await
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn discovery_mode(&self) -> DiscoveryMode {
+        self.state.oscquery.read().await.discovery_mode()
+    }
+
+    pub async fn set_discovery_mode(&self, mode: DiscoveryMode) {
+        self.state.oscquery.write().await.set_discovery_mode(mode);
+        if let Err(e) = self.sync_transport().await {
+            log::error!("Failed to switch OSC transport: {e}");
+        }
     }
 
     /// Currently configured UKF parameters (shared by all contacts).
@@ -92,26 +133,51 @@ impl AvatarScanner {
         self.state.refresh_tx.subscribe()
     }
 
-    ///
-    /// VRChat discovery is intentionally *not* started here — call
-    /// [`discover_wait`] once after `start()` to perform the first discovery.
-    /// Subsequent avatar changes are handled automatically by the listener.
+
     pub async fn start(&self) -> Result<()> {
-        self.restart_listener().await
+        self.sync_transport().await
     }
 
     pub async fn stop(&self) {
+        if let Some(handle) = self.state.discovery.lock().await.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+        self.stop_listener().await;
+        self.stop_poller().await;
+    }
+
+    async fn sync_transport(&self) -> Result<()> {
+        match self.discovery_mode().await {
+            DiscoveryMode::Osc => {
+                self.stop_poller().await;
+                self.restart_listener().await
+            }
+            DiscoveryMode::OscQuery => {
+                self.stop_listener().await;
+                self.restart_poller().await;
+                Ok(())
+            }
+        }
+    }
+
+    async fn stop_listener(&self) {
         if let Some(handle) = self.state.listener.lock().await.take() {
+            handle.abort();
+            let _ = handle.await;
+            log::info!("OSC UDP listener stopped (port free for other apps)");
+        }
+    }
+
+    async fn stop_poller(&self) {
+        if let Some(handle) = self.state.poller.lock().await.take() {
             handle.abort();
             let _ = handle.await;
         }
     }
 
     async fn restart_listener(&self) -> Result<()> {
-        if let Some(handle) = self.state.listener.lock().await.take() {
-            handle.abort();
-            let _ = handle.await;
-        }
+        self.stop_listener().await;
 
         let me = self.clone();
         let handle = tokio::spawn(async move {
@@ -123,18 +189,59 @@ impl AvatarScanner {
         Ok(())
     }
 
-    /// Discover VRChat via mDNS + OSCQuery and bulk-fetch avatar parameters
-    /// **in the current task** (mDNS scan blocks up to ~5 s).
-    /// On success emits a refresh event (see [`subscribe_refreshes`]).
-    /// Returns `true` when VRChat was found.
+    async fn restart_poller(&self) {
+        self.stop_poller().await;
+
+        let me = self.clone();
+        let handle = tokio::spawn(async move {
+            me.run_oscquery_poller().await;
+        });
+        *self.state.poller.lock().await = Some(handle);
+        log::info!(
+            "OSCQuery poller started (no UDP bind — port {} left free)",
+            *self.state.port.read().await
+        );    }
+
     pub async fn discover_wait(&self) -> Result<bool> {
-        let mut osc = self.state.oscquery.write().await;
-        let found = osc.discover().await?;
-        drop(osc);
+        let (found, mode) = self.run_discover().await?;
         if found {
-            self.update_bulk().await;
+            match mode {
+                DiscoveryMode::OscQuery => self.update_bulk().await,
+                DiscoveryMode::Osc => self.apply_local_avatar_config(None).await,
+            }
         }
         Ok(found)
+    }
+
+    pub fn rediscover_background(&self) {
+        let me = self.clone();
+        tokio::spawn(async move {
+            me.replace_discovery_task().await;
+        });
+    }
+
+    async fn replace_discovery_task(&self) {
+        let me = self.clone();
+        let handle = tokio::spawn(async move {
+            me.try_discover().await;
+        });
+        let mut slot = self.state.discovery.lock().await;
+        if let Some(prev) = slot.take() {
+            prev.abort();
+        }
+        *slot = Some(handle);
+    }
+
+    async fn run_discover(&self) -> Result<(bool, DiscoveryMode)> {
+        let (client, mode, port) = {
+            let osc = self.state.oscquery.read().await;
+            (osc.client(), osc.discovery_mode(), osc.fallback_port())
+        };
+
+        let found = VrchatOscQuery::locate(&client, mode, port).await?;
+        let mut osc = self.state.oscquery.write().await;
+        osc.set_address(found.clone());
+        Ok((found.is_some(), mode))
     }
 
     /// Send an OSC float parameter back to VRChat (e.g. haptic feedback level).
@@ -168,7 +275,6 @@ impl AvatarScanner {
         self.state.oscquery.read().await.get_address().cloned()
     }
 
-    // Internal — OSC listener loop
     async fn run_listener(&self) -> Result<()> {
         let port = *self.state.port.read().await;
         let bind_addr = format!("0.0.0.0:{port}");
@@ -191,16 +297,96 @@ impl AvatarScanner {
         }
     }
 
+    async fn run_oscquery_poller(&self) {
+        let mut consecutive_failures = 0u32;
+        loop {
+            let ok = self.poll_oscquery_once().await;
+            if ok {
+                consecutive_failures = 0;
+            } else {
+                consecutive_failures = consecutive_failures.saturating_add(1);
+                if consecutive_failures == 1 || consecutive_failures % 40 == 0 {
+                    let busy = self
+                        .state
+                        .discovery
+                        .lock()
+                        .await
+                        .as_ref()
+                        .is_some_and(|h| !h.is_finished());
+                    if !busy {
+                        self.replace_discovery_task().await;
+                    }
+                }
+            }
+            tokio::time::sleep(OSCQUERY_POLL_INTERVAL).await;
+        }
+    }
+
+    async fn poll_oscquery_once(&self) -> bool {
+        let osc = self.state.oscquery.read().await;
+        if osc.get_address().is_none() {
+            return false;
+        }
+        let bulk_result = osc.get_bulk().await;
+        drop(osc);
+
+        let params = match bulk_result {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+
+        let mut new_zones: HashSet<(OldZoneType, String)> = HashSet::new();
+        for (path, _) in &params {
+            if let Some(param) = path.strip_prefix("/avatar/parameters/") {
+                let parts: Vec<&str> = param.split('/').collect();
+                if let Some((zone_type, id, _, _)) = parse_sps_param(&parts) {
+                    new_zones.insert((zone_type, id));
+                }
+            }
+        }
+
+        {
+            let mut prev = self.state.last_bulk_zones.lock().await;
+            if !prev.is_empty() && !new_zones.is_empty() && prev.is_disjoint(&new_zones) {
+                log::info!("OSCQuery: avatar zone set changed — clearing cache");
+                self.state.devices.write().await.clear();
+            }
+            *prev = new_zones;
+        }
+
+        for (path, value) in params {
+            if let Some(param) = path.strip_prefix("/avatar/parameters/") {
+                self.received_param(param, value).await;
+            }
+        }
+        true
+    }
+
     async fn handle_message(&self, msg: OscMessage) {
         if msg.addr == "/avatar/change" {
-            log::info!("Avatar changed — clearing zone cache");
-            self.state.devices.write().await.clear();
-
-            // Re-discover in background; on success update_bulk() fires refresh_tx
-            let me = self.clone();
-            tokio::spawn(async move {
-                me.try_discover().await;
+            let avatar_id = msg.args.iter().find_map(|a| match a {
+                OscType::String(s) => Some(s.clone()),
+                _ => None,
             });
+            log::info!(
+                "Avatar changed{} — clearing zone cache",
+                avatar_id
+                    .as_ref()
+                    .map(|id| format!(" ({id})"))
+                    .unwrap_or_default()
+            );
+            self.state.devices.write().await.clear();
+            self.state.last_bulk_zones.lock().await.clear();
+
+            let mode = self.discovery_mode().await;
+            if mode == DiscoveryMode::Osc {
+                let me = self.clone();
+                tokio::spawn(async move {
+                    me.apply_local_avatar_config(avatar_id.as_deref()).await;
+                });
+            } else {
+                self.rediscover_background();
+            }
             return;
         }
 
@@ -235,19 +421,57 @@ impl AvatarScanner {
 
     // Internal — VRChat OSCQuery discovery & bulk fetch
     async fn try_discover(&self) {
-        let mut osc = self.state.oscquery.write().await;
-        match osc.discover().await {
-            Ok(true) => {
-                drop(osc);
+        match self.run_discover().await {
+            Ok((true, DiscoveryMode::OscQuery)) => {
                 self.update_bulk().await;
             }
-            Ok(false) => {
-                log::debug!("VRChat not found during OSCQuery scan");
+            Ok((true, DiscoveryMode::Osc)) => {
+                self.apply_local_avatar_config(None).await;
+            }
+            Ok((false, _)) => {
+                log::debug!("VRChat not found during discovery");
             }
             Err(e) => {
-                log::warn!("OSCQuery discovery error: {e}");
+                log::warn!("Discovery error: {e}");
             }
         }
+    }
+
+    async fn apply_local_avatar_config(&self, avatar_id: Option<&str>) {
+        let override_dir = self.state.osc_avatars_dir.read().await.clone();
+        let override_ref = override_dir.as_deref();
+
+        let loaded = match avatar_id {
+            Some(id) if !id.is_empty() => load_avatar_param_paths(id, override_ref),
+            _ => load_latest_avatar_param_paths(override_ref),
+        };
+
+        let (label, paths) = match loaded {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!(
+                    "[osc] Local avatar config: {e} — zones will appear when contacts fire"
+                );
+                return;
+            }
+        };
+
+        let mut seeded = 0usize;
+        for path in &paths {
+            let parts: Vec<&str> = path.split('/').collect();
+            if parse_sps_param(&parts).is_none() {
+                continue;
+            }
+            self.received_param(path, OscValue::Float(0.0)).await;
+            seeded += 1;
+        }
+
+        log::info!(
+            "[osc] Seeded {seeded} contact params from local config ({label})"
+        );
+
+        let zones = self.zones().await;
+        let _ = self.state.refresh_tx.send(zones);
     }
 
     async fn update_bulk(&self) {

@@ -219,7 +219,7 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
         Tab::Status => "  Q/Esc — quit",
         Tab::Setup => "  Enter — type port  ·  [ / ] ±1  ·  −/+  ·  Esc — cancel edit",
         Tab::Presets => "  ↑↓ select  ·  × delete mine  ·  → A/B apply  ·  Save A/B  ·  R refresh",
-        Tab::Zones => "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  Shift±1  ·  R reset  ·  M mode  ·  X remove",
+        Tab::Zones => "  ↑↓ select  ·  −/+ scale  ·  [ / ] min  ·  , / . max  ·  R/T/Y reset  ·  M mode  ·  X remove",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",
         Tab::Modulation => "  Enter — function list  ·  source buttons  ·  ↑↓ field  ·  wheel — scroll",

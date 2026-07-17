@@ -13,6 +13,7 @@ impl App {
             Action::Quit => self.should_quit = true,
             Action::SwitchTab(t) => {
                 self.cancel_osc_port_edit();
+                self.cancel_osc_avatars_dir_edit();
                 self.cancel_preset_save_edit();
                 self.cancel_preset_delete_confirm();
                 self.close_mod_function_picker();
@@ -35,8 +36,23 @@ impl App {
             Action::StartOscPortEdit => self.start_osc_port_edit(),
             Action::StepOscPort(delta) => {
                 self.cancel_osc_port_edit();
+                self.cancel_osc_avatars_dir_edit();
                 let new_port = (self.osc_port as i32 + delta).clamp(1024, 65535) as u16;
                 self.set_osc_port(new_port).await;
+            }
+            Action::SetDiscoveryMode(mode) => {
+                self.cancel_osc_port_edit();
+                self.cancel_osc_avatars_dir_edit();
+                self.set_discovery_mode(mode).await;
+            }
+            Action::StartOscAvatarsDirEdit => {
+                self.cancel_osc_port_edit();
+                self.start_osc_avatars_dir_edit();
+            }
+            Action::ResetOscAvatarsDir => {
+                self.cancel_osc_port_edit();
+                self.cancel_osc_avatars_dir_edit();
+                self.set_osc_avatars_dir(String::new()).await;
             }
             Action::FocusZonesPane(p) => self.zones_pane = p,
             Action::SelectConfigured(ch, i) => match ch {
@@ -131,6 +147,136 @@ impl App {
                     }
                     engine.set_config(cfg).await;
                     log::info!("[ch-{}] Zone {id} scale set to {scale}%", ch.label());
+                    self.refresh_config().await;
+                }
+            }
+            Action::StepZoneThresholdMin(ch, i, delta) => {
+                let Some(engine) = self.active_engine() else { return };
+                use shocking_vrc_core::cli::clamp_zone_activation_threshold;
+                let updated = {
+                    let cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &cfg.channel_a.zones,
+                        Channel::B => &cfg.channel_b.zones,
+                    };
+                    zones.get(i).map(|entry| {
+                        let cents = (entry.activation_threshold * 100.0).round() as i32;
+                        let mut next =
+                            clamp_zone_activation_threshold((cents + delta) as f32 / 100.0);
+                        next = next.min(entry.activation_threshold_max);
+                        (entry.id.clone(), next)
+                    })
+                };
+                if let Some((id, threshold)) = updated {
+                    let mut cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &mut cfg.channel_a.zones,
+                        Channel::B => &mut cfg.channel_b.zones,
+                    };
+                    if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+                        e.activation_threshold = threshold;
+                    }
+                    engine.set_config(cfg).await;
+                    log::info!(
+                        "[ch-{}] Zone {id} min threshold set to {threshold:.2}",
+                        ch.label()
+                    );
+                    self.refresh_config().await;
+                }
+            }
+            Action::SetZoneThresholdMin(ch, i, cents) => {
+                let Some(engine) = self.active_engine() else { return };
+                use shocking_vrc_core::cli::clamp_zone_activation_threshold;
+                let entry_id = {
+                    let cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &cfg.channel_a.zones,
+                        Channel::B => &cfg.channel_b.zones,
+                    };
+                    zones.get(i).map(|e| e.id.clone())
+                };
+                if let Some(id) = entry_id {
+                    let mut cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &mut cfg.channel_a.zones,
+                        Channel::B => &mut cfg.channel_b.zones,
+                    };
+                    if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+                        let mut threshold =
+                            clamp_zone_activation_threshold(cents as f32 / 100.0);
+                        threshold = threshold.min(e.activation_threshold_max);
+                        e.activation_threshold = threshold;
+                        log::info!(
+                            "[ch-{}] Zone {id} min threshold set to {threshold:.2}",
+                            ch.label()
+                        );
+                    }
+                    engine.set_config(cfg).await;
+                    self.refresh_config().await;
+                }
+            }
+            Action::StepZoneThresholdMax(ch, i, delta) => {
+                let Some(engine) = self.active_engine() else { return };
+                use shocking_vrc_core::cli::clamp_zone_activation_threshold;
+                let updated = {
+                    let cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &cfg.channel_a.zones,
+                        Channel::B => &cfg.channel_b.zones,
+                    };
+                    zones.get(i).map(|entry| {
+                        let cents = (entry.activation_threshold_max * 100.0).round() as i32;
+                        let mut next =
+                            clamp_zone_activation_threshold((cents + delta) as f32 / 100.0);
+                        next = next.max(entry.activation_threshold);
+                        (entry.id.clone(), next)
+                    })
+                };
+                if let Some((id, threshold)) = updated {
+                    let mut cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &mut cfg.channel_a.zones,
+                        Channel::B => &mut cfg.channel_b.zones,
+                    };
+                    if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+                        e.activation_threshold_max = threshold;
+                    }
+                    engine.set_config(cfg).await;
+                    log::info!(
+                        "[ch-{}] Zone {id} max threshold set to {threshold:.2}",
+                        ch.label()
+                    );
+                    self.refresh_config().await;
+                }
+            }
+            Action::SetZoneThresholdMax(ch, i, cents) => {
+                let Some(engine) = self.active_engine() else { return };
+                use shocking_vrc_core::cli::clamp_zone_activation_threshold;
+                let entry_id = {
+                    let cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &cfg.channel_a.zones,
+                        Channel::B => &cfg.channel_b.zones,
+                    };
+                    zones.get(i).map(|e| e.id.clone())
+                };
+                if let Some(id) = entry_id {
+                    let mut cfg = engine.config().await;
+                    let zones = match ch {
+                        Channel::A => &mut cfg.channel_a.zones,
+                        Channel::B => &mut cfg.channel_b.zones,
+                    };
+                    if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+                        let mut threshold =
+                            clamp_zone_activation_threshold(cents as f32 / 100.0);
+                        threshold = threshold.max(e.activation_threshold);
+                        e.activation_threshold_max = threshold;
+                        log::info!(
+                            "[ch-{}] Zone {id} max threshold set to {threshold:.2}",
+                            ch.label()
+                        );
+                    }
+                    engine.set_config(cfg).await;
                     self.refresh_config().await;
                 }
             }

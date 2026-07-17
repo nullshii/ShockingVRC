@@ -4,7 +4,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use shocking_vrc_core::cli::ContactMode;
+use shocking_vrc_core::cli::{ContactMode, ZONE_ACTIVATION_THRESHOLD};
 
 use crate::tui::app::{Action, App, Channel, SliderKind, ZonesPane};
 use crate::tui::theme;
@@ -41,18 +41,22 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         Constraint::Min(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .split(inner);
     let list_area = layout[0];
     let btn_row = layout[1];
-    let slider_row_area = layout[2];
+    let scale_row = layout[2];
+    let min_row = layout[3];
+    let max_row = layout[4];
 
     let selected = match ch {
         Channel::A => app.sel_conf_a,
         Channel::B => app.sel_conf_b,
     };
 
-    let entries: Vec<(String, u8)> = app
+    let entries: Vec<(String, u8, f32, f32)> = app
         .channel_config(ch)
         .zones
         .iter()
@@ -68,7 +72,22 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
             } else {
                 String::new()
             };
-            (format!("{} · {}{}", e.id, mode_str, scale_badge), e.scale)
+            let thr_changed = (e.activation_threshold - ZONE_ACTIVATION_THRESHOLD).abs() > 1e-6
+                || (e.activation_threshold_max - 1.0).abs() > 1e-6;
+            let thr_badge = if thr_changed {
+                format!(
+                    " ·t{:.2}-{:.2}",
+                    e.activation_threshold, e.activation_threshold_max
+                )
+            } else {
+                String::new()
+            };
+            (
+                format!("{} · {}{}{}", e.id, mode_str, scale_badge, thr_badge),
+                e.scale,
+                e.activation_threshold,
+                e.activation_threshold_max,
+            )
         })
         .collect();
 
@@ -76,7 +95,7 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         frame,
         app,
         list_area,
-        &entries.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>(),
+        &entries.iter().map(|(s, _, _, _)| s.clone()).collect::<Vec<_>>(),
         selected,
         focused,
         &|i| Action::SelectConfigured(ch, i),
@@ -87,15 +106,54 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
     ui::button(frame, app, btns[0], "Cycle mode", false, Action::CycleMode(ch, selected));
     ui::button(frame, app, btns[1], "Remove", false, Action::RemoveZone(ch, selected));
 
+    let current_scale = entries.get(selected).map(|(_, s, _, _)| *s).unwrap_or(100);
+    let current_min = entries
+        .get(selected)
+        .map(|(_, _, t, _)| *t)
+        .unwrap_or(ZONE_ACTIVATION_THRESHOLD);
+    let current_max = entries
+        .get(selected)
+        .map(|(_, _, _, t)| *t)
+        .unwrap_or(1.0);
 
-    let current_scale = entries.get(selected).map(|(_, s)| *s).unwrap_or(100);
+    render_scale_slider(app, frame, scale_row, ch, selected, current_scale, focused);
+    render_threshold_slider(
+        app,
+        frame,
+        min_row,
+        ch,
+        selected,
+        current_min,
+        focused,
+        true,
+    );
+    render_threshold_slider(
+        app,
+        frame,
+        max_row,
+        ch,
+        selected,
+        current_max,
+        focused,
+        false,
+    );
+}
 
+fn render_scale_slider(
+    app: &mut App,
+    frame: &mut Frame,
+    area: Rect,
+    ch: Channel,
+    selected: usize,
+    current_scale: u8,
+    focused: bool,
+) {
     let label_cols = Layout::horizontal([
         Constraint::Length(7),
         Constraint::Min(8),
         Constraint::Length(5),
     ])
-    .split(slider_row_area);
+    .split(area);
 
     let label_style = if focused {
         Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
@@ -103,10 +161,7 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         Style::default().fg(theme::TEXT_DIM)
     };
 
-    frame.render_widget(
-        Paragraph::new("Scale ").style(label_style),
-        label_cols[0],
-    );
+    frame.render_widget(Paragraph::new("Scale ").style(label_style), label_cols[0]);
 
     let ratio = current_scale as f64 / 100.0;
     let bar_color = scale_bar_color(current_scale);
@@ -127,6 +182,71 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             format!("{:>3}%", current_scale),
+            val_style,
+        ))),
+        label_cols[2],
+    );
+}
+
+fn render_threshold_slider(
+    app: &mut App,
+    frame: &mut Frame,
+    area: Rect,
+    ch: Channel,
+    selected: usize,
+    current_threshold: f32,
+    focused: bool,
+    is_min: bool,
+) {
+    let label_cols = Layout::horizontal([
+        Constraint::Length(7),
+        Constraint::Min(8),
+        Constraint::Length(5),
+    ])
+    .split(area);
+
+    let label_style = if focused {
+        Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_DIM)
+    };
+
+    let (label, default_val, kind) = if is_min {
+        (
+            "Min   ",
+            ZONE_ACTIVATION_THRESHOLD,
+            SliderKind::ZoneThresholdMin(ch, selected),
+        )
+    } else {
+        ("Max   ", 1.0, SliderKind::ZoneThresholdMax(ch, selected))
+    };
+    frame.render_widget(Paragraph::new(label).style(label_style), label_cols[0]);
+
+    let cents = (current_threshold * 100.0).round().clamp(1.0, 100.0);
+    let ratio = (cents / 100.0) as f64;
+    let is_default = (current_threshold - default_val).abs() < 1e-6;
+    let bar_color = if is_default {
+        theme::ACCENT
+    } else {
+        theme::WARNING
+    };
+    let gauge = ratatui::widgets::Gauge::default()
+        .gauge_style(Style::default().fg(bar_color).bg(theme::SURFACE_ELEVATED))
+        .ratio(ratio)
+        .label("");
+    frame.render_widget(gauge, label_cols[1]);
+    app.push_slider(label_cols[1], kind);
+
+    let val_style = if !is_default {
+        Style::default()
+            .fg(bar_color)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_DIM)
+    };
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!("{:>4.2}", current_threshold),
             val_style,
         ))),
         label_cols[2],

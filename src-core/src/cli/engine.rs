@@ -12,7 +12,10 @@ use crate::osc::types::ZoneEvent;
 use crate::protocol::waveform::WaveformV3;
 use crate::protocol::waveform_bf::WaveformBF;
 
-use super::config::{ChannelConfig, CliConfig, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
+use super::config::{
+    ChannelConfig, CliConfig, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId,
+    apply_zone_activation_range,
+};
 
 const ZONE_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
 const WATCHDOG_INTERVAL: Duration = Duration::from_millis(50);
@@ -478,7 +481,10 @@ fn compute_channel_status(
         if pattern.is_wildcard() {
             for (known_id, k) in kinematics {
                 if pattern.matches(known_id) && seen.insert(known_id.clone()) {
-                    let value = (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0);
+                    let raw =
+                        (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0);
+                    let (thr_min, thr_max) = entry.activation_range();
+                    let value = apply_zone_activation_range(raw, thr_min, thr_max);
                     zone_levels.push(value);
                     if value > 0.0 {
                         active_zones.push((known_id.clone(), value));
@@ -492,10 +498,12 @@ fn compute_channel_status(
                 }
             }
         } else if seen.insert(pattern.clone()) {
-            let value = kinematics
+            let raw = kinematics
                 .get(pattern)
                 .map(|k| (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0))
                 .unwrap_or(0.0);
+            let (thr_min, thr_max) = entry.activation_range();
+            let value = apply_zone_activation_range(raw, thr_min, thr_max);
             zone_levels.push(value);
             if value > 0.0 {
                 active_zones.push((pattern.clone(), value));
