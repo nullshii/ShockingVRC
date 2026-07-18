@@ -58,6 +58,8 @@ pub(super) fn should_persist_config(action: &Action) -> bool {
             | Action::CycleMode(_, _)
             | Action::StepZoneScale(_, _, _)
             | Action::SetZoneScale(_, _, _)
+            | Action::SetZoneThresholdMin(_, _, _)
+            | Action::SetZoneThresholdMax(_, _, _)
             | Action::AddAvatarZone(_, _)
             | Action::AddAllZones(_)
             | Action::SetFreq(_, _, _)

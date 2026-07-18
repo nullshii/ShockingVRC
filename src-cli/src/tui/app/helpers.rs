@@ -44,6 +44,12 @@ pub(super) fn slider_value_action(kind: SliderKind, rect: Rect, col: u16) -> Act
         SliderKind::LimitMin(ch) => Action::SetLimitMin(ch, val.clamp(min, max) as u8),
         SliderKind::LimitMax(ch) => Action::SetLimitMax(ch, val.clamp(min, max) as u8),
         SliderKind::ZoneScale(ch, i) => Action::SetZoneScale(ch, i, val.clamp(min, max) as u8),
+        SliderKind::ZoneThresholdMin(ch, i) => {
+            Action::SetZoneThresholdMin(ch, i, val.clamp(min, max) as u8)
+        }
+        SliderKind::ZoneThresholdMax(ch, i) => {
+            Action::SetZoneThresholdMax(ch, i, val.clamp(min, max) as u8)
+        }
     }
 }
 

@@ -191,6 +191,22 @@ fn is_default_zone_scale(v: &u8) -> bool {
     *v == 100
 }
 
+fn default_zone_threshold_min() -> u8 {
+    ZoneEntry::THRESHOLD_MIN
+}
+
+fn is_default_zone_threshold_min(v: &u8) -> bool {
+    *v == ZoneEntry::THRESHOLD_MIN
+}
+
+fn default_zone_threshold_max() -> u8 {
+    ZoneEntry::THRESHOLD_MAX
+}
+
+fn is_default_zone_threshold_max(v: &u8) -> bool {
+    *v == ZoneEntry::THRESHOLD_MAX
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ZoneEntry {
     #[serde(flatten)]
@@ -199,11 +215,30 @@ pub struct ZoneEntry {
     pub mode: ContactMode,
     #[serde(default = "default_zone_scale", skip_serializing_if = "is_default_zone_scale")]
     pub scale: u8,
+    #[serde(
+        default = "default_zone_threshold_min",
+        skip_serializing_if = "is_default_zone_threshold_min"
+    )]
+    pub min_threshold: u8,
+    #[serde(
+        default = "default_zone_threshold_max",
+        skip_serializing_if = "is_default_zone_threshold_max"
+    )]
+    pub max_threshold: u8,
 }
 
 impl ZoneEntry {
+    pub const THRESHOLD_MIN: u8 = 1;
+    pub const THRESHOLD_MAX: u8 = 100;
+
     pub fn new(id: ZoneId, mode: ContactMode) -> Self {
-        Self { id, mode, scale: 100 }
+        Self {
+            id,
+            mode,
+            scale: 100,
+            min_threshold: Self::THRESHOLD_MIN,
+            max_threshold: Self::THRESHOLD_MAX,
+        }
     }
 
     pub fn with_default_mode(id: ZoneId) -> Self {
@@ -211,6 +246,8 @@ impl ZoneEntry {
             id,
             mode: ContactMode::default(),
             scale: 100,
+            min_threshold: Self::THRESHOLD_MIN,
+            max_threshold: Self::THRESHOLD_MAX,
         }
     }
 }
@@ -316,5 +353,48 @@ impl Default for CliConfig {
             ukf: UkfConfig::default(),
             norms: MotionNorms::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::OldZoneType;
+
+    fn sample_id() -> ZoneId {
+        ZoneId::new(OldZoneType::Touch, "chest")
+    }
+
+    #[test]
+    fn defaults_match_expected_bounds() {
+        let e = ZoneEntry::with_default_mode(sample_id());
+        assert_eq!(e.min_threshold, 1);
+        assert_eq!(e.max_threshold, 100);
+    }
+
+    #[test]
+    fn legacy_json_without_thresholds_uses_defaults() {
+        let json = serde_json::to_string(&ZoneEntry::with_default_mode(sample_id())).unwrap();
+        assert!(!json.contains("threshold"));
+        let e: ZoneEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(e.min_threshold, 1);
+        assert_eq!(e.max_threshold, 100);
+    }
+
+    #[test]
+    fn default_thresholds_are_omitted_when_serialized() {
+        let e = ZoneEntry::with_default_mode(sample_id());
+        let json = serde_json::to_string(&e).unwrap();
+        assert!(!json.contains("threshold"), "defaults should be skipped: {json}");
+    }
+
+    #[test]
+    fn non_default_thresholds_round_trip() {
+        let mut e = ZoneEntry::with_default_mode(sample_id());
+        e.min_threshold = 20;
+        e.max_threshold = 80;
+        let json = serde_json::to_string(&e).unwrap();
+        let back: ZoneEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, e);
     }
 }

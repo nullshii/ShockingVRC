@@ -445,6 +445,21 @@ fn project_with_freshness(k: &ZoneKinematics, mode: ContactMode, norms: &MotionN
     }
 }
 
+fn apply_threshold(level: f32, min_threshold: u8, max_threshold: u8) -> f32 {
+    if min_threshold <= ZoneEntry::THRESHOLD_MIN && max_threshold >= ZoneEntry::THRESHOLD_MAX {
+        return level;
+    }
+    let lo = min_threshold as f32 / 100.0;
+    let hi = max_threshold as f32 / 100.0;
+    if level <= lo {
+        return 0.0;
+    }
+    if hi <= lo {
+        return 1.0;
+    }
+    ((level - lo) / (hi - lo)).clamp(0.0, 1.0)
+}
+
 fn kinematics_for_zone(k: &ZoneKinematics, norms: &MotionNorms, now: Instant) -> KinematicsInput {
     if k.is_stale(now) {
         KinematicsInput::default()
@@ -478,7 +493,9 @@ fn compute_channel_status(
         if pattern.is_wildcard() {
             for (known_id, k) in kinematics {
                 if pattern.matches(known_id) && seen.insert(known_id.clone()) {
-                    let value = (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0);
+                    let projected = project_with_freshness(k, entry.mode, norms, now);
+                    let gated = apply_threshold(projected, entry.min_threshold, entry.max_threshold);
+                    let value = (gated * zone_scale).clamp(0.0, 1.0);
                     zone_levels.push(value);
                     if value > 0.0 {
                         active_zones.push((known_id.clone(), value));
@@ -494,7 +511,11 @@ fn compute_channel_status(
         } else if seen.insert(pattern.clone()) {
             let value = kinematics
                 .get(pattern)
-                .map(|k| (project_with_freshness(k, entry.mode, norms, now) * zone_scale).clamp(0.0, 1.0))
+                .map(|k| {
+                    let projected = project_with_freshness(k, entry.mode, norms, now);
+                    let gated = apply_threshold(projected, entry.min_threshold, entry.max_threshold);
+                    (gated * zone_scale).clamp(0.0, 1.0)
+                })
                 .unwrap_or(0.0);
             zone_levels.push(value);
             if value > 0.0 {
@@ -551,5 +572,31 @@ impl CliStopHandle {
 impl Drop for CliStopHandle {
     fn drop(&mut self) {
         let _ = self.stop_tx.send(true);
+    }
+}
+
+#[cfg(test)]
+mod threshold_tests {
+    use super::apply_threshold;
+
+    #[test]
+    fn full_range_is_pass_through() {
+        for level in [0.0, 0.005, 0.3, 0.99, 1.0] {
+            assert_eq!(apply_threshold(level, 1, 100), level);
+        }
+    }
+
+    #[test]
+    fn min_threshold_gates_low_input() {
+        assert_eq!(apply_threshold(0.2, 30, 100), 0.0);
+        assert_eq!(apply_threshold(0.30, 30, 100), 0.0);
+        assert!(apply_threshold(0.31, 30, 100) > 0.0);
+    }
+
+    #[test]
+    fn window_is_stretched_to_full_output() {
+        assert!((apply_threshold(0.50, 20, 80) - 0.5).abs() < 1e-6);
+        assert_eq!(apply_threshold(0.80, 20, 80), 1.0);
+        assert_eq!(apply_threshold(0.95, 20, 80), 1.0);
     }
 }

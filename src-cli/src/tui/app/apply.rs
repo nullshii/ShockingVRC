@@ -134,6 +134,40 @@ impl App {
                     self.refresh_config().await;
                 }
             }
+            Action::SetZoneThresholdMin(ch, i, v) => {
+                let v = v.clamp(ZoneEntry::THRESHOLD_MIN, ZoneEntry::THRESHOLD_MAX);
+                let mut applied = v;
+                let id = self
+                    .mutate_zone(ch, i, |e| {
+                        applied = v.min(e.max_threshold);
+                        e.min_threshold = applied;
+                    })
+                    .await;
+                if let Some(id) = id {
+                    log::info!(
+                        "[ch-{}] Zone {id} min threshold set to {:.2}",
+                        ch.label(),
+                        applied as f32 / 100.0
+                    );
+                }
+            }
+            Action::SetZoneThresholdMax(ch, i, v) => {
+                let v = v.clamp(ZoneEntry::THRESHOLD_MIN, ZoneEntry::THRESHOLD_MAX);
+                let mut applied = v;
+                let id = self
+                    .mutate_zone(ch, i, |e| {
+                        applied = v.max(e.min_threshold);
+                        e.max_threshold = applied;
+                    })
+                    .await;
+                if let Some(id) = id {
+                    log::info!(
+                        "[ch-{}] Zone {id} max threshold set to {:.2}",
+                        ch.label(),
+                        applied as f32 / 100.0
+                    );
+                }
+            }
             Action::AddAvatarZone(ch, i) => {
                 let Some(engine) = self.active_engine() else { return };
                 if let Some(z) = self.avatar_zones.get(i) {
@@ -450,6 +484,34 @@ impl App {
             Channel::B => engine.set_intensity_b(it).await,
         }
         self.refresh_config().await;
+    }
+
+    pub(super) async fn mutate_zone(
+        &mut self,
+        ch: Channel,
+        i: usize,
+        f: impl FnOnce(&mut ZoneEntry),
+    ) -> Option<ZoneId> {
+        let engine = self.active_engine()?;
+        let id = {
+            let cfg = engine.config().await;
+            let zones = match ch {
+                Channel::A => &cfg.channel_a.zones,
+                Channel::B => &cfg.channel_b.zones,
+            };
+            zones.get(i).map(|e| e.id.clone())
+        }?;
+        let mut cfg = engine.config().await;
+        let zones = match ch {
+            Channel::A => &mut cfg.channel_a.zones,
+            Channel::B => &mut cfg.channel_b.zones,
+        };
+        if let Some(e) = zones.iter_mut().find(|e| e.id == id) {
+            f(e);
+        }
+        engine.set_config(cfg).await;
+        self.refresh_config().await;
+        Some(id)
     }
 
     pub(super) async fn set_limits(&mut self, ch: Channel, lim: PowerLimits) {

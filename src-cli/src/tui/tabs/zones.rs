@@ -38,9 +38,11 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
     frame.render_widget(block, area);
 
     let layout = Layout::vertical([
-        Constraint::Min(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Min(1),    // mapped-zone list
+        Constraint::Length(1), // Cycle mode / Remove buttons
+        Constraint::Length(1), // Scale slider
+        Constraint::Length(1), // Min threshold slider
+        Constraint::Length(1), // Max threshold slider
     ])
     .split(inner);
     let list_area = layout[0];
@@ -68,7 +70,19 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
             } else {
                 String::new()
             };
-            (format!("{} · {}{}", e.id, mode_str, scale_badge), e.scale)
+            let thr_badge = if e.min_threshold != 1 || e.max_threshold != 100 {
+                format!(
+                    " ·thr {:.2}-{:.2}",
+                    e.min_threshold as f32 / 100.0,
+                    e.max_threshold as f32 / 100.0
+                )
+            } else {
+                String::new()
+            };
+            (
+                format!("{} · {}{}{}", e.id, mode_str, scale_badge, thr_badge),
+                e.scale,
+            )
         })
         .collect();
 
@@ -130,6 +144,78 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
             val_style,
         ))),
         label_cols[2],
+    );
+
+    // Threshold-range sliders (stored in hundredths, shown 0.01–1.00).
+    let (thr_min, thr_max) = app
+        .channel_config(ch)
+        .zones
+        .get(selected)
+        .map(|e| (e.min_threshold, e.max_threshold))
+        .unwrap_or((1, 100));
+
+    threshold_row(
+        frame,
+        app,
+        layout[3],
+        "Min thr",
+        thr_min,
+        SliderKind::ZoneThresholdMin(ch, selected),
+        focused,
+    );
+    threshold_row(
+        frame,
+        app,
+        layout[4],
+        "Max thr",
+        thr_max,
+        SliderKind::ZoneThresholdMax(ch, selected),
+        focused,
+    );
+}
+
+/// Render a single threshold slider row: label, gauge (0.01–1.00), and the
+/// current value shown as a decimal in real time. Mirrors the Scale gauge so it
+/// blends into the existing Zone menu styling.
+#[allow(clippy::too_many_arguments)]
+fn threshold_row(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    label: &str,
+    value: u8,
+    kind: SliderKind,
+    focused: bool,
+) {
+    let cols = Layout::horizontal([
+        Constraint::Length(10),
+        Constraint::Min(6),
+        Constraint::Length(5),
+    ])
+    .split(area);
+
+    let label_style = if focused {
+        Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_DIM)
+    };
+    frame.render_widget(Paragraph::new(label.to_string()).style(label_style), cols[0]);
+
+    let bar_color = if focused { theme::HIGHLIGHT } else { theme::ACCENT };
+    let gauge = ratatui::widgets::Gauge::default()
+        .gauge_style(Style::default().fg(bar_color).bg(theme::SURFACE_ELEVATED))
+        .ratio((value as f64 / 100.0).clamp(0.0, 1.0))
+        .label("");
+    frame.render_widget(gauge, cols[1]);
+    app.push_slider(cols[1], kind);
+
+    let val_style = Style::default().fg(bar_color).add_modifier(Modifier::BOLD);
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!("{:>4.2}", value as f32 / 100.0),
+            val_style,
+        ))),
+        cols[2],
     );
 }
 
