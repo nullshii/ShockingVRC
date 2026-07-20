@@ -3,6 +3,6 @@ pub mod oscquery;
 pub mod scanner;
 pub mod types;
 
-pub use oscquery::VrchatAddress;
+pub use oscquery::{OscQueryServer, VrchatAddress};
 pub use scanner::AvatarScanner;
 pub use types::{OldZoneType, OscValue, ZoneEvent};

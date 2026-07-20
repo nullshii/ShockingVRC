@@ -12,7 +12,6 @@ impl App {
         match action {
             Action::Quit => self.should_quit = true,
             Action::SwitchTab(t) => {
-                self.cancel_osc_port_edit();
                 self.cancel_preset_save_edit();
                 self.cancel_preset_delete_confirm();
                 self.close_mod_function_picker();
@@ -31,12 +30,6 @@ impl App {
                 let n = self.device_infos.len() as i32;
                 let next = (self.active_device as i32 + delta).rem_euclid(n) as usize;
                 self.switch_device(next).await;
-            }
-            Action::StartOscPortEdit => self.start_osc_port_edit(),
-            Action::StepOscPort(delta) => {
-                self.cancel_osc_port_edit();
-                let new_port = (self.osc_port as i32 + delta).clamp(1024, 65535) as u16;
-                self.set_osc_port(new_port).await;
             }
             Action::FocusZonesPane(p) => self.zones_pane = p,
             Action::SelectConfigured(ch, i) => match ch {

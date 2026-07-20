@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 use rosc::{OscMessage, OscPacket, OscType};
 use tokio::net::UdpSocket;
@@ -7,36 +9,42 @@ use tokio::sync::{Mutex, RwLock, broadcast};
 use tokio::task::JoinHandle;
 
 use super::game_device::GameDevice;
-use super::oscquery::VrchatOscQuery;
+use super::oscquery::{MdnsBroadcaster, OscQueryServer, VrchatClient, select_port};
 use super::types::{OldZoneType, OscValue, ZoneEvent};
 use crate::dsp::UkfParams;
 use crate::error::{DGLabError, Result};
+
+const STALE_MS: Duration = Duration::from_millis(15_000);
+const BULK_RETRY: Duration = Duration::from_millis(250);
+
+const OGB_ENABLED_PARAM: &str = "OGB_ENABLED";
+const OGB_ENABLED_INTERVAL: Duration = Duration::from_secs(5);
 
 // Internal shared state
 struct ScannerState {
     devices: RwLock<HashMap<(OldZoneType, String), GameDevice>>,
     event_tx: broadcast::Sender<ZoneEvent>,
-    /// Fired after every completed bulk-fetch — contains full zone snapshot.
-    /// Subscribers use this to know "avatar zones are now known".
     refresh_tx: broadcast::Sender<Vec<ZoneEvent>>,
-    oscquery: RwLock<VrchatOscQuery>,
-    port: RwLock<u16>,
+    requested_port: Option<u16>,
+    osc_port: RwLock<u16>,
     listener: Mutex<Option<JoinHandle<()>>>,
+    http: Mutex<Option<OscQueryServer>>,
+    mdns: Mutex<Option<MdnsBroadcaster>>,
+    client: Mutex<Option<Arc<VrchatClient>>>,
+    keepalive: Mutex<Option<JoinHandle<()>>>,
     ukf_params: RwLock<UkfParams>,
+    last_packet: RwLock<Option<Instant>>,
+    has_received: AtomicBool,
+    bulk_attempt: AtomicU64,
 }
 
-// AvatarScanner — public handle
-/// Listens for VRChat OSC avatar parameters on a UDP port, discovers VRChat
-/// via OSCQuery, parses SPS contact zones and emits [`ZoneEvent`]s.
-/// The scanner is cheaply cloneable; all clones share the same internal state.
 #[derive(Clone)]
 pub struct AvatarScanner {
     state: Arc<ScannerState>,
 }
 
 impl AvatarScanner {
-    /// Create a scanner that will listen on `port` for OSC UDP packets.
-    pub fn new(port: u16) -> Self {
+    pub fn new(port: Option<u16>) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         let (refresh_tx, _) = broadcast::channel(16);
         Self {
@@ -44,26 +52,39 @@ impl AvatarScanner {
                 devices: RwLock::new(HashMap::new()),
                 event_tx,
                 refresh_tx,
-                oscquery: RwLock::new(VrchatOscQuery::new()),
-                port: RwLock::new(port),
+                requested_port: port,
+                osc_port: RwLock::new(port.unwrap_or(0)),
                 listener: Mutex::new(None),
+                http: Mutex::new(None),
+                mdns: Mutex::new(None),
+                client: Mutex::new(None),
+                keepalive: Mutex::new(None),
                 ukf_params: RwLock::new(UkfParams::default()),
+                last_packet: RwLock::new(None),
+                has_received: AtomicBool::new(false),
+                bulk_attempt: AtomicU64::new(0),
             }),
         }
     }
 
     pub async fn port(&self) -> u16 {
-        *self.state.port.read().await
+        *self.state.osc_port.read().await
     }
 
-    pub async fn set_port(&self, port: u16) -> Result<()> {
-        if !(1024..=65535).contains(&port) {
-            return Err(DGLabError::OscError(format!(
-                "Invalid OSC port {port} (use 1024–65535)"
-            )));
-        }
-        *self.state.port.write().await = port;
-        self.restart_listener().await
+    pub async fn oscquery_port(&self) -> Option<u16> {
+        self.state.http.lock().await.as_ref().map(|s| s.port())
+    }
+
+    pub async fn vrchat_connected(&self) -> bool {
+        self.state
+            .last_packet
+            .read()
+            .await
+            .is_some_and(|t| t.elapsed() < STALE_MS)
+    }
+
+    pub async fn vrchat_address(&self) -> Option<crate::osc::VrchatAddress> {
+        self.state.client.lock().await.as_ref().and_then(|c| c.address())
     }
 
     /// Currently configured UKF parameters (shared by all contacts).
@@ -83,21 +104,56 @@ impl AvatarScanner {
         self.state.event_tx.subscribe()
     }
 
-    /// Subscribe to bulk-refresh notifications.
-    /// A message is sent every time a successful OSCQuery bulk-fetch completes
-    /// (on first connection and after every `/avatar/change`).  The payload is
-    /// a snapshot of **all zones** found on the new avatar.
-    /// Use this to re-run a zone-discovery report without polling.
     pub fn subscribe_refreshes(&self) -> broadcast::Receiver<Vec<ZoneEvent>> {
         self.state.refresh_tx.subscribe()
     }
 
-    ///
-    /// VRChat discovery is intentionally *not* started here — call
-    /// [`discover_wait`] once after `start()` to perform the first discovery.
-    /// Subsequent avatar changes are handled automatically by the listener.
     pub async fn start(&self) -> Result<()> {
-        self.restart_listener().await
+        self.stop().await;
+        let (osc_port, http_port, advertise) = match self.state.requested_port {
+            None => {
+                let p = select_port()?;
+                (p, p, true)
+            }
+            Some(p) => {
+                let hp = select_port()?;
+                (p, hp, false)
+            }
+        };
+        *self.state.osc_port.write().await = osc_port;
+        self.state.has_received.store(false, Ordering::Relaxed);
+        *self.state.last_packet.write().await = None;
+
+        let socket = UdpSocket::bind(("0.0.0.0", osc_port))
+            .await
+            .map_err(|e| DGLabError::OscError(format!("OSC bind 0.0.0.0:{osc_port} failed: {e}")))?;
+        log::info!("OSC listener bound to 0.0.0.0:{osc_port}");
+        let me = self.clone();
+        let handle = tokio::spawn(async move {
+            me.run_listener(socket).await;
+        });
+        *self.state.listener.lock().await = Some(handle);
+
+        *self.state.http.lock().await = Some(OscQueryServer::start(http_port).await?);
+
+        if advertise {
+            *self.state.mdns.lock().await = Some(MdnsBroadcaster::start(http_port));
+        } else {
+            log::info!("Legacy fixed-port mode: mDNS self-advertising disabled");
+        }
+
+        *self.state.client.lock().await = Some(Arc::new(VrchatClient::start()));
+
+        let me = self.clone();
+        let keepalive = tokio::spawn(async move {
+            loop {
+                me.send_ogb_enabled().await;
+                tokio::time::sleep(OGB_ENABLED_INTERVAL).await;
+            }
+        });
+        *self.state.keepalive.lock().await = Some(keepalive);
+
+        Ok(())
     }
 
     pub async fn stop(&self) {
@@ -105,51 +161,38 @@ impl AvatarScanner {
             handle.abort();
             let _ = handle.await;
         }
-    }
-
-    async fn restart_listener(&self) -> Result<()> {
-        if let Some(handle) = self.state.listener.lock().await.take() {
+        if let Some(server) = self.state.http.lock().await.take() {
+            server.shutdown();
+        }
+        if let Some(mdns) = self.state.mdns.lock().await.take() {
+            mdns.shutdown();
+        }
+        if let Some(client) = self.state.client.lock().await.take() {
+            client.shutdown();
+        }
+        if let Some(handle) = self.state.keepalive.lock().await.take() {
             handle.abort();
-            let _ = handle.await;
         }
-
-        let me = self.clone();
-        let handle = tokio::spawn(async move {
-            if let Err(e) = me.run_listener().await {
-                log::error!("OSC listener stopped: {e}");
-            }
-        });
-        *self.state.listener.lock().await = Some(handle);
-        Ok(())
+        self.state.bulk_attempt.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Discover VRChat via mDNS + OSCQuery and bulk-fetch avatar parameters
-    /// **in the current task** (mDNS scan blocks up to ~5 s).
-    /// On success emits a refresh event (see [`subscribe_refreshes`]).
-    /// Returns `true` when VRChat was found.
-    pub async fn discover_wait(&self) -> Result<bool> {
-        let mut osc = self.state.oscquery.write().await;
-        let found = osc.discover().await?;
-        drop(osc);
-        if found {
-            self.update_bulk().await;
-        }
-        Ok(found)
-    }
 
-    /// Send an OSC float parameter back to VRChat (e.g. haptic feedback level).
     pub async fn send_param(&self, param: &str, value: f32) -> Result<()> {
-        let osc = self.state.oscquery.read().await;
-        let addr = osc
-            .get_address()
+        self.send_osc(param, OscType::Float(value)).await
+    }
+    pub async fn send_param_bool(&self, param: &str, value: bool) -> Result<()> {
+        self.send_osc(param, OscType::Bool(value)).await
+    }
+    async fn send_osc(&self, param: &str, arg: OscType) -> Result<()> {
+        let addr = self
+            .vrchat_address()
+            .await
             .ok_or_else(|| DGLabError::OscError("VRChat address unknown".to_string()))?;
-
         let target = format!("{}:{}", addr.osc_ip, addr.osc_port);
-        drop(osc);
 
         let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage {
             addr: format!("/avatar/parameters/{param}"),
-            args: vec![OscType::Float(value)],
+            args: vec![arg],
         }))
         .map_err(|e| DGLabError::OscError(e.to_string()))?;
 
@@ -158,26 +201,28 @@ impl AvatarScanner {
         Ok(())
     }
 
+    async fn send_ogb_enabled(&self) {
+        if let Err(e) = self.send_param_bool(OGB_ENABLED_PARAM, true).await {
+            log::trace!("OGB_ENABLED send skipped: {e}");
+        }
+    }
+
     /// Snapshot of all zones seen so far (level may be 0.0 if no active contact).
     pub async fn zones(&self) -> Vec<ZoneEvent> {
         self.state.devices.read().await.values().map(|d| d.to_event()).collect()
     }
 
-    /// Return the VRChat OSC address if already discovered.
-    pub async fn vrchat_address(&self) -> Option<crate::osc::VrchatAddress> {
-        self.state.oscquery.read().await.get_address().cloned()
-    }
-
     // Internal — OSC listener loop
-    async fn run_listener(&self) -> Result<()> {
-        let port = *self.state.port.read().await;
-        let bind_addr = format!("0.0.0.0:{port}");
-        let socket = UdpSocket::bind(&bind_addr).await?;
-        log::info!("OSC listener bound to {bind_addr}");
-
+    async fn run_listener(&self, socket: UdpSocket) {
         let mut buf = vec![0u8; 65_535];
         loop {
-            let (len, _src) = socket.recv_from(&mut buf).await?;
+            let (len, _src) = match socket.recv_from(&mut buf).await {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("OSC listener stopped: {e}");
+                    return;
+                }
+            };
             match rosc::decoder::decode_udp(&buf[..len]) {
                 Ok((_, packet)) => {
                     for msg in flatten_packet(packet) {
@@ -192,14 +237,21 @@ impl AvatarScanner {
     }
 
     async fn handle_message(&self, msg: OscMessage) {
+        *self.state.last_packet.write().await = Some(Instant::now());
+
+        if !self.state.has_received.swap(true, Ordering::Relaxed) {
+            log::info!("First OSC packet received — starting bulk parameter sync");
+            self.trigger_bulk();
+        }
+
         if msg.addr == "/avatar/change" {
             log::info!("Avatar changed — clearing zone cache");
             self.state.devices.write().await.clear();
-
-            // Re-discover in background; on success update_bulk() fires refresh_tx
+            let _ = self.state.refresh_tx.send(Vec::new());
+            self.trigger_bulk();
             let me = self.clone();
             tokio::spawn(async move {
-                me.try_discover().await;
+                me.send_ogb_enabled().await;
             });
             return;
         }
@@ -210,11 +262,10 @@ impl AvatarScanner {
         let Some(value) = extract_osc_value(&msg.args) else {
             return;
         };
-        self.received_param(param, value).await;
+        self.received_param(param, value, false).await;
     }
 
-    // Internal — parameter routing=
-    async fn received_param(&self, param: &str, value: OscValue) {
+    async fn received_param(&self, param: &str, value: OscValue, only_if_new: bool) {
         let parts: Vec<&str> = param.split('/').collect();
         let Some((zone_type, id, contact, is_tps)) = parse_sps_param(&parts) else {
             return;
@@ -223,58 +274,58 @@ impl AvatarScanner {
         let key = (zone_type.clone(), id.clone());
         let ukf_params = *self.state.ukf_params.read().await;
         let mut devices = self.state.devices.write().await;
+        let is_new_zone = !devices.contains_key(&key);
         let device = devices
             .entry(key)
             .or_insert_with(|| GameDevice::with_ukf_params(zone_type, id, is_tps, ukf_params));
+        if only_if_new && device.has_value(&contact) {
+            return;
+        }
         device.set_value(&contact, value);
         let event = device.to_event();
         drop(devices);
 
         let _ = self.state.event_tx.send(event);
-    }
-
-    // Internal — VRChat OSCQuery discovery & bulk fetch
-    async fn try_discover(&self) {
-        let mut osc = self.state.oscquery.write().await;
-        match osc.discover().await {
-            Ok(true) => {
-                drop(osc);
-                self.update_bulk().await;
-            }
-            Ok(false) => {
-                log::debug!("VRChat not found during OSCQuery scan");
-            }
-            Err(e) => {
-                log::warn!("OSCQuery discovery error: {e}");
-            }
+        if is_new_zone {
+            let zones = self.zones().await;
+            let _ = self.state.refresh_tx.send(zones);
         }
     }
-
-    async fn update_bulk(&self) {
-        let osc = self.state.oscquery.read().await;
-        let bulk_result = osc.get_bulk().await;
-        drop(osc);
-
-        let params = match bulk_result {
-            Ok(p) => {
-                log::debug!("Bulk OSCQuery: {} parameters received", p.len());
-                p
+    fn trigger_bulk(&self) {
+        let attempt = self.state.bulk_attempt.fetch_add(1, Ordering::Relaxed) + 1;
+        let me = self.clone();
+        tokio::spawn(async move {
+            loop {
+                if me.state.bulk_attempt.load(Ordering::Relaxed) != attempt {
+                    return;
+                }
+                match me.fetch_bulk().await {
+                    Ok(()) => return,
+                    Err(e) => {
+                        log::debug!("Bulk fetch not ready: {e}");
+                        tokio::time::sleep(BULK_RETRY).await;
+                    }
+                }
             }
-            Err(e) => {
-                log::warn!("OSCQuery bulk fetch failed: {e}");
-                return;
-            }
+        });
+    }
+
+    async fn fetch_bulk(&self) -> Result<()> {
+        let Some(client) = self.state.client.lock().await.clone() else {
+            return Err(DGLabError::OscError("scanner stopped".into()));
         };
+        let params = client.get_bulk().await?;
 
+        log::debug!("Bulk OSCQuery: {} values received", params.len());
         for (path, value) in params {
             if let Some(param) = path.strip_prefix("/avatar/parameters/") {
-                self.received_param(param, value).await;
+                self.received_param(param, value, true).await;
             }
         }
 
-        // Notify subscribers that a fresh zone list is available
         let zones = self.zones().await;
         let _ = self.state.refresh_tx.send(zones);
+        Ok(())
     }
 }
 

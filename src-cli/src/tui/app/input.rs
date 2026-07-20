@@ -78,10 +78,6 @@ impl App {
                     self.cancel_preset_save_edit();
                     return;
                 }
-                if self.osc_port_editing {
-                    self.cancel_osc_port_edit();
-                    return;
-                }
                 if self.update_popup {
                     self.dismiss_update_popup();
                     return;
@@ -114,23 +110,6 @@ impl App {
         if self.preset_save_editing && self.active_tab == Tab::Presets {
             self.handle_preset_save_key(key).await;
             return;
-        }
-
-        if self.osc_port_editing {
-            match key.code {
-                KeyCode::Tab => {
-                    self.switch_tab_relative(1);
-                    return;
-                }
-                KeyCode::BackTab => {
-                    self.switch_tab_relative(-1);
-                    return;
-                }
-                _ => {
-                    self.handle_osc_port_edit_key(key).await;
-                    return;
-                }
-            }
         }
 
         match key.code {
@@ -288,14 +267,7 @@ impl App {
     fn map_key_to_action(&self, key: KeyEvent) -> Option<Action> {
         match self.active_tab {
             Tab::Status => None,
-            Tab::Setup => match key.code {
-                KeyCode::Enter | KeyCode::Char('e') | KeyCode::Char('E') => {
-                    Some(Action::StartOscPortEdit)
-                }
-                KeyCode::Char('[') => Some(Action::StepOscPort(-1)),
-                KeyCode::Char(']') => Some(Action::StepOscPort(1)),
-                _ => None,
-            },
+            Tab::Setup => None,
             Tab::Zones => match key.code {
                 KeyCode::Up => Some(Action::FocusPrev),
                 KeyCode::Down => Some(Action::FocusNext),
@@ -480,7 +452,6 @@ impl App {
     }
 
     pub(super) fn switch_tab_relative(&mut self, delta: i32) {
-        self.cancel_osc_port_edit();
         self.cancel_preset_save_edit();
         self.cancel_preset_delete_confirm();
         self.close_mod_function_picker();

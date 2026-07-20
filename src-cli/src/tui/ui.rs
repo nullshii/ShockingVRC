@@ -217,7 +217,7 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let hint = match app.active_tab {
         Tab::Status => "  Q/Esc — quit",
-        Tab::Setup => "  Enter — type port  ·  [ / ] ±1  ·  −/+  ·  Esc — cancel edit",
+        Tab::Setup => "  OSC & OSCQuery auto-configured  ·  enable OSC in VRChat",
         Tab::Presets => "  ↑↓ select  ·  × delete mine  ·  → A/B apply  ·  Save A/B  ·  R refresh",
         Tab::Zones => "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  R reset  ·  drag threshold sliders  ·  M mode  ·  X remove",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",

@@ -2534,7 +2534,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "shocking_vrc_cli"
-version = "1.0.3"
+version = "1.0.41"
 dependencies = [
  "base64",
  "btleplug",
@@ -2559,13 +2559,14 @@ dependencies = [
 
 [[package]]
 name = "shocking_vrc_core"
-version = "1.0.3"
+version = "1.0.41"
 dependencies = [
  "base64",
  "btleplug",
  "env_logger",
  "flate2",
  "futures-util",
+ "if-addrs",
  "log",
  "mdns-sd",
  "rand 0.10.1",
@@ -2574,6 +2575,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "socket2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",

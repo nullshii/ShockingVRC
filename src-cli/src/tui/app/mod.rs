@@ -45,8 +45,7 @@ pub struct App {
     pub avatar_zones: Vec<ZoneEvent>,
     pub vrchat_found: bool,
     pub osc_port: u16,
-    pub osc_port_editing: bool,
-    pub osc_port_input: String,
+    pub oscquery_port: Option<u16>,
     pub device_infos: Vec<DeviceSlotInfo>,
     pub active_device: usize,
     device_ui_states: DeviceUiStateMap,
@@ -151,8 +150,7 @@ impl App {
             avatar_zones: Vec::new(),
             vrchat_found: false,
             osc_port: 9001,
-            osc_port_editing: false,
-            osc_port_input: String::new(),
+            oscquery_port: None,
             device_infos: Vec::new(),
             active_device: 0,
             device_ui_states: HashMap::new(),
@@ -239,8 +237,9 @@ impl App {
             self.state.scanner.set_ukf_params(ukf.into()).await;
         }
         self.avatar_zones = self.state.scanner.zones().await;
-        self.vrchat_found = self.state.scanner.vrchat_address().await.is_some();
+        self.vrchat_found = self.state.scanner.vrchat_connected().await;
         self.osc_port = self.state.scanner.port().await;
+        self.oscquery_port = self.state.scanner.oscquery_port().await;
         self.last_refresh = Instant::now();
         self.load_editor_from_config();
     }
@@ -262,7 +261,10 @@ impl App {
                 self.status = engine.current_status().await;
             }
             self.avatar_zones = self.state.scanner.zones().await;
-            self.vrchat_found = self.state.scanner.vrchat_address().await.is_some();
+            self.vrchat_found = self.state.scanner.vrchat_connected().await;
+            if self.oscquery_port.is_none() {
+                self.oscquery_port = self.state.scanner.oscquery_port().await;
+            }
             self.last_refresh = Instant::now();
         }
     }
@@ -961,61 +963,6 @@ impl App {
     }
 }
 
-impl App {
-    pub(super) fn cancel_osc_port_edit(&mut self) {
-        self.osc_port_editing = false;
-        self.osc_port_input.clear();
-    }
-
-    fn start_osc_port_edit(&mut self) {
-        self.osc_port_input = self.osc_port.to_string();
-        self.osc_port_editing = true;
-    }
-
-    async fn commit_osc_port_edit(&mut self) {
-        if self.osc_port_input.is_empty() {
-            self.cancel_osc_port_edit();
-            return;
-        }
-        let Ok(port) = self.osc_port_input.parse::<u16>() else {
-            log::warn!("[osc] Invalid port — use digits only (1024–65535)");
-            return;
-        };
-        if !(1024..=65535).contains(&port) {
-            log::warn!("[osc] Port {port} out of range (1024–65535)");
-            return;
-        }
-        self.set_osc_port(port).await;
-        self.cancel_osc_port_edit();
-    }
-
-    async fn set_osc_port(&mut self, new_port: u16) {
-        if new_port == self.osc_port { return; }
-        match self.state.scanner.set_port(new_port).await {
-            Ok(()) => {
-                self.osc_port = new_port;
-                log::info!("[osc] Listener restarted on UDP port {new_port}");
-            }
-            Err(e) => log::error!("[osc] Failed to change port: {e}"),
-        }
-    }
-
-    async fn handle_osc_port_edit_key(&mut self, key: ratatui::crossterm::event::KeyEvent) {
-        use ratatui::crossterm::event::KeyCode;
-        match key.code {
-            KeyCode::Enter => self.commit_osc_port_edit().await,
-            KeyCode::Backspace => { self.osc_port_input.pop(); }
-            KeyCode::Char(c) if c.is_ascii_digit() => {
-                if self.osc_port_input.len() >= 5 { return; }
-                self.osc_port_input.push(c);
-                if self.osc_port_input.parse::<u32>().unwrap_or(0) > 65535 {
-                    self.osc_port_input.pop();
-                }
-            }
-            _ => {}
-        }
-    }
-}
 
 impl App {
     pub(super) fn close_mod_function_picker(&mut self) {

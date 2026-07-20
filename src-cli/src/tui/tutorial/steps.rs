@@ -78,7 +78,7 @@ impl TutorialStep {
             Self::TuningIntro => "Tuning — UKF & normalization",
             Self::PresetsIntro => "Presets — catalog",
             Self::PresetsApply => "Presets — apply & save",
-            Self::SetupOsc => "Setup — OSC port",
+            Self::SetupOsc => "Setup — OSC & OSCQuery",
             Self::SetupAutoSave => "Setup — auto-save",
             Self::Done => "All done!",
         }
@@ -214,11 +214,12 @@ impl TutorialStep {
                 "Presets NEVER touch your power limits or zones!",
             ],
             Self::SetupOsc => &[
-                "OSC port — the UDP port for VRChat avatar parameters.",
-                "Default is 9001 (VRChat sends on 9000).",
+                "OSC & OSCQuery are configured automatically.",
+                "A free port is picked at runtime and used for both",
+                "OSC (UDP) and OSCQuery (HTTP), then advertised to",
+                "VRChat over mDNS.",
                 "",
-                "Click the port number or press  Enter  to type a",
-                "custom port. Use  +/-  buttons for quick adjustment.",
+                "Just enable OSC in VRChat — it discovers this app",
             ],
             Self::SetupAutoSave => &[
                 "Auto-save writes cli_config.json whenever you",

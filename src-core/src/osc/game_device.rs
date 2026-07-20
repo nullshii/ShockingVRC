@@ -48,6 +48,10 @@ impl GameDevice {
         self.last_state = UkfState::default();
     }
 
+    pub fn has_value(&self, contact: &str) -> bool {
+        self.values.contains_key(contact)
+    }
+
     /// Store a contact parameter value and refresh the saved penetrator length
     pub fn set_value(&mut self, contact: &str, value: OscValue) {
         self.values.insert(contact.to_string(), value);

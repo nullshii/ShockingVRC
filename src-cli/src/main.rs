@@ -16,14 +16,14 @@ use shocking_vrc_cli::{tui, tui_logger};
 const CONFIG_FILE: &str = "cli_config.json";
 
 struct Args {
-    port: u16,
+    port: Option<u16>,
     scan_timeout: u64,
     skip_update_check: bool,
 }
 
 fn parse_args() -> Args {
     let args: Vec<String> = std::env::args().collect();
-    let mut port = 9001u16;
+    let mut port = None;
     let mut scan_timeout = 8u64;
     let mut skip_update_check = false;
     let mut i = 1;
@@ -32,14 +32,16 @@ fn parse_args() -> Args {
         match args[i].as_str() {
             "--help" | "-h" => {
                 println!("Usage: shockingvrc-cli [--port <n>] [--scan-timeout <secs>] [--skip-update-check]");
-                println!("  --port               UDP OSC port (default: 9001)");
+                println!("  --port               Legacy fixed OSC UDP port (e.g. 9001). Default: automatic");
+                println!("                       via OSCQuery — a free port is chosen and advertised to");
+                println!("                       VRChat over mDNS, no VRChat configuration needed.");
                 println!("  --scan-timeout       BLE scan timeout in seconds (default: 8)");
                 println!("  --skip-update-check  Do not check GitHub for updates on startup");
                 std::process::exit(0);
             }
             "--port" => {
                 if let Some(v) = args.get(i + 1) {
-                    port = v.parse().unwrap_or(port);
+                    port = v.parse().ok();
                     i += 1;
                 }
             }
@@ -301,33 +303,26 @@ async fn main() {
         default_config()
     };
 
-    log::info!("[osc] Starting OSC listener on UDP port {}...", args.port);
+    match args.port {
+        Some(p) => log::info!("[osc] Starting in legacy mode on fixed UDP port {p}..."),
+        None => log::info!("[osc] Starting in OSCQuery auto mode (dynamic port)..."),
+    }
     let scanner = AvatarScanner::new(args.port);
-    scanner.start().await.expect("Failed to start OSC listener");
+    scanner
+        .start()
+        .await
+        .expect("Failed to start OSC listener / OSCQuery server");
 
-    log::info!("[osc] Scanning for VRChat...");
-    match scanner.discover_wait().await {
-        Ok(true) => {
-            if let Some(addr) = scanner.vrchat_address().await {
-                log::info!(
-                    "[osc] VRChat found → {} (OSC {}:{})",
-                    addr.http_addr,
-                    addr.osc_ip,
-                    addr.osc_port
-                );
-            }
-            let zones = scanner.zones().await;
-            log::info!("[osc] Avatar zones found: {}", zones.len());
-            for z in &zones {
-                log::info!("      [{:<5}] {}", z.zone_type, z.id);
-            }
-        }
-        Ok(false) => {
-            log::warn!(
-                "[osc] VRChat not found — enable OSC in Settings → OSC. Retrying on avatar change."
-            )
-        }
-        Err(e) => log::error!("[osc] Discovery error: {e}"),
+    let osc_port = scanner.port().await;
+    match scanner.oscquery_port().await {
+        Some(_) if args.port.is_none() => log::info!(
+            "[osc] Port {osc_port} selected (OSC UDP + OSCQuery HTTP). Advertising to VRChat \
+             over mDNS — enable OSC in VRChat and it will connect automatically."
+        ),
+        Some(http_port) => log::info!(
+            "[osc] OSC on UDP :{osc_port} (fixed); OSCQuery HTTP on :{http_port} (not advertised)"
+        ),
+        None => log::warn!("[osc] OSCQuery server did not start"),
     }
 
     let monitor_enabled = Arc::new(AtomicBool::new(true));

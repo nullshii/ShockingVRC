@@ -9,4 +9,5 @@ cargo build --release -p shocking_vrc_cli
 cargo run --release -p shocking_vrc_cli
 ```
 
-Optional flags: `--port <udp>` (default 9001), `--scan-timeout <secs>` (default 8).
+Optional flags: `--port <udp>` (legacy fixed OSC port; default is automatic via
+OSCQuery), `--scan-timeout <secs>` (default 8).

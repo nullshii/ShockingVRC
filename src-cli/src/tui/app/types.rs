@@ -241,8 +241,6 @@ impl SliderKind {
 pub enum Action {
     Quit,
     SwitchTab(Tab),
-    StepOscPort(i32),
-    StartOscPortEdit,
 
     FocusZonesPane(ZonesPane),
     SelectConfigured(Channel, usize),

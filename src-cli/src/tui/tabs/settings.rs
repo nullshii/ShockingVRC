@@ -24,7 +24,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_osc(app: &mut App, frame: &mut Frame, area: Rect) {
-    let block = theme::panel_block("OSC — VRChat listener");
+    let block = theme::panel_block("OSC — VRChat / OSCQuery");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -36,49 +36,20 @@ fn render_osc(app: &mut App, frame: &mut Frame, area: Rect) {
     ])
     .split(inner);
 
-    ui::header(frame, rows[0], "UDP port for incoming avatar parameters");
+    ui::header(frame, rows[0], "Auto-discovered by VRChat via OSCQuery");
 
-    render_port_row(app, frame, rows[1]);
-
-    let hint = if app.osc_port_editing {
-        "Editing: type digits, Enter apply, Esc cancel  ·  range 1024–65535"
-    } else {
-        "VRChat default: 9000  ·  this app: 9001  ·  click port or press Enter to type"
-    };
-    frame.render_widget(
-        Paragraph::new(hint).style(Style::default().fg(theme::TEXT_DIM)),
-        rows[2],
-    );
-}
-
-fn render_port_row(app: &mut App, frame: &mut Frame, area: Rect) {
-    let cols = Layout::horizontal([
-        Constraint::Min(16),
-        Constraint::Length(5),
-        Constraint::Length(1),
-        Constraint::Length(5),
-    ])
-    .split(area);
-
-    let label = if app.osc_port_editing {
-        format!("Port  {}{}", app.osc_port_input, "▏")
-    } else {
+    let port_line = if app.osc_port == 0 {
+        "Port  selecting…".to_string()
+    } else if app.oscquery_port == Some(app.osc_port) {
         format!("Port  {}", app.osc_port)
+    } else {
+        format!("OSC (UDP)  {}  (fixed, legacy mode)", app.osc_port)
     };
     frame.render_widget(
-        Paragraph::new(label).style(
-            if app.osc_port_editing {
-                theme::focused_style()
-            } else {
-                theme::label_style(false)
-            },
-        ),
-        cols[0],
+        Paragraph::new(port_line).style(theme::label_style(false)),
+        rows[1],
     );
-    app.push_click(cols[0], Action::StartOscPortEdit);
 
-    ui::button(frame, app, cols[1], "−", false, Action::StepOscPort(-1));
-    ui::button(frame, app, cols[3], "+", false, Action::StepOscPort(1));
 }
 
 fn render_connection(app: &mut App, frame: &mut Frame, area: Rect) {
