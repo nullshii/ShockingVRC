@@ -291,6 +291,15 @@ impl Default for ChannelConfig {
 }
 
 impl ChannelConfig {
+    pub fn sanitise_modulation(&mut self) {
+        for slot in self.freq_modulation.iter_mut().flatten() {
+            slot.sanitise(false);
+        }
+        for slot in self.intensity_modulation.iter_mut().flatten() {
+            slot.sanitise(true);
+        }
+    }
+
     /// Aggregate multiple zone levels into a single [0.0, 1.0] value.
     pub fn aggregate(&self, levels: &[f32]) -> f32 {
         if levels.is_empty() {
@@ -356,6 +365,14 @@ impl Default for CliConfig {
     }
 }
 
+impl CliConfig {
+    pub fn sanitise(&mut self) {
+        self.channel_a.sanitise_modulation();
+        self.channel_b.sanitise_modulation();
+        self.norms = self.norms.sanitised();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,5 +413,37 @@ mod tests {
         let json = serde_json::to_string(&e).unwrap();
         let back: ZoneEntry = serde_json::from_str(&json).unwrap();
         assert_eq!(back, e);
+    }
+
+    #[test]
+    fn sanitise_modulation_clamps_intensity_bounds_into_range() {
+        use crate::modulation::ModulationConfig;
+        let mut cfg = ModulationConfig::default();
+        cfg.clamp_min = -5.0;
+        cfg.clamp_max = 255.0;
+        let mut ch = ChannelConfig {
+            intensity_modulation: [Some(cfg), None, None, None],
+            ..ChannelConfig::default()
+        };
+        ch.sanitise_modulation();
+        let slot = ch.intensity_modulation[0].as_ref().unwrap();
+        assert_eq!(slot.clamp_min, 0.0);
+        assert_eq!(slot.clamp_max, 100.0);
+    }
+
+    #[test]
+    fn sanitise_modulation_raises_sub_hardware_freq_clamp() {
+        use crate::modulation::ModulationConfig;
+        let mut cfg = ModulationConfig::default();
+        cfg.clamp_min = 5.0;
+        cfg.clamp_max = 45.0;
+        let mut ch = ChannelConfig {
+            freq_modulation: [Some(cfg), None, None, None],
+            ..ChannelConfig::default()
+        };
+        ch.sanitise_modulation();
+        let slot = ch.freq_modulation[0].as_ref().unwrap();
+        assert_eq!(slot.clamp_min, 10.0);
+        assert_eq!(slot.clamp_max, 45.0);
     }
 }

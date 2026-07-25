@@ -109,7 +109,24 @@ mod tests {
     fn parse_sample_manifest() {
         let json = include_str!("../../../presets/manifest.json");
         let manifest = parse_manifest(json).expect("manifest");
-        assert_eq!(manifest.presets.len(), 23);
+        assert_eq!(manifest.presets.len(), 31);
+    }
+
+    #[test]
+    fn every_manifest_preset_file_parses() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root")
+            .join("presets");
+        let manifest_txt =
+            std::fs::read_to_string(dir.join("manifest.json")).expect("read manifest");
+        let manifest = parse_manifest(&manifest_txt).expect("parse manifest");
+        for pref in &manifest.presets {
+            let txt = std::fs::read_to_string(dir.join(&pref.file))
+                .unwrap_or_else(|e| panic!("missing preset file '{}': {e}", pref.file));
+            parse_preset(&txt)
+                .unwrap_or_else(|e| panic!("preset '{}' failed to parse: {e}", pref.file));
+        }
     }
 
     #[test]

@@ -195,7 +195,7 @@ fn render_editor(app: &mut App, frame: &mut Frame, area: Rect) {
         let val = param.get(&editor);
         let formatted = match param {
             ModParam::BaseSpeed => format!("{:<14} {:.2} Hz", param.label(), val),
-            ModParam::Phase => format!("{:<14} {:.2}", param.label(), val),
+            ModParam::Phase => format!("{:<14} {:.2} cyc", param.label(), val),
             ModParam::MaxDeviation => format!("{:<14} ±{:.1}", param.label(), val),
             ModParam::Offset => format!("{:<14} {:.1}", param.label(), val),
             ModParam::ClampMin | ModParam::ClampMax => format!("{:<14} {:.1}", param.label(), val),

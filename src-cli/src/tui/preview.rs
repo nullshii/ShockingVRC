@@ -19,7 +19,7 @@ const PREVIEW_DT: f32 = 0.035;
 
 pub fn sample_modulation_curve(config: &ModulationConfig, base: f32) -> Vec<f32> {
     let kin = steady_kinematics(config.source);
-    let mut accum = config.phase / config.frequency_multiplier.max(0.001);
+    let mut accum = 0.0;
     let mut out = Vec::with_capacity(PREVIEW_SAMPLES);
     for _ in 0..PREVIEW_SAMPLES {
         advance_accumulator(config, &mut accum, &kin, PREVIEW_DT);
@@ -174,4 +174,53 @@ pub fn render_modulation_preview(
         });
 
     frame.render_widget(canvas, graph_area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shocking_vrc_core::modulation::config::ModulationFunction;
+
+    fn static_config(phase: f32, freq_mul: f32) -> ModulationConfig {
+        ModulationConfig {
+            source: ModulationSource::Depth,
+            function: ModulationFunction::Sin,
+            base_speed: 0.0,
+            sensitivity: 0.0,
+            max_deviation: 1.0,
+            phase,
+            frequency_multiplier: freq_mul,
+            offset: 0.0,
+            power: 1.0,
+            clamp_min: -10.0,
+            clamp_max: 10.0,
+        }
+    }
+
+    #[test]
+    fn preview_does_not_double_count_phase() {
+        for freq_mul in [0.5, 1.0, 2.0, 3.7] {
+            let cfg = static_config(0.25, freq_mul);
+            let samples = sample_modulation_curve(&cfg, 0.0);
+            for s in samples {
+                assert!(
+                    (s - 1.0).abs() < 1e-3,
+                    "phase 0.25 cycle should give sin(π/2)=1 at freq_mul={freq_mul}, got {s}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn preview_matches_engine_for_shifted_phase() {
+        let cfg = static_config(0.75, 1.5);
+        let kin = steady_kinematics(cfg.source);
+        let mut accum = 0.0;
+        let samples = sample_modulation_curve(&cfg, 5.0);
+        for s in samples {
+            advance_accumulator(&cfg, &mut accum, &kin, PREVIEW_DT);
+            let expected = evaluate_with_accumulator(&cfg, 5.0, accum);
+            assert!((s - expected).abs() < 1e-6, "preview diverged from engine eval");
+        }
+    }
 }

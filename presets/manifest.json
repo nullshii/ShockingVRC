@@ -156,6 +156,36 @@
       "name": "Helpless Moan",
       "description": "Agonizingly slow 30-90Hz builds that suddenly drop into 5Hz torture",
       "file": "helpless-moan.json"
+    },
+    {
+      "id": "fibonacci-drift",
+      "name": "Fibonacci Drift",
+      "description": "Never-repeating shimmer — sine layers detuned by golden-ratio multipliers that beat forever",
+      "file": "fibonacci-drift.json"
+    },
+    {
+      "id": "adrenaline",
+      "name": "Adrenaline",
+      "description": "Reactive heartbeat — calm at rest, races toward a panicked pulse the deeper you go",
+      "file": "adrenaline.json"
+    },
+    {
+      "id": "sample-hold",
+      "name": "Sample & Hold",
+      "description": "Glitchy random arp — frequency snaps to new random steps, faster the quicker you move",
+      "file": "sample-hold.json"
+    },
+    {
+      "id": "tremolo-wobble",
+      "name": "Tremolo Wobble",
+      "description": "Shimmering tremolo — a fast volume flutter riding on a slow pitch wobble",
+      "file": "tremolo-wobble.json"
+    },
+    {
+      "id": "siren",
+      "name": "Siren",
+      "description": "Rising-and-falling wail — a triangle sweep drags the pitch up and down like a siren",
+      "file": "siren.json"
     }
   ]
 }

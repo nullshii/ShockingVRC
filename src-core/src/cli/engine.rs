@@ -74,7 +74,8 @@ pub struct CliEngine {
 }
 
 impl CliEngine {
-    pub fn new(config: CliConfig) -> Self {
+    pub fn new(mut config: CliConfig) -> Self {
+        config.sanitise();
         let (status_tx, _) = broadcast::channel(64);
         Self {
             state: Arc::new(EngineState {
@@ -98,7 +99,8 @@ impl CliEngine {
         self.state.config.read().await.clone()
     }
 
-    pub async fn set_config(&self, config: CliConfig) {
+    pub async fn set_config(&self, mut config: CliConfig) {
+        config.sanitise();
         let ukf = config.ukf;
         *self.state.config.write().await = config;
         self.push_ukf_to_scanner(ukf).await;

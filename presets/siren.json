@@ -1,0 +1,91 @@
+{
+  "name": "Siren",
+  "description": "Rising-and-falling wail \u2014 a triangle sweep drags the pitch up and down like a siren, wailing faster the deeper you go",
+  "author": "ShockingVRC",
+  "frequency": [80, 80, 80, 80],
+  "intensity": [78, 75, 78, 75],
+  "freq_modulation": [
+    {
+      "source": "Depth",
+      "function": "Triangle",
+      "base_speed": 0.4,
+      "sensitivity": 0.8,
+      "max_deviation": 62.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 12.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Triangle",
+      "base_speed": 0.4,
+      "sensitivity": 0.8,
+      "max_deviation": 62.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 12.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Triangle",
+      "base_speed": 0.4,
+      "sensitivity": 0.8,
+      "max_deviation": 62.0,
+      "phase": 0.5,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 12.0,
+      "clamp_max": 200.0
+    },
+    {
+      "source": "Depth",
+      "function": "Triangle",
+      "base_speed": 0.4,
+      "sensitivity": 0.8,
+      "max_deviation": 62.0,
+      "phase": 0.75,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 12.0,
+      "clamp_max": 200.0
+    }
+  ],
+  "intensity_modulation": [
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.4,
+      "sensitivity": 0.8,
+      "max_deviation": 14.0,
+      "phase": 0.0,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 0.0,
+      "clamp_max": 100.0
+    },
+    {
+      "source": "Depth",
+      "function": "Sin",
+      "base_speed": 0.4,
+      "sensitivity": 0.8,
+      "max_deviation": 14.0,
+      "phase": 0.25,
+      "frequency_multiplier": 1.0,
+      "offset": 0.0,
+      "power": 1.0,
+      "clamp_min": 0.0,
+      "clamp_max": 100.0
+    },
+    null,
+    null
+  ]
+}

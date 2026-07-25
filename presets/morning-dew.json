@@ -15,7 +15,7 @@
       "frequency_multiplier": 1.0,
       "offset": 0.0,
       "power": 1.0,
-      "clamp_min": 5.0,
+      "clamp_min": 10.0,
       "clamp_max": 60.0
     },
     {
@@ -28,7 +28,7 @@
       "frequency_multiplier": 1.0,
       "offset": 0.0,
       "power": 1.0,
-      "clamp_min": 5.0,
+      "clamp_min": 10.0,
       "clamp_max": 60.0
     },
     {
@@ -41,7 +41,7 @@
       "frequency_multiplier": 1.0,
       "offset": 0.0,
       "power": 1.0,
-      "clamp_min": 5.0,
+      "clamp_min": 10.0,
       "clamp_max": 60.0
     },
     {
@@ -54,7 +54,7 @@
       "frequency_multiplier": 1.0,
       "offset": 0.0,
       "power": 1.0,
-      "clamp_min": 5.0,
+      "clamp_min": 10.0,
       "clamp_max": 60.0
     }
   ],

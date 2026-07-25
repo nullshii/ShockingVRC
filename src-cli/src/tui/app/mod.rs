@@ -643,6 +643,8 @@ impl App {
                 let mut c = ModulationConfig::default();
                 if self.mod_kind == ModKind::Intensity {
                     c.max_deviation = 10.0;
+                    c.clamp_min = 0.0;
+                    c.clamp_max = 100.0;
                 }
                 c
             }
