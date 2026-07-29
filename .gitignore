@@ -14,6 +14,12 @@ dist-ssr
 build/
 target/
 
+# Runtime files written next to the binary
+cli_config.json
+alarm.json
+shockingvrc_prefs.json
+devices/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

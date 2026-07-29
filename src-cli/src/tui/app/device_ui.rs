@@ -13,6 +13,7 @@ pub struct DeviceUiState {
     pub channel_focus: usize,
     pub tuning_focus: usize,
     pub mod_focus: usize,
+    pub alarm_focus: usize,
     pub mod_channel: Channel,
     pub mod_kind: ModKind,
     pub mod_seg: usize,
@@ -25,6 +26,7 @@ pub struct DeviceUiState {
     pub mod_slots_scroll: u16,
     pub mod_editor_scroll: u16,
     pub tuning_scroll: u16,
+    pub alarm_scroll: u16,
 }
 
 impl Default for DeviceUiState {
@@ -37,6 +39,7 @@ impl Default for DeviceUiState {
             channel_focus: 0,
             tuning_focus: 0,
             mod_focus: 0,
+            alarm_focus: 0,
             mod_channel: Channel::A,
             mod_kind: ModKind::Freq,
             mod_seg: 0,
@@ -49,6 +52,7 @@ impl Default for DeviceUiState {
             mod_slots_scroll: 0,
             mod_editor_scroll: 0,
             tuning_scroll: 0,
+            alarm_scroll: 0,
         }
     }
 }

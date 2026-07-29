@@ -12,9 +12,10 @@ use crate::osc::types::ZoneEvent;
 use crate::protocol::waveform::WaveformV3;
 use crate::protocol::waveform_bf::WaveformBF;
 
+use super::alarm::{AlarmConfig, AlarmController};
 use super::config::{ChannelConfig, CliConfig, ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
 
-const ZONE_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
+const ZONE_IDLE_TIMEOUT: Duration = Duration::from_millis(500);
 const WATCHDOG_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Per-channel runtime status snapshot.
@@ -66,6 +67,8 @@ struct EngineState {
     scanner: RwLock<Option<AvatarScanner>>,
     mod_accums: Mutex<ModAccumulators>,
     last_wave_tick: Mutex<Instant>,
+    alarm: AlarmController,
+    last_bf: Mutex<Option<(u8, u8)>>,
 }
 
 #[derive(Clone)]
@@ -74,7 +77,7 @@ pub struct CliEngine {
 }
 
 impl CliEngine {
-    pub fn new(mut config: CliConfig) -> Self {
+    pub fn new(mut config: CliConfig, alarm: AlarmController) -> Self {
         config.sanitise();
         let (status_tx, _) = broadcast::channel(64);
         Self {
@@ -86,6 +89,8 @@ impl CliEngine {
                 scanner: RwLock::new(None),
                 mod_accums: Mutex::new(ModAccumulators::default()),
                 last_wave_tick: Mutex::new(Instant::now()),
+                alarm,
+                last_bf: Mutex::new(None),
             }),
         }
     }
@@ -104,6 +109,7 @@ impl CliEngine {
         let ukf = config.ukf;
         *self.state.config.write().await = config;
         self.push_ukf_to_scanner(ukf).await;
+        self.try_sync_hardware_limits().await;
     }
 
     pub async fn set_ukf_params(&self, ukf: UkfConfig) {
@@ -121,6 +127,10 @@ impl CliEngine {
 
     pub async fn norms(&self) -> MotionNorms {
         self.state.config.read().await.norms
+    }
+
+    pub fn alarm(&self) -> &AlarmController {
+        &self.state.alarm
     }
 
     async fn push_ukf_to_scanner(&self, ukf: UkfConfig) {
@@ -220,7 +230,13 @@ impl CliEngine {
         let cfg = self.state.config.read().await;
         let kinematics = self.state.zone_kinematics.read().await;
         let connected = self.state.device.lock().await.is_some();
-        compute_status(&cfg, &kinematics, Instant::now(), connected)
+        let mut status = compute_status(&cfg, &kinematics, Instant::now(), connected);
+        apply_alarm_to_channels(
+            &self.state.alarm.config(),
+            self.state.alarm.strength(),
+            &mut status,
+        );
+        status
     }
 
     pub async fn is_device_connected(&self) -> bool {
@@ -228,17 +244,10 @@ impl CliEngine {
     }
 
     pub async fn connect_device(&self, device: Arc<CoyoteDevice>) {
-        let cfg = self.state.config.read().await;
-        let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
-        drop(cfg);
-
-        match device.set_wave_bf(&bf).await {
-            Ok(_) => info!("[cli] BF limits sent to device {}", device.mac_address()),
-            Err(e) => warn!("[cli] Failed to send BF limits: {e}"),
-        }
-
+        *self.state.last_bf.lock().await = None;
         *self.state.device.lock().await = Some(device);
         info!("[cli] Device attached");
+        self.try_sync_hardware_limits().await;
     }
 
     pub async fn disconnect_device(&self) {
@@ -246,6 +255,8 @@ impl CliEngine {
         if let Some(dev) = guard.take() {
             *dev.wave_now().lock().await = WaveformV3::default();
         }
+        drop(guard);
+        *self.state.last_bf.lock().await = None;
         info!("[cli] Device detached");
     }
 
@@ -255,14 +266,31 @@ impl CliEngine {
     }
 
     async fn try_sync_hardware_limits(&self) {
-        let device_guard = self.state.device.lock().await;
-        if let Some(dev) = device_guard.as_ref() {
-            let cfg = self.state.config.read().await;
-            let bf = WaveformBF::new(cfg.channel_a.limits.max, cfg.channel_b.limits.max, 0, 0, 0, 0);
-            drop(cfg);
-            match dev.set_wave_bf(&bf).await {
-                Ok(_) => info!("[cli] BF limits synced to device"),
-                Err(e) => warn!("[cli] Failed to sync BF limits: {e}"),
+        let cfg = self.state.config.read().await;
+        let (a, b) = bf_targets(&cfg, &self.state.alarm.config(), self.state.alarm.is_active());
+        drop(cfg);
+        self.push_bf(a, b).await;
+    }
+
+    async fn push_bf(&self, a: u8, b: u8) {
+        let device = self.state.device.lock().await.clone();
+        let Some(device) = device else {
+            *self.state.last_bf.lock().await = None;
+            return;
+        };
+        {
+            let mut last = self.state.last_bf.lock().await;
+            if *last == Some((a, b)) {
+                return;
+            }
+            *last = Some((a, b));
+        }
+        let bf = WaveformBF::new(a, b, 0, 0, 0, 0);
+        match device.set_wave_bf(&bf).await {
+            Ok(_) => info!("[cli] BF ceiling set to A={a} B={b}"),
+            Err(e) => {
+                warn!("[cli] Failed to send BF ceiling: {e}");
+                *self.state.last_bf.lock().await = None;
             }
         }
     }
@@ -350,6 +378,11 @@ impl CliEngine {
         };
 
         let mut status = compute_status(&cfg, &kinematics, now, connected);
+
+        let alarm_cfg = self.state.alarm.config();
+        apply_alarm_to_channels(&alarm_cfg, self.state.alarm.strength(), &mut status);
+        let (bf_a, bf_b) = bf_targets(&cfg, &alarm_cfg, self.state.alarm.is_active());
+        self.push_bf(bf_a, bf_b).await;
 
         let mut accums = self.state.mod_accums.lock().await;
         let ModAccumulators {
@@ -561,6 +594,32 @@ fn compute_status(
     }
 }
 
+fn apply_alarm_to_channels(alarm: &AlarmConfig, commanded: u8, status: &mut CliStatus) {
+    if commanded == 0 {
+        return;
+    }
+    if alarm.channels.drives_a() {
+        status.channel_a.strength = status.channel_a.strength.max(commanded);
+    }
+    if alarm.channels.drives_b() {
+        status.channel_b.strength = status.channel_b.strength.max(commanded);
+    }
+}
+
+fn bf_targets(cfg: &CliConfig, alarm: &AlarmConfig, alarm_active: bool) -> (u8, u8) {
+    let mut a = cfg.channel_a.limits.max;
+    let mut b = cfg.channel_b.limits.max;
+    if alarm_active {
+        if alarm.channels.drives_a() {
+            a = a.max(alarm.peak_strength);
+        }
+        if alarm.channels.drives_b() {
+            b = b.max(alarm.peak_strength);
+        }
+    }
+    (a, b)
+}
+
 pub struct CliStopHandle {
     stop_tx: watch::Sender<bool>,
 }
@@ -574,6 +633,93 @@ impl CliStopHandle {
 impl Drop for CliStopHandle {
     fn drop(&mut self) {
         let _ = self.stop_tx.send(true);
+    }
+}
+
+#[cfg(test)]
+mod alarm_output_tests {
+    use super::*;
+    use crate::cli::alarm::AlarmChannels;
+
+    fn status_with(a: u8, b: u8) -> CliStatus {
+        let channel = |strength| ChannelStatus {
+            raw_level: 0.0,
+            strength,
+            frequency: [100; 4],
+            active_zones: Vec::new(),
+            kinematics: KinematicsInput::default(),
+        };
+        CliStatus {
+            channel_a: channel(a),
+            channel_b: channel(b),
+            device_connected: true,
+        }
+    }
+
+    fn alarm_on(channels: AlarmChannels, peak: u8) -> AlarmConfig {
+        AlarmConfig {
+            channels,
+            peak_strength: peak,
+            ..AlarmConfig::default()
+        }
+    }
+
+    fn limits(max_a: u8, max_b: u8) -> CliConfig {
+        let mut cfg = CliConfig::default();
+        cfg.channel_a.limits = PowerLimits::new(0, max_a);
+        cfg.channel_b.limits = PowerLimits::new(0, max_b);
+        cfg
+    }
+
+    #[test]
+    fn alarm_drives_the_selected_channels_only() {
+        let mut status = status_with(0, 0);
+        apply_alarm_to_channels(&alarm_on(AlarmChannels::A, 40), 40, &mut status);
+        assert_eq!(status.channel_a.strength, 40);
+        assert_eq!(status.channel_b.strength, 0, "channel B was not selected");
+    }
+
+    #[test]
+    fn alarm_output_ignores_the_channel_power_limits() {
+        let mut status = status_with(0, 0);
+        apply_alarm_to_channels(&alarm_on(AlarmChannels::Both, 120), 120, &mut status);
+        assert_eq!(status.channel_a.strength, 120);
+        assert_eq!(status.channel_b.strength, 120);
+    }
+
+    #[test]
+    fn a_stronger_zone_touch_is_not_cut_by_the_alarm() {
+        let mut status = status_with(80, 5);
+        apply_alarm_to_channels(&alarm_on(AlarmChannels::Both, 30), 30, &mut status);
+        assert_eq!(status.channel_a.strength, 80);
+        assert_eq!(status.channel_b.strength, 30);
+    }
+
+    #[test]
+    fn a_silent_pulse_gap_leaves_the_channels_untouched() {
+        let mut status = status_with(12, 0);
+        apply_alarm_to_channels(&alarm_on(AlarmChannels::Both, 30), 0, &mut status);
+        assert_eq!(status.channel_a.strength, 12);
+        assert_eq!(status.channel_b.strength, 0);
+    }
+
+    #[test]
+    fn hardware_ceiling_follows_the_channel_limits_while_idle() {
+        let (a, b) = bf_targets(&limits(25, 60), &alarm_on(AlarmChannels::Both, 120), false);
+        assert_eq!((a, b), (25, 60), "an idle alarm must not raise the ceiling");
+    }
+
+    #[test]
+    fn hardware_ceiling_is_raised_for_the_driven_channels_while_active() {
+        let (a, b) = bf_targets(&limits(25, 60), &alarm_on(AlarmChannels::A, 120), true);
+        assert_eq!(a, 120, "channel A needs headroom for the alarm peak");
+        assert_eq!(b, 60, "channel B is untouched by this alarm");
+    }
+
+    #[test]
+    fn hardware_ceiling_never_drops_below_the_channel_limit() {
+        let (a, b) = bf_targets(&limits(90, 90), &alarm_on(AlarmChannels::Both, 20), true);
+        assert_eq!((a, b), (90, 90));
     }
 }
 
@@ -600,5 +746,37 @@ mod threshold_tests {
         assert!((apply_threshold(0.50, 20, 80) - 0.5).abs() < 1e-6);
         assert_eq!(apply_threshold(0.80, 20, 80), 1.0);
         assert_eq!(apply_threshold(0.95, 20, 80), 1.0);
+    }
+}
+
+#[cfg(test)]
+mod staleness_tests {
+    use super::{ZoneKinematics, ZONE_IDLE_TIMEOUT};
+    use std::time::{Duration, Instant};
+
+    fn zone_at(base: Instant) -> ZoneKinematics {
+        ZoneKinematics {
+            level: 1.0,
+            velocity: 0.0,
+            acceleration: 0.0,
+            recoil: 0.0,
+            last_update: base,
+        }
+    }
+
+    #[test]
+    fn brief_osc_gaps_do_not_drop_a_held_zone() {
+        let base = Instant::now();
+        let k = zone_at(base);
+        assert!(!k.is_stale(base + ZONE_IDLE_TIMEOUT / 5));
+        assert!(!k.is_stale(base + ZONE_IDLE_TIMEOUT / 2));
+    }
+
+    #[test]
+    fn a_stale_nonzero_value_stops_within_the_window() {
+        let base = Instant::now();
+        let k = zone_at(base);
+        assert!(k.is_stale(base + ZONE_IDLE_TIMEOUT * 2));
+        assert!(ZONE_IDLE_TIMEOUT <= Duration::from_millis(600), "phantom-stim window too long");
     }
 }

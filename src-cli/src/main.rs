@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 use shocking_vrc_core::cli::{
     AggregationMode, ChannelConfig, CliConfig, ContactMode, PowerLimits, ZoneEntry, ZoneId,
 };
-use shocking_vrc_core::{AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
+use shocking_vrc_core::{AlarmController, AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
 
+use shocking_vrc_cli::alarm_store;
 use shocking_vrc_cli::app_state::{AppState, DeviceSlot};
 use shocking_vrc_cli::device_config;
 use shocking_vrc_cli::{tui, tui_logger};
@@ -126,7 +127,7 @@ async fn add_device_slot(state: &Arc<AppState>, mut dev: CoyoteDevice, scanner: 
 
     let name = dev.name().to_string();
     let cfg = device_config::load_device_config(&mac, &state.default_config);
-    let engine = CliEngine::new(cfg);
+    let engine = CliEngine::new(cfg, state.alarm.clone());
     let stop_handle = engine.start(scanner).await;
 
     dev.start();
@@ -327,11 +328,15 @@ async fn main() {
 
     let monitor_enabled = Arc::new(AtomicBool::new(true));
 
+    let alarm = AlarmController::new(alarm_store::load_alarm());
+    alarm.spawn_ticker();
+
     let state = Arc::new(AppState {
         scanner: scanner.clone(),
         monitor_enabled: Arc::clone(&monitor_enabled),
         default_config,
         device_slots: Arc::new(RwLock::new(Vec::new())),
+        alarm,
     });
 
     log::info!("[cli] Ready.");

@@ -15,6 +15,8 @@ pub(super) struct UiPrefs {
     pub nickname: String,
     #[serde(default)]
     pub skipped_update_version: Option<String>,
+    #[serde(default)]
+    pub alarm_tab: bool,
 }
 
 fn default_auto_save() -> bool {
@@ -30,12 +32,19 @@ pub(super) fn load_ui_prefs() -> UiPrefs {
             has_seen_tutorial: false,
             nickname: String::new(),
             skipped_update_version: None,
+            alarm_tab: false,
         })
 }
 
 pub(super) fn save_ui_prefs(auto_save: bool) -> Result<(), Box<dyn std::error::Error>> {
     let mut prefs = load_ui_prefs();
     prefs.auto_save = auto_save;
+    save_ui_prefs_full(&prefs)
+}
+
+pub(super) fn save_alarm_tab_pref(visible: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let mut prefs = load_ui_prefs();
+    prefs.alarm_tab = visible;
     save_ui_prefs_full(&prefs)
 }
 

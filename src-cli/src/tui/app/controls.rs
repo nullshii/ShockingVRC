@@ -1,7 +1,7 @@
 use shocking_vrc_core::cli::{AggregationMode, ContactMode};
 use shocking_vrc_core::modulation::config::{ModulationFunction, ModulationSource};
 
-use super::{Action, Channel, ModKind, NormField, UkfField};
+use super::{Action, AlarmField, Channel, ModKind, NormField, UkfField};
 
 pub fn mod_function_list() -> Vec<ModulationFunction> {
     use ModulationFunction::*;
@@ -192,6 +192,113 @@ pub fn tuning_control_row(ctrl: TuningControl) -> u16 {
         TuningControl::Norm(NormField::Acc) => 1,
         TuningControl::Norm(NormField::Recoil) => 2,
         TuningControl::NormReset => 3,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupControl {
+    AutoSave,
+    AlarmTab,
+    Tutorial,
+}
+
+impl SetupControl {
+    pub const ALL: [SetupControl; 3] = [
+        SetupControl::AutoSave,
+        SetupControl::AlarmTab,
+        SetupControl::Tutorial,
+    ];
+
+    pub fn adjust_action(self, d: i32) -> Option<Action> {
+        match self {
+            SetupControl::AutoSave => Some(Action::SetAutoSave(d > 0)),
+            SetupControl::AlarmTab => Some(Action::SetAlarmTabVisible(d > 0)),
+            SetupControl::Tutorial => None,
+        }
+    }
+
+    pub fn activate_action(self) -> Option<Action> {
+        match self {
+            SetupControl::AutoSave => Some(Action::ToggleAutoSave),
+            SetupControl::AlarmTab => Some(Action::ToggleAlarmTabVisible),
+            SetupControl::Tutorial => Some(Action::TutorialStart),
+        }
+    }
+}
+
+pub fn setup_controls() -> &'static [SetupControl; 3] {
+    &SetupControl::ALL
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlarmControl {
+    Enabled,
+    Field(AlarmField),
+    Channels,
+    Test,
+    Stop,
+    Snooze,
+}
+
+impl AlarmControl {
+    pub fn adjust_action(self, d: i32) -> Option<Action> {
+        match self {
+            AlarmControl::Enabled => Some(Action::SetAlarmEnabled(d > 0)),
+            AlarmControl::Field(f) => Some(Action::StepAlarmField(f, d)),
+            AlarmControl::Channels => Some(Action::CycleAlarmChannels(d)),
+            _ => None,
+        }
+    }
+
+    pub fn activate_action(self) -> Option<Action> {
+        match self {
+            AlarmControl::Enabled => Some(Action::ToggleAlarmEnabled),
+            AlarmControl::Channels => Some(Action::CycleAlarmChannels(1)),
+            AlarmControl::Test => Some(Action::AlarmTest),
+            AlarmControl::Stop => Some(Action::AlarmStop),
+            AlarmControl::Snooze => Some(Action::AlarmSnooze),
+            AlarmControl::Field(_) => None,
+        }
+    }
+}
+
+pub const ALARM_SCHEDULE_FIELDS: [AlarmField; 2] = [AlarmField::Hour, AlarmField::Minute];
+pub const ALARM_PATTERN_FIELDS: [AlarmField; 7] = [
+    AlarmField::StartStrength,
+    AlarmField::PeakStrength,
+    AlarmField::Ramp,
+    AlarmField::MaxDuration,
+    AlarmField::Repeats,
+    AlarmField::PulseOn,
+    AlarmField::PulseOff,
+];
+
+pub fn alarm_controls() -> Vec<AlarmControl> {
+    let mut v = vec![AlarmControl::Enabled];
+    v.extend(ALARM_SCHEDULE_FIELDS.map(AlarmControl::Field));
+    v.push(AlarmControl::Channels);
+    v.extend(ALARM_PATTERN_FIELDS.map(AlarmControl::Field));
+    v.push(AlarmControl::Field(AlarmField::Snooze));
+    v.push(AlarmControl::Test);
+    v.push(AlarmControl::Stop);
+    v.push(AlarmControl::Snooze);
+    v
+}
+
+pub fn alarm_control_row(ctrl: AlarmControl) -> Option<u16> {
+    match ctrl {
+        AlarmControl::Enabled => Some(0),
+        AlarmControl::Channels => Some(3),
+        AlarmControl::Field(f) => {
+            if let Some(i) = ALARM_SCHEDULE_FIELDS.iter().position(|x| *x == f) {
+                return Some(1 + i as u16);
+            }
+            if let Some(i) = ALARM_PATTERN_FIELDS.iter().position(|x| *x == f) {
+                return Some(i as u16);
+            }
+            Some(ALARM_PATTERN_FIELDS.len() as u16)
+        }
+        AlarmControl::Test | AlarmControl::Stop | AlarmControl::Snooze => None,
     }
 }
 

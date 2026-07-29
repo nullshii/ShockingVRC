@@ -1,5 +1,5 @@
 use ratatui::layout::Rect;
-use shocking_vrc_core::cli::AggregationMode;
+use shocking_vrc_core::cli::{AggregationMode, AlarmChannels, AlarmConfig};
 use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationSource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,10 +27,11 @@ pub enum Tab {
     Log,
     Presets,
     Setup,
+    Alarm,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 8] = [
+    pub const ALL: [Tab; 9] = [
         Tab::Status,
         Tab::Zones,
         Tab::Channels,
@@ -39,6 +40,7 @@ impl Tab {
         Tab::Log,
         Tab::Presets,
         Tab::Setup,
+        Tab::Alarm,
     ];
 
     pub fn title(self) -> &'static str {
@@ -51,6 +53,7 @@ impl Tab {
             Tab::Log => "Log",
             Tab::Presets => "Presets",
             Tab::Setup => "Setup",
+            Tab::Alarm => "Alarm",
         }
     }
 
@@ -110,6 +113,161 @@ pub enum NormField {
 pub enum PresetSaveField {
     Name,
     Nickname,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlarmField {
+    Hour,
+    Minute,
+    StartStrength,
+    PeakStrength,
+    Ramp,
+    MaxDuration,
+    Repeats,
+    PulseOn,
+    PulseOff,
+    Snooze,
+}
+
+impl AlarmField {
+    pub fn label(self) -> &'static str {
+        match self {
+            AlarmField::Hour => "Hour",
+            AlarmField::Minute => "Minute",
+            AlarmField::StartStrength => "Start power",
+            AlarmField::PeakStrength => "Peak power",
+            AlarmField::Ramp => "Ramp to peak",
+            AlarmField::MaxDuration => "Try for",
+            AlarmField::Repeats => "Repeats",
+            AlarmField::PulseOn => "Pulse on",
+            AlarmField::PulseOff => "Pulse off",
+            AlarmField::Snooze => "Snooze",
+        }
+    }
+
+    fn step(self) -> i32 {
+        match self {
+            AlarmField::Hour
+            | AlarmField::Minute
+            | AlarmField::Snooze
+            | AlarmField::Repeats => 1,
+            AlarmField::StartStrength | AlarmField::PeakStrength => 1,
+            AlarmField::Ramp => 10,
+            AlarmField::MaxDuration => 30,
+            AlarmField::PulseOn | AlarmField::PulseOff => 100,
+        }
+    }
+
+    fn range(self) -> (i32, i32) {
+        match self {
+            AlarmField::Hour => (0, 23),
+            AlarmField::Minute => (0, 59),
+            AlarmField::StartStrength | AlarmField::PeakStrength => {
+                (0, AlarmConfig::MAX_STRENGTH as i32)
+            }
+            AlarmField::Ramp => (0, AlarmConfig::RAMP_MAX_SECS as i32),
+            AlarmField::MaxDuration => (
+                AlarmConfig::DURATION_MIN_SECS as i32,
+                AlarmConfig::DURATION_MAX_SECS as i32,
+            ),
+            AlarmField::Repeats => (1, AlarmConfig::MAX_REPEATS as i32),
+            AlarmField::PulseOn => (
+                AlarmConfig::PULSE_MIN_MS as i32,
+                AlarmConfig::PULSE_MAX_MS as i32,
+            ),
+            AlarmField::PulseOff => (0, AlarmConfig::PULSE_MAX_MS as i32),
+            AlarmField::Snooze => (1, AlarmConfig::SNOOZE_MAX_MINS as i32),
+        }
+    }
+
+    fn wraps(self) -> bool {
+        matches!(self, AlarmField::Hour | AlarmField::Minute)
+    }
+
+    pub fn get(self, cfg: &AlarmConfig) -> i32 {
+        match self {
+            AlarmField::Hour => cfg.hour as i32,
+            AlarmField::Minute => cfg.minute as i32,
+            AlarmField::StartStrength => cfg.start_strength as i32,
+            AlarmField::PeakStrength => cfg.peak_strength as i32,
+            AlarmField::Ramp => cfg.ramp_secs as i32,
+            AlarmField::MaxDuration => cfg.max_duration_secs as i32,
+            AlarmField::Repeats => cfg.repeats as i32,
+            AlarmField::PulseOn => cfg.pulse_on_ms as i32,
+            AlarmField::PulseOff => cfg.pulse_off_ms as i32,
+            AlarmField::Snooze => cfg.snooze_mins as i32,
+        }
+    }
+
+    fn set(self, cfg: &mut AlarmConfig, v: i32) {
+        match self {
+            AlarmField::Hour => cfg.hour = v as u8,
+            AlarmField::Minute => cfg.minute = v as u8,
+            AlarmField::StartStrength => cfg.start_strength = v as u8,
+            AlarmField::PeakStrength => cfg.peak_strength = v as u8,
+            AlarmField::Ramp => cfg.ramp_secs = v as u16,
+            AlarmField::MaxDuration => cfg.max_duration_secs = v as u16,
+            AlarmField::Repeats => cfg.repeats = v as u8,
+            AlarmField::PulseOn => cfg.pulse_on_ms = v as u16,
+            AlarmField::PulseOff => cfg.pulse_off_ms = v as u16,
+            AlarmField::Snooze => cfg.snooze_mins = v as u8,
+        }
+    }
+
+    pub fn apply_step(self, cfg: &mut AlarmConfig, delta: i32) {
+        let (min, max) = self.range();
+        let next = self.get(cfg) + delta * self.step();
+        let next = if self.wraps() {
+            let span = max - min + 1;
+            min + (next - min).rem_euclid(span)
+        } else {
+            next.clamp(min, max)
+        };
+        self.set(cfg, next);
+        match self {
+            AlarmField::StartStrength => {
+                cfg.peak_strength = cfg.peak_strength.max(cfg.start_strength)
+            }
+            AlarmField::PeakStrength => {
+                cfg.start_strength = cfg.start_strength.min(cfg.peak_strength)
+            }
+            _ => {}
+        }
+    }
+
+    pub fn value_label(self, cfg: &AlarmConfig) -> String {
+        let v = self.get(cfg);
+        match self {
+            AlarmField::Hour | AlarmField::Minute => format!("{v:02}"),
+            AlarmField::StartStrength | AlarmField::PeakStrength => v.to_string(),
+            AlarmField::Ramp | AlarmField::MaxDuration => format_secs(v),
+            AlarmField::Repeats => {
+                if v == 1 {
+                    "once".to_string()
+                } else {
+                    format!("{v} ×")
+                }
+            }
+            AlarmField::PulseOn | AlarmField::PulseOff => {
+                if v == 0 {
+                    "off (steady)".to_string()
+                } else {
+                    format!("{:.1} s", v as f32 / 1000.0)
+                }
+            }
+            AlarmField::Snooze => format!("{v} min"),
+        }
+    }
+}
+
+pub fn format_secs(secs: i32) -> String {
+    if secs < 60 {
+        format!("{secs} s")
+    } else if secs % 60 == 0 {
+        format!("{} min", secs / 60)
+    } else {
+        format!("{}:{:02} min", secs / 60, secs % 60)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -269,6 +427,9 @@ pub enum Action {
     SaveConfig,
     LoadConfig,
     SetAutoSave(bool),
+    ToggleAutoSave,
+    SetAlarmTabVisible(bool),
+    ToggleAlarmTabVisible,
 
     StepUkf(UkfField, i32),
     ResetUkf,
@@ -296,6 +457,15 @@ pub enum Action {
     ConfirmDeletePreset,
     CancelDeletePreset,
     RefreshPresets,
+
+    SetAlarmEnabled(bool),
+    ToggleAlarmEnabled,
+    CycleAlarmChannels(i32),
+    StepAlarmField(AlarmField, i32),
+    SetAlarmChannels(AlarmChannels),
+    AlarmTest,
+    AlarmStop,
+    AlarmSnooze,
 
     ConfirmUpdate,
     DismissUpdate,

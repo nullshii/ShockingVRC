@@ -1,3 +1,4 @@
+pub mod alarm;
 pub mod channels;
 pub mod logs;
 pub mod modulation;

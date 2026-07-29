@@ -4,6 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Gauge, Paragraph};
 
+use super::alarm_overlay;
 use super::app::{Action, App, SliderKind, Tab};
 use super::tabs;
 use super::theme;
@@ -39,6 +40,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         Tab::Log => tabs::logs::render(app, frame, content),
         Tab::Presets => tabs::presets::render(app, frame, content),
         Tab::Setup => tabs::settings::render(app, frame, content),
+        Tab::Alarm => tabs::alarm::render(app, frame, content),
     }
 
     render_status_bar(frame, app, rows[3]);
@@ -49,6 +51,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if app.tutorial_active {
         tutorial::render_overlay(app, frame);
+    }
+    
+    if app.alarm_ringing() {
+        alarm_overlay::render(app, frame, area);
     }
 }
 
@@ -149,7 +155,7 @@ fn render_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let tab_labels: [(&str, Tab); 8] = [
+    let all_labels: [(&str, Tab); 9] = [
         ("1 Status", Tab::Status),
         ("2 Zones", Tab::Zones),
         ("3 Channels", Tab::Channels),
@@ -158,7 +164,12 @@ fn render_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
         ("6 Log", Tab::Log),
         ("7 Presets", Tab::Presets),
         ("8 Setup", Tab::Setup),
+        ("9 Alarm", Tab::Alarm),
     ];
+    let tab_labels: Vec<(&str, Tab)> = all_labels
+        .into_iter()
+        .filter(|(_, tab)| app.tab_visible(*tab))
+        .collect();
 
     let mut x = inner.x;
     for (i, (label, tab)) in tab_labels.iter().enumerate() {
@@ -217,13 +228,14 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let hint = match app.active_tab {
         Tab::Status => "  Q/Esc — quit",
-        Tab::Setup => "  OSC & OSCQuery auto-configured  ·  enable OSC in VRChat",
+        Tab::Setup => "  ↑↓ select  ·  ←→ / Enter toggle  ·  OSC & OSCQuery auto-configured",
         Tab::Presets => "  ↑↓ select  ·  × delete mine  ·  → A/B apply  ·  Save A/B  ·  R refresh",
         Tab::Zones => "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  R reset  ·  drag threshold sliders  ·  M mode  ·  X remove",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",
         Tab::Modulation => "  Enter — function list  ·  source buttons  ·  ↑↓ field  ·  wheel — scroll",
         Tab::Log => "  ↑↓ / wheel — scroll  ·  Q/Esc — quit",
+        Tab::Alarm => "  ↑↓ field  ·  ←→ adjust  ·  Enter toggle  ·  T test  ·  X stop  ·  S snooze",
     };
     let line = Line::from(vec![
         Span::styled(dev_label.clone(), dev_style.add_modifier(Modifier::BOLD)),

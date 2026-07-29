@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::RwLock;
 
-use shocking_vrc_core::cli::{CliConfig, CliEngine, CliStopHandle};
+use shocking_vrc_core::cli::{AlarmController, CliConfig, CliEngine, CliStopHandle};
 use shocking_vrc_core::{AvatarScanner};
 
 #[derive(Debug, Clone)]
@@ -41,6 +41,7 @@ pub struct AppState {
     pub monitor_enabled: Arc<AtomicBool>,
     pub default_config: CliConfig,
     pub device_slots: Arc<RwLock<Vec<DeviceSlot>>>,
+    pub alarm: AlarmController,
 }
 
 impl AppState {

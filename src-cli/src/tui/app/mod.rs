@@ -7,14 +7,15 @@ mod prefs;
 mod types;
 
 pub use controls::{
-    agg_name, aggregation_modes, channel_control_row, channel_controls, cycle_aggregation,
-    cycle_mode, mod_controls_len, mod_function_list, mod_function_list_for, mod_kind_name,
-    mod_slot_index, mod_source_list, tuning_control_row, tuning_controls, ChannelControl,
-    TuningControl,
+    agg_name, aggregation_modes, alarm_control_row, alarm_controls, channel_control_row,
+    channel_controls, cycle_aggregation, cycle_mode, mod_controls_len, mod_function_list,
+    mod_function_list_for, mod_kind_name, mod_slot_index, mod_source_list, setup_controls,
+    tuning_control_row, tuning_controls, AlarmControl, ChannelControl, SetupControl, TuningControl,
+    ALARM_PATTERN_FIELDS, ALARM_SCHEDULE_FIELDS,
 };
 pub use types::{
-    Action, Channel, Clickable, ClickKind, ModKind, ModParam, NormField, PresetSaveField,
-    SliderKind, Tab, UkfField, ZonesPane,
+    format_secs, Action, AlarmField, Channel, Clickable, ClickKind, ModKind, ModParam, NormField,
+    PresetSaveField, SliderKind, Tab, UkfField, ZonesPane,
 };
 
 use std::collections::HashMap;
@@ -23,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::{broadcast, mpsc};
 
-use shocking_vrc_core::cli::{ChannelConfig, CliConfig, CliStatus};
+use shocking_vrc_core::cli::{AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::PresetEntry;
 use shocking_vrc_core::ZoneEvent;
@@ -42,6 +43,9 @@ pub struct App {
 
     pub config: CliConfig,
     pub status: CliStatus,
+    /// Session-wide alarm, mirrored from the shared controller each frame.
+    pub alarm: AlarmConfig,
+    pub alarm_status: AlarmStatus,
     pub avatar_zones: Vec<ZoneEvent>,
     pub vrchat_found: bool,
     pub osc_port: u16,
@@ -64,6 +68,9 @@ pub struct App {
     pub channel_focus: usize,
     pub tuning_focus: usize,
     pub mod_focus: usize,
+    pub alarm_focus: usize,
+    pub setup_focus: usize,
+    pub alarm_tab_visible: bool,
 
     pub mod_channel: Channel,
     pub mod_kind: ModKind,
@@ -85,6 +92,8 @@ pub struct App {
     pub mod_editor_viewport_h: u16,
     pub tuning_scroll: u16,
     pub tuning_viewport_h: u16,
+    pub alarm_scroll: u16,
+    pub alarm_viewport_h: u16,
     pub mod_split_x: u16,
 
     pub button_flash: Option<(Action, Instant)>,
@@ -142,11 +151,15 @@ impl App {
     pub fn new(state: Arc<AppState>, log_buffer: LogBuffer) -> Self {
         use std::sync::atomic::Ordering;
         state.monitor_enabled.store(true, Ordering::Relaxed);
+        let alarm = state.alarm.config();
+        let alarm_status = state.alarm.status();
         let mut app = App {
             state,
             log_buffer,
             config: CliConfig::default(),
             status: default_status(),
+            alarm,
+            alarm_status,
             avatar_zones: Vec::new(),
             vrchat_found: false,
             osc_port: 9001,
@@ -165,6 +178,9 @@ impl App {
             channel_focus: 0,
             tuning_focus: 0,
             mod_focus: 0,
+            alarm_focus: 0,
+            setup_focus: 0,
+            alarm_tab_visible: false,
             mod_channel: Channel::A,
             mod_kind: ModKind::Freq,
             mod_seg: 0,
@@ -182,6 +198,8 @@ impl App {
             mod_editor_viewport_h: 0,
             tuning_scroll: 0,
             tuning_viewport_h: 0,
+            alarm_scroll: 0,
+            alarm_viewport_h: 0,
             mod_split_x: 0,
             button_flash: None,
             auto_save: false,
@@ -218,6 +236,7 @@ impl App {
         app.load_editor_from_config();
         let p = load_ui_prefs();
         app.auto_save = p.auto_save;
+        app.alarm_tab_visible = p.alarm_tab;
         app.preset_save_nickname = p.nickname;
         if !p.has_seen_tutorial {
             app.start_tutorial();
@@ -348,6 +367,7 @@ impl App {
             channel_focus: self.channel_focus,
             tuning_focus: self.tuning_focus,
             mod_focus: self.mod_focus,
+            alarm_focus: self.alarm_focus,
             mod_channel: self.mod_channel,
             mod_kind: self.mod_kind,
             mod_seg: self.mod_seg,
@@ -360,6 +380,7 @@ impl App {
             mod_slots_scroll: self.mod_slots_scroll,
             mod_editor_scroll: self.mod_editor_scroll,
             tuning_scroll: self.tuning_scroll,
+            alarm_scroll: self.alarm_scroll,
         }
     }
 
@@ -371,6 +392,7 @@ impl App {
         self.channel_focus = ui.channel_focus;
         self.tuning_focus = ui.tuning_focus;
         self.mod_focus = ui.mod_focus;
+        self.alarm_focus = ui.alarm_focus;
         self.mod_channel = ui.mod_channel;
         self.mod_kind = ui.mod_kind;
         self.mod_seg = ui.mod_seg;
@@ -383,6 +405,7 @@ impl App {
         self.mod_slots_scroll = ui.mod_slots_scroll;
         self.mod_editor_scroll = ui.mod_editor_scroll;
         self.tuning_scroll = ui.tuning_scroll;
+        self.alarm_scroll = ui.alarm_scroll;
     }
 
     fn reset_ui_state(&mut self) {
@@ -393,6 +416,7 @@ impl App {
         self.channel_focus = 0;
         self.tuning_focus = 0;
         self.mod_focus = 0;
+        self.alarm_focus = 0;
         self.mod_channel = Channel::A;
         self.mod_kind = ModKind::Freq;
         self.mod_seg = 0;
@@ -400,6 +424,7 @@ impl App {
         self.mod_slots_scroll = 0;
         self.mod_editor_scroll = 0;
         self.tuning_scroll = 0;
+        self.alarm_scroll = 0;
         self.mod_function_picker = false;
     }
 
@@ -616,6 +641,38 @@ impl App {
 }
 
 impl App {
+    pub fn tab_visible(&self, tab: Tab) -> bool {
+        match tab {
+            Tab::Alarm => self.alarm_tab_visible,
+            _ => true,
+        }
+    }
+
+    pub fn alarm_config(&self) -> &AlarmConfig {
+        &self.alarm
+    }
+
+    pub fn alarm_ringing(&self) -> bool {
+        self.alarm_status.phase.is_ringing()
+    }
+
+    pub fn poll_alarm(&mut self) {
+        self.alarm_status = self.state.alarm.status();
+        self.alarm = self.state.alarm.config();
+    }
+
+    pub(super) fn mutate_alarm(&mut self, f: impl FnOnce(&mut AlarmConfig)) {
+        let mut alarm = self.state.alarm.config();
+        f(&mut alarm);
+        self.state.alarm.set_config(alarm);
+        self.alarm = self.state.alarm.config();
+        if let Err(e) = crate::alarm_store::save_alarm(&self.alarm) {
+            log::error!("[alarm] Failed to save {}: {e}", crate::alarm_store::ALARM_FILE);
+        }
+    }
+}
+
+impl App {
     pub fn channel_config(&self, ch: Channel) -> &ChannelConfig {
         match ch {
             Channel::A => &self.config.channel_a,
@@ -689,6 +746,13 @@ impl App {
         let idx = mod_slot_index(self.mod_channel, self.mod_kind, self.mod_seg);
         self.mod_slots_scroll =
             crate::tui::ui::scroll_to_row(self.mod_slots_scroll, self.mod_slots_viewport_h, idx);
+    }
+
+    pub(super) fn sync_alarm_scroll(&mut self) {
+        let Some(ctrl) = alarm_controls().get(self.alarm_focus).copied() else { return };
+        let Some(row) = alarm_control_row(ctrl) else { return };
+        self.alarm_scroll =
+            crate::tui::ui::scroll_to_row(self.alarm_scroll, self.alarm_viewport_h, row);
     }
 
     pub(super) fn sync_presets_scroll(&mut self) {

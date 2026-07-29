@@ -4,11 +4,35 @@ use ratatui::crossterm::event::{
 
 use super::App;
 use super::{Action, Channel, ModParam, Tab, ZonesPane};
-use super::controls::{channel_controls, mod_controls_len, tuning_controls};
+use super::controls::{
+    alarm_controls, channel_controls, mod_controls_len, setup_controls, tuning_controls,
+};
 use super::helpers::{point_in, slider_value_action, step_multiplier, HitResult};
 
 impl App {
     pub async fn handle_key(&mut self, key: KeyEvent) {
+        if self.alarm_ringing() {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.should_quit = true;
+                }
+                KeyCode::Char('s') | KeyCode::Char('S') => {
+                    self.flash_button(Action::AlarmSnooze);
+                    self.apply(Action::AlarmSnooze).await;
+                }
+                KeyCode::Enter
+                | KeyCode::Esc
+                | KeyCode::Char(' ')
+                | KeyCode::Char('q')
+                | KeyCode::Char('Q') => {
+                    self.flash_button(Action::AlarmStop);
+                    self.apply(Action::AlarmStop).await;
+                }
+                _ => {}
+            }
+            return;
+        }
+
         if self.update_popup {
             if self.update_downloading {
                 return;
@@ -139,16 +163,12 @@ impl App {
                 self.apply(Action::CycleDevice(1)).await;
                 return;
             }
-            KeyCode::Char(c @ '1'..='8') => {
+            KeyCode::Char(c @ '1'..='9') => {
                 self.close_mod_function_picker();
                 let idx = c as usize - '1' as usize;
-                if let Some(t) = Tab::ALL.get(idx) {
-                    self.active_tab = *t;
-                    self.channels_scroll = 0;
-                    self.mod_slots_scroll = 0;
-                    self.mod_editor_scroll = 0;
-                    self.tuning_scroll = 0;
-                    self.preset_scroll = 0;
+                if let Some(t) = Tab::ALL.get(idx).copied().filter(|t| self.tab_visible(*t)) {
+                    self.active_tab = t;
+                    self.reset_tab_scrolls();
                 }
                 return;
             }
@@ -179,6 +199,23 @@ impl App {
     }
 
     pub async fn handle_mouse(&mut self, m: MouseEvent) {
+        if self.alarm_ringing() {
+            if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
+                let hit = self.clickables.iter().rev()
+                    .find(|c| point_in(c.rect, m.column, m.row))
+                    .and_then(|c| match &c.kind {
+                        super::ClickKind::Act(a @ Action::AlarmStop)
+                        | super::ClickKind::Act(a @ Action::AlarmSnooze) => Some(a.clone()),
+                        _ => None,
+                    });
+                if let Some(a) = hit {
+                    self.flash_button(a.clone());
+                    self.apply(a).await;
+                }
+            }
+            return;
+        }
+
         if self.tutorial_active {
             if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
                 let hit = self.clickables.iter().rev()
@@ -267,7 +304,14 @@ impl App {
     fn map_key_to_action(&self, key: KeyEvent) -> Option<Action> {
         match self.active_tab {
             Tab::Status => None,
-            Tab::Setup => None,
+            Tab::Setup => match key.code {
+                KeyCode::Up => Some(Action::FocusPrev),
+                KeyCode::Down => Some(Action::FocusNext),
+                KeyCode::Left => Some(Action::AdjustFocused(-1)),
+                KeyCode::Right => Some(Action::AdjustFocused(1)),
+                KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ActivateFocused),
+                _ => None,
+            },
             Tab::Zones => match key.code {
                 KeyCode::Up => Some(Action::FocusPrev),
                 KeyCode::Down => Some(Action::FocusNext),
@@ -309,6 +353,21 @@ impl App {
                     ZonesPane::ConfiguredB => Some(Action::SetZoneScale(Channel::B, self.sel_conf_b, 100)),
                     ZonesPane::Avatar => None,
                 },
+                KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ActivateFocused),
+                _ => None,
+            },
+            Tab::Alarm => match key.code {
+                KeyCode::Char('t') | KeyCode::Char('T') => Some(Action::AlarmTest),
+                KeyCode::Char('x') | KeyCode::Char('X') => Some(Action::AlarmStop),
+                KeyCode::Char('s') | KeyCode::Char('S') => Some(Action::AlarmSnooze),
+                KeyCode::Up => Some(Action::FocusPrev),
+                KeyCode::Down => Some(Action::FocusNext),
+                KeyCode::Left | KeyCode::Char('-') => {
+                    Some(Action::AdjustFocused(-step_multiplier(&key)))
+                }
+                KeyCode::Right | KeyCode::Char('+') | KeyCode::Char('=') => {
+                    Some(Action::AdjustFocused(step_multiplier(&key)))
+                }
                 KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ActivateFocused),
                 _ => None,
             },
@@ -382,6 +441,10 @@ impl App {
                 self.tuning_scroll =
                     crate::tui::ui::apply_scroll_delta(self.tuning_scroll, delta, 1);
             }
+            Tab::Alarm => {
+                self.alarm_scroll =
+                    crate::tui::ui::apply_scroll_delta(self.alarm_scroll, delta, 1);
+            }
             Tab::Modulation => {
                 if self.mod_function_picker {
                     self.move_mod_func_pick(delta);
@@ -440,6 +503,13 @@ impl App {
                 self.mod_focus = step_index(self.mod_focus, delta, mod_controls_len());
                 self.sync_mod_editor_scroll();
             }
+            Tab::Alarm => {
+                self.alarm_focus = step_index(self.alarm_focus, delta, alarm_controls().len());
+                self.sync_alarm_scroll();
+            }
+            Tab::Setup => {
+                self.setup_focus = step_index(self.setup_focus, delta, setup_controls().len());
+            }
             Tab::Presets => {
                 if !self.preset_entries.is_empty() {
                     self.sel_preset =
@@ -456,12 +526,23 @@ impl App {
         self.cancel_preset_delete_confirm();
         self.close_mod_function_picker();
         let n = Tab::ALL.len() as i32;
-        let idx = (self.active_tab.index() as i32 + delta).rem_euclid(n) as usize;
-        self.active_tab = Tab::ALL[idx];
+        let mut idx = self.active_tab.index() as i32;
+        for _ in 0..n {
+            idx = (idx + delta.signum()).rem_euclid(n);
+            if self.tab_visible(Tab::ALL[idx as usize]) {
+                break;
+            }
+        }
+        self.active_tab = Tab::ALL[idx as usize];
+        self.reset_tab_scrolls();
+    }
+
+    pub(super) fn reset_tab_scrolls(&mut self) {
         self.channels_scroll = 0;
         self.mod_slots_scroll = 0;
         self.mod_editor_scroll = 0;
         self.tuning_scroll = 0;
+        self.alarm_scroll = 0;
         self.preset_scroll = 0;
     }
 
@@ -476,6 +557,14 @@ impl App {
                 .copied()
                 .and_then(|c| c.adjust_action(d)),
             Tab::Modulation => self.mod_control_adjust(self.mod_focus, d),
+            Tab::Alarm => alarm_controls()
+                .get(self.alarm_focus)
+                .copied()
+                .and_then(|c| c.adjust_action(d)),
+            Tab::Setup => setup_controls()
+                .get(self.setup_focus)
+                .copied()
+                .and_then(|c| c.adjust_action(d)),
             _ => None,
         }
     }
@@ -496,6 +585,14 @@ impl App {
                 .copied()
                 .and_then(|c| c.activate_action()),
             Tab::Modulation => self.mod_control_activate(self.mod_focus),
+            Tab::Alarm => alarm_controls()
+                .get(self.alarm_focus)
+                .copied()
+                .and_then(|c| c.activate_action()),
+            Tab::Setup => setup_controls()
+                .get(self.setup_focus)
+                .copied()
+                .and_then(|c| c.activate_action()),
             _ => None,
         }
     }

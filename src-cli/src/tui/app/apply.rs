@@ -1,10 +1,12 @@
-use shocking_vrc_core::cli::{MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
+use shocking_vrc_core::cli::{AlarmChannels, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
 
 use super::App;
 use super::{Action, Channel, ModKind};
 use super::controls::{agg_name, cycle_aggregation, cycle_mode, mod_function_list_for, mod_kind_name};
 use super::helpers::{apply_norm_step, apply_ukf_step, step_u8};
-use super::prefs::{save_config, save_ui_prefs, should_persist_config, CONFIG_FILE};
+use super::prefs::{
+    save_alarm_tab_pref, save_config, save_ui_prefs, should_persist_config, CONFIG_FILE,
+};
 
 impl App {
     pub async fn apply(&mut self, action: Action) {
@@ -12,15 +14,14 @@ impl App {
         match action {
             Action::Quit => self.should_quit = true,
             Action::SwitchTab(t) => {
+                if !self.tab_visible(t) {
+                    return;
+                }
                 self.cancel_preset_save_edit();
                 self.cancel_preset_delete_confirm();
                 self.close_mod_function_picker();
                 self.active_tab = t;
-                self.channels_scroll = 0;
-                self.mod_slots_scroll = 0;
-                self.mod_editor_scroll = 0;
-                self.tuning_scroll = 0;
-                self.preset_scroll = 0;
+                self.reset_tab_scrolls();
             }
             Action::SwitchDevice(i) => self.switch_device(i).await,
             Action::CycleDevice(delta) => {
@@ -285,17 +286,15 @@ impl App {
                 self.clamp_selections();
                 self.load_editor_from_config();
             }
-            Action::SetAutoSave(on) => {
-                self.auto_save = on;
-                match save_ui_prefs(self.auto_save) {
-                    Ok(()) => {
-                        log::info!("[prefs] Auto-save {}", if on { "enabled" } else { "disabled" })
-                    }
-                    Err(e) => log::error!("[prefs] Failed to save: {e}"),
-                }
-                if on {
-                    self.auto_save_config().await;
-                }
+            Action::SetAutoSave(on) => self.set_auto_save(on).await,
+            Action::ToggleAutoSave => {
+                let on = !self.auto_save;
+                self.set_auto_save(on).await;
+            }
+            Action::SetAlarmTabVisible(on) => self.set_alarm_tab_visible(on),
+            Action::ToggleAlarmTabVisible => {
+                let on = !self.alarm_tab_visible;
+                self.set_alarm_tab_visible(on);
             }
             Action::StepUkf(field, d) => {
                 let Some(engine) = self.active_engine() else { return };
@@ -431,6 +430,41 @@ impl App {
             Action::ConfirmDeletePreset => self.confirm_preset_delete().await,
             Action::CancelDeletePreset => self.cancel_preset_delete_confirm(),
             Action::RefreshPresets => self.start_refresh_presets(),
+            Action::SetAlarmEnabled(on) => self.set_alarm_enabled(on),
+            Action::ToggleAlarmEnabled => {
+                let on = !self.alarm.enabled;
+                self.set_alarm_enabled(on);
+            }
+            Action::StepAlarmField(field, d) => {
+                self.mutate_alarm(|a| field.apply_step(a, d));
+                log::debug!("[alarm] {} = {}", field.label(), field.value_label(&self.alarm));
+            }
+            Action::SetAlarmChannels(ch) => {
+                self.mutate_alarm(|a| a.channels = ch);
+                log::info!("[alarm] Channel: {}", ch.label());
+            }
+            Action::CycleAlarmChannels(d) => {
+                let all = AlarmChannels::ALL;
+                let cur = all
+                    .iter()
+                    .position(|c| *c == self.alarm.channels)
+                    .unwrap_or(0) as i32;
+                let next = all[(cur + d).rem_euclid(all.len() as i32) as usize];
+                self.mutate_alarm(|a| a.channels = next);
+                log::info!("[alarm] Channel: {}", next.label());
+            }
+            Action::AlarmTest => {
+                self.state.alarm.test();
+                self.poll_alarm();
+            }
+            Action::AlarmStop => {
+                self.state.alarm.stop();
+                self.poll_alarm();
+            }
+            Action::AlarmSnooze => {
+                self.state.alarm.snooze();
+                self.poll_alarm();
+            }
             Action::ConfirmUpdate => self.start_update_download(),
             Action::DismissUpdate => self.dismiss_update_popup(),
             Action::SkipUpdateVersion => self.skip_update_version(),
@@ -446,6 +480,50 @@ impl App {
 
         if persist {
             self.auto_save_config().await;
+        }
+    }
+
+    async fn set_auto_save(&mut self, on: bool) {
+        self.auto_save = on;
+        match save_ui_prefs(self.auto_save) {
+            Ok(()) => log::info!("[prefs] Auto-save {}", if on { "enabled" } else { "disabled" }),
+            Err(e) => log::error!("[prefs] Failed to save: {e}"),
+        }
+        if on {
+            self.auto_save_config().await;
+        }
+    }
+
+    fn set_alarm_tab_visible(&mut self, on: bool) {
+        self.alarm_tab_visible = on;
+        if let Err(e) = save_alarm_tab_pref(on) {
+            log::error!("[prefs] Failed to save: {e}");
+        }
+        if on {
+            log::info!("[prefs] Alarm tab shown");
+            return;
+        }
+        if self.active_tab == super::Tab::Alarm {
+            self.active_tab = super::Tab::Setup;
+        }
+        self.state.alarm.stop();
+        if self.alarm.enabled {
+            self.mutate_alarm(|a| a.enabled = false);
+        }
+        self.poll_alarm();
+        log::info!("[prefs] Alarm tab hidden — alarm disarmed");
+    }
+
+    fn set_alarm_enabled(&mut self, on: bool) {
+        self.mutate_alarm(|a| a.enabled = on);
+        if on {
+            log::info!(
+                "[alarm] Armed for {} on channel {} — all devices",
+                self.alarm.time_label(),
+                self.alarm.channels.label()
+            );
+        } else {
+            log::info!("[alarm] Disarmed");
         }
     }
 

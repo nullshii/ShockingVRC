@@ -1,3 +1,4 @@
+pub mod alarm_overlay;
 pub mod app;
 pub mod event;
 pub mod preview;
@@ -77,6 +78,7 @@ pub async fn run(
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     let result = loop {
+        app.poll_alarm();
         app.poll_presets_load();
         app.poll_update_check();
         app.poll_update_download();

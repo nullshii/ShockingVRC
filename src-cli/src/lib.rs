@@ -1,3 +1,4 @@
+pub mod alarm_store;
 pub mod app_state;
 pub mod device_config;
 pub mod presets;
