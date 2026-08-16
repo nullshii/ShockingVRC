@@ -308,15 +308,25 @@ impl CliEngine {
             let mut stop_rx = stop_rx;
             let mut watchdog = tokio::time::interval(WATCHDOG_INTERVAL);
             watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let mut batch: Vec<ZoneEvent> = Vec::new();
 
             loop {
                 tokio::select! {
                     result = zone_rx.recv() => {
                         match result {
                             Ok(event) => {
-                                engine.process_event(&event).await;
-                                let status = engine.build_and_push_wave().await;
-                                let _ = engine.state.status_tx.send(status);
+                                batch.push(event);
+                                loop {
+                                    match zone_rx.try_recv() {
+                                        Ok(ev) => batch.push(ev),
+                                        Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                                            debug!("[cli] Skipped {n} zone events (lagged)");
+                                        }
+                                        Err(_) => break,
+                                    }
+                                }
+                                engine.process_events(&batch).await;
+                                batch.clear();
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {
                                 debug!("[cli] Skipped {n} zone events (lagged)");
@@ -344,18 +354,24 @@ impl CliEngine {
         CliStopHandle { stop_tx }
     }
 
-    async fn process_event(&self, event: &ZoneEvent) {
-        let zone_id = ZoneId::from_event(event);
-        self.state.zone_kinematics.write().await.insert(
-            zone_id,
-            ZoneKinematics {
-                level: event.level,
-                velocity: event.velocity,
-                acceleration: event.acceleration,
-                recoil: event.recoil,
-                last_update: Instant::now(),
-            },
-        );
+    async fn process_events(&self, events: &[ZoneEvent]) {
+        if events.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        let mut kinematics = self.state.zone_kinematics.write().await;
+        for event in events {
+            kinematics.insert(
+                ZoneId::from_event(event),
+                ZoneKinematics {
+                    level: event.level,
+                    velocity: event.velocity,
+                    acceleration: event.acceleration,
+                    recoil: event.recoil,
+                    last_update: now,
+                },
+            );
+        }
     }
 
     async fn build_and_push_wave(&self) -> CliStatus {

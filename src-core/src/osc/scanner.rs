@@ -15,7 +15,11 @@ use crate::dsp::UkfParams;
 use crate::error::{DGLabError, Result};
 
 const STALE_MS: Duration = Duration::from_millis(15_000);
-const BULK_RETRY: Duration = Duration::from_millis(250);
+
+const BULK_DEBOUNCE: Duration = Duration::from_millis(500);
+const BULK_RETRY_MIN: Duration = Duration::from_millis(250);
+const BULK_RETRY_MAX: Duration = Duration::from_secs(5);
+const BULK_MAX_ATTEMPTS: u32 = 20;
 
 const OGB_ENABLED_PARAM: &str = "OGB_ENABLED";
 const OGB_ENABLED_INTERVAL: Duration = Duration::from_secs(5);
@@ -32,8 +36,10 @@ struct ScannerState {
     mdns: Mutex<Option<MdnsBroadcaster>>,
     client: Mutex<Option<Arc<VrchatClient>>>,
     keepalive: Mutex<Option<JoinHandle<()>>>,
+    send_socket: tokio::sync::OnceCell<UdpSocket>,
     ukf_params: RwLock<UkfParams>,
-    last_packet: RwLock<Option<Instant>>,
+    epoch: Instant,
+    last_packet_ms: AtomicU64,
     has_received: AtomicBool,
     bulk_attempt: AtomicU64,
 }
@@ -59,8 +65,10 @@ impl AvatarScanner {
                 mdns: Mutex::new(None),
                 client: Mutex::new(None),
                 keepalive: Mutex::new(None),
+                send_socket: tokio::sync::OnceCell::new(),
                 ukf_params: RwLock::new(UkfParams::default()),
-                last_packet: RwLock::new(None),
+                epoch: Instant::now(),
+                last_packet_ms: AtomicU64::new(0),
                 has_received: AtomicBool::new(false),
                 bulk_attempt: AtomicU64::new(0),
             }),
@@ -76,11 +84,12 @@ impl AvatarScanner {
     }
 
     pub async fn vrchat_connected(&self) -> bool {
-        self.state
-            .last_packet
-            .read()
-            .await
-            .is_some_and(|t| t.elapsed() < STALE_MS)
+        let last = self.state.last_packet_ms.load(Ordering::Relaxed);
+        if last == 0 {
+            return false;
+        }
+        let now = self.state.epoch.elapsed().as_millis() as u64;
+        now.saturating_sub(last) < STALE_MS.as_millis() as u64
     }
 
     pub async fn vrchat_address(&self) -> Option<crate::osc::VrchatAddress> {
@@ -122,7 +131,7 @@ impl AvatarScanner {
         };
         *self.state.osc_port.write().await = osc_port;
         self.state.has_received.store(false, Ordering::Relaxed);
-        *self.state.last_packet.write().await = None;
+        self.state.last_packet_ms.store(0, Ordering::Relaxed);
 
         let socket = UdpSocket::bind(("0.0.0.0", osc_port))
             .await
@@ -196,7 +205,11 @@ impl AvatarScanner {
         }))
         .map_err(|e| DGLabError::OscError(e.to_string()))?;
 
-        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        let socket = self
+            .state
+            .send_socket
+            .get_or_try_init(|| UdpSocket::bind("0.0.0.0:0"))
+            .await?;
         socket.send_to(&msg, &target).await?;
         Ok(())
     }
@@ -237,7 +250,8 @@ impl AvatarScanner {
     }
 
     async fn handle_message(&self, msg: OscMessage) {
-        *self.state.last_packet.write().await = Some(Instant::now());
+        let stamp = (self.state.epoch.elapsed().as_millis() as u64).max(1);
+        self.state.last_packet_ms.store(stamp, Ordering::Relaxed);
 
         if !self.state.has_received.swap(true, Ordering::Relaxed) {
             log::info!("First OSC packet received — starting bulk parameter sync");
@@ -295,18 +309,23 @@ impl AvatarScanner {
         let attempt = self.state.bulk_attempt.fetch_add(1, Ordering::Relaxed) + 1;
         let me = self.clone();
         tokio::spawn(async move {
-            loop {
+            tokio::time::sleep(BULK_DEBOUNCE).await;
+
+            let mut delay = BULK_RETRY_MIN;
+            for try_no in 1..=BULK_MAX_ATTEMPTS {
                 if me.state.bulk_attempt.load(Ordering::Relaxed) != attempt {
                     return;
                 }
                 match me.fetch_bulk().await {
                     Ok(()) => return,
                     Err(e) => {
-                        log::debug!("Bulk fetch not ready: {e}");
-                        tokio::time::sleep(BULK_RETRY).await;
+                        log::debug!("Bulk fetch not ready (try {try_no}/{BULK_MAX_ATTEMPTS}): {e}");
+                        tokio::time::sleep(delay).await;
+                        delay = (delay * 2).min(BULK_RETRY_MAX);
                     }
                 }
             }
+            log::debug!("Bulk parameter sync gave up after {BULK_MAX_ATTEMPTS} attempts");
         });
     }
 

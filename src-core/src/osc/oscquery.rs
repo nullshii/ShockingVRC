@@ -24,8 +24,11 @@ const MDNS_PORT: u16 = 5353;
 const MDNS_REBROADCAST: Duration = Duration::from_secs(5);
 const MDNS_TTL_SECS: u32 = 120;
 
-const VRCHAT_RESCAN: Duration = Duration::from_secs(5);
+const VRCHAT_RESCAN_MIN: Duration = Duration::from_secs(5);
+const VRCHAT_RESCAN_MAX: Duration = Duration::from_secs(30);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
+const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
+const LOG_SCAN_COOLDOWN: Duration = Duration::from_secs(30);
 
 const MAX_REQUEST_BYTES: usize = 8 * 1024;
 
@@ -358,9 +361,19 @@ struct OscQueryNode {
 
 struct ClientInner {
     http: reqwest::Client,
+    probe: reqwest::Client,
     address: std::sync::RwLock<Option<VrchatAddress>>,
     services: std::sync::Mutex<HashMap<String, (Vec<IpAddr>, u16)>>,
+    log_scan: std::sync::Mutex<LogScan>,
     stop: AtomicBool,
+}
+
+#[derive(Default)]
+struct LogScan {
+    path: Option<PathBuf>,
+    offset: u64,
+    port: Option<u16>,
+    last_scan: Option<std::time::Instant>,
 }
 
 pub struct VrchatClient {
@@ -375,8 +388,13 @@ impl VrchatClient {
                 .timeout(HTTP_TIMEOUT)
                 .build()
                 .unwrap_or_default(),
+            probe: reqwest::Client::builder()
+                .timeout(PROBE_TIMEOUT)
+                .build()
+                .unwrap_or_default(),
             address: std::sync::RwLock::new(None),
             services: std::sync::Mutex::new(HashMap::new()),
+            log_scan: std::sync::Mutex::new(LogScan::default()),
             stop: AtomicBool::new(false),
         });
 
@@ -385,12 +403,17 @@ impl VrchatClient {
 
         let rescan_inner = Arc::clone(&inner);
         let rescan_task = tokio::spawn(async move {
+            let mut backoff = VRCHAT_RESCAN_MIN;
             loop {
                 if rescan_inner.stop.load(Ordering::Relaxed) {
                     return;
                 }
-                rescan(&rescan_inner).await;
-                tokio::time::sleep(VRCHAT_RESCAN).await;
+                backoff = if rescan(&rescan_inner).await {
+                    VRCHAT_RESCAN_MIN
+                } else {
+                    (backoff * 2).min(VRCHAT_RESCAN_MAX)
+                };
+                tokio::time::sleep(backoff).await;
             }
         });
 
@@ -485,12 +508,12 @@ fn browse_worker(inner: Arc<ClientInner>) {
     let _ = daemon.shutdown();
 }
 
-async fn rescan(inner: &Arc<ClientInner>) {
+async fn rescan(inner: &Arc<ClientInner>) -> bool {
     let cached = inner.address.read().ok().and_then(|a| a.clone());
     if let Some(addr) = cached
         && check_endpoint(inner, addr.http_addr).await
     {
-        return;
+        return true;
     }
 
     let candidates: Vec<(Vec<IpAddr>, u16)> = inner
@@ -510,23 +533,24 @@ async fn rescan(inner: &Arc<ClientInner>) {
                 && check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port))
                     .await
             {
-                return;
+                return true;
             }
             if check_endpoint(inner, SocketAddr::new(ip, port)).await {
-                return;
+                return true;
             }
         }
     }
 
-    if let Some(port) = oscquery_port_from_logs().await {
+    if let Some(port) = oscquery_port_from_logs(inner).await {
         log::debug!("Found VRChat OSCQuery port {port} in log file");
-        check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await;
+        return check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await;
     }
+    false
 }
 
 async fn check_endpoint(inner: &Arc<ClientInner>, http_addr: SocketAddr) -> bool {
     let url = format!("http://{http_addr}/?HOST_INFO");
-    let info: HostInfo = match inner.http.get(&url).send().await {
+    let info: HostInfo = match inner.probe.get(&url).send().await {
         Ok(resp) => match resp.json().await {
             Ok(json) => json,
             Err(_) => return false,
@@ -591,25 +615,75 @@ fn vrchat_log_dir() -> Option<PathBuf> {
     )
 }
 
-async fn oscquery_port_from_logs() -> Option<u16> {
-    tokio::task::spawn_blocking(|| {
+async fn oscquery_port_from_logs(inner: &Arc<ClientInner>) -> Option<u16> {
+    let inner = Arc::clone(inner);
+    tokio::task::spawn_blocking(move || {
+        let mut scan = inner.log_scan.lock().unwrap_or_else(|e| e.into_inner());
+        if scan
+            .last_scan
+            .is_some_and(|t| t.elapsed() < LOG_SCAN_COOLDOWN)
+        {
+            return scan.port;
+        }
+        scan.last_scan = Some(std::time::Instant::now());
         let dir = vrchat_log_dir()?;
-        let newest = std::fs::read_dir(dir)
-            .ok()?
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("output_log_")
-            })
-            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())?;
-
-        let content = std::fs::read_to_string(newest.path()).ok()?;
-        parse_oscquery_port(&content)
+        scan_log_for_port(&mut scan, &dir)
     })
     .await
     .ok()
     .flatten()
+}
+
+fn scan_log_for_port(scan: &mut LogScan, dir: &std::path::Path) -> Option<u16> {
+    use std::io::{BufRead, Seek, SeekFrom};
+
+    let newest = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("output_log_")
+        })
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())?;
+    let path = newest.path();
+
+    if scan.path.as_deref() != Some(path.as_path()) {
+        scan.path = Some(path.clone());
+        scan.offset = 0;
+        scan.port = None;
+    }
+
+    let len = newest.metadata().ok()?.len();
+    if len < scan.offset {
+        scan.offset = 0;
+        scan.port = None;
+    }
+    if len == scan.offset {
+        return scan.port;
+    }
+
+    let mut file = std::fs::File::open(&path).ok()?;
+    file.seek(SeekFrom::Start(scan.offset)).ok()?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(n) => {
+                if !line.ends_with('\n') {
+                    break;
+                }
+                scan.offset += n as u64;
+                if let Some(port) = parse_oscquery_port(&line) {
+                    scan.port = Some(port);
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    scan.port
 }
 
 fn parse_oscquery_port(content: &str) -> Option<u16> {
@@ -672,6 +746,83 @@ mod tests {
         let log = "junk\nBlah of type OSCQuery on 9012 something\nof type OSCQuery on 34567\n";
         assert_eq!(parse_oscquery_port(log), Some(34567));
         assert_eq!(parse_oscquery_port("no match"), None);
+    }
+
+    fn scratch_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("svrc_logscan_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn append(path: &std::path::Path, text: &str) {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+        f.write_all(text.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn log_scan_only_reads_bytes_appended_since_the_last_pass() {
+        let dir = scratch_dir("incremental");
+        let log = dir.join("output_log_2026-01-01_00-00-00.txt");
+        append(&log, "boot\nserver of type OSCQuery on 34567 ready\n");
+
+        let mut scan = LogScan::default();
+        assert_eq!(scan_log_for_port(&mut scan, &dir), Some(34567));
+        let after_first = scan.offset;
+        assert!(after_first > 0);
+
+        assert_eq!(scan_log_for_port(&mut scan, &dir), Some(34567));
+        assert_eq!(scan.offset, after_first);
+
+        append(&log, "chatter\nserver of type OSCQuery on 41000 ready\n");
+        assert_eq!(scan_log_for_port(&mut scan, &dir), Some(41000));
+        assert!(scan.offset > after_first);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn log_scan_leaves_a_half_written_line_for_the_next_pass() {
+        let dir = scratch_dir("partial");
+        let log = dir.join("output_log_2026-01-01_00-00-00.txt");
+        append(&log, "boot\nserver of type OSCQuery on 3");
+
+        let mut scan = LogScan::default();
+        assert_eq!(scan_log_for_port(&mut scan, &dir), None, "line is incomplete");
+        let stopped_at = scan.offset;
+        assert_eq!(stopped_at, "boot\n".len() as u64);
+
+        append(&log, "4567 ready\n");
+        assert_eq!(
+            scan_log_for_port(&mut scan, &dir),
+            Some(34567),
+            "the completed line is re-read in full"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn log_scan_restarts_on_a_new_session_file() {
+        let dir = scratch_dir("rotate");
+        let old = dir.join("output_log_2026-01-01_00-00-00.txt");
+        append(&old, "server of type OSCQuery on 34567 ready\n");
+
+        let mut scan = LogScan::default();
+        assert_eq!(scan_log_for_port(&mut scan, &dir), Some(34567));
+
+        std::thread::sleep(Duration::from_millis(20));
+        let new = dir.join("output_log_2026-01-02_00-00-00.txt");
+        append(&new, "server of type OSCQuery on 9001 ready\n");
+        assert_eq!(scan_log_for_port(&mut scan, &dir), Some(9001));
+        assert_eq!(scan.path.as_deref(), Some(new.as_path()));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
