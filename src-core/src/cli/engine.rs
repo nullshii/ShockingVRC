@@ -488,11 +488,24 @@ fn modulate_channel(
     (freq_out, int_out)
 }
 
-fn project_with_freshness(k: &ZoneKinematics, mode: ContactMode, norms: &MotionNorms, now: Instant) -> f32 {
+fn threshold_window_is_open(min_threshold: u8, max_threshold: u8) -> bool {
+    min_threshold <= ZoneEntry::THRESHOLD_MIN && max_threshold >= ZoneEntry::THRESHOLD_MAX
+}
+
+fn project_zone(k: &ZoneKinematics, entry: &ZoneEntry, norms: &MotionNorms, now: Instant) -> f32 {
     if k.is_stale(now) {
-        0.0
-    } else {
-        project_kinematics(k, mode, norms)
+        return 0.0;
+    }
+    let depth = apply_threshold(k.level.clamp(0.0, 1.0), entry.min_threshold, entry.max_threshold);
+    match entry.mode {
+        ContactMode::Depth => depth,
+        motion => {
+            if depth <= 0.0 && !threshold_window_is_open(entry.min_threshold, entry.max_threshold) {
+                0.0
+            } else {
+                project_kinematics(k, motion, norms)
+            }
+        }
     }
 }
 
@@ -544,9 +557,7 @@ fn compute_channel_status(
         if pattern.is_wildcard() {
             for (known_id, k) in kinematics {
                 if pattern.matches(known_id) && seen.insert(known_id.clone()) {
-                    let projected = project_with_freshness(k, entry.mode, norms, now);
-                    let gated = apply_threshold(projected, entry.min_threshold, entry.max_threshold);
-                    let value = (gated * zone_scale).clamp(0.0, 1.0);
+                    let value = (project_zone(k, entry, norms, now) * zone_scale).clamp(0.0, 1.0);
                     zone_levels.push(value);
                     if value > 0.0 {
                         active_zones.push((known_id.clone(), value));
@@ -562,11 +573,7 @@ fn compute_channel_status(
         } else if seen.insert(pattern.clone()) {
             let value = kinematics
                 .get(pattern)
-                .map(|k| {
-                    let projected = project_with_freshness(k, entry.mode, norms, now);
-                    let gated = apply_threshold(projected, entry.min_threshold, entry.max_threshold);
-                    (gated * zone_scale).clamp(0.0, 1.0)
-                })
+                .map(|k| (project_zone(k, entry, norms, now) * zone_scale).clamp(0.0, 1.0))
                 .unwrap_or(0.0);
             zone_levels.push(value);
             if value > 0.0 {
@@ -762,6 +769,101 @@ mod threshold_tests {
         assert!((apply_threshold(0.50, 20, 80) - 0.5).abs() < 1e-6);
         assert_eq!(apply_threshold(0.80, 20, 80), 1.0);
         assert_eq!(apply_threshold(0.95, 20, 80), 1.0);
+    }
+}
+
+#[cfg(test)]
+mod threshold_is_a_depth_calibration_tests {
+    use super::*;
+    use crate::cli::config::ZoneId;
+    use crate::osc::types::OldZoneType;
+
+    fn zone(depth: f32, velocity: f32) -> ZoneKinematics {
+        ZoneKinematics {
+            level: depth,
+            velocity,
+            acceleration: velocity,
+            recoil: velocity,
+            last_update: Instant::now(),
+        }
+    }
+
+    fn entry(mode: ContactMode, min: u8, max: u8) -> ZoneEntry {
+        let mut e = ZoneEntry::new(ZoneId::new(OldZoneType::Orf, "Pussy"), mode);
+        e.min_threshold = min;
+        e.max_threshold = max;
+        e
+    }
+
+    fn unit_norms() -> MotionNorms {
+        MotionNorms {
+            speed: 1.0,
+            acc: 1.0,
+            recoil: 1.0,
+        }
+    }
+
+    #[test]
+    fn a_shallow_contact_is_silent_in_every_mode() {
+        let now = Instant::now();
+        let k = zone(0.20, 0.9);
+        for mode in [ContactMode::Depth, ContactMode::Speed, ContactMode::Acc, ContactMode::Recoil] {
+            assert_eq!(
+                project_zone(&k, &entry(mode, 30, 80), &unit_norms(), now),
+                0.0,
+                "{mode:?} fires below the configured depth window"
+            );
+        }
+    }
+
+    #[test]
+    fn inside_the_window_motion_modes_pass_through_unstretched() {
+        let now = Instant::now();
+        let k = zone(0.50, 0.9);
+        for mode in [ContactMode::Speed, ContactMode::Acc, ContactMode::Recoil] {
+            assert_eq!(
+                project_zone(&k, &entry(mode, 30, 80), &unit_norms(), now),
+                0.9,
+                "{mode:?} must report the motion itself, not a remapped depth"
+            );
+        }
+        let depth = project_zone(&k, &entry(ContactMode::Depth, 30, 80), &unit_norms(), now);
+        assert!((depth - 0.4).abs() < 1e-6, "got {depth}");
+    }
+
+    #[test]
+    fn past_the_max_edge_the_contact_counts_as_full() {
+        let now = Instant::now();
+        let k = zone(0.95, 0.9);
+        assert_eq!(
+            project_zone(&k, &entry(ContactMode::Depth, 30, 80), &unit_norms(), now),
+            1.0,
+            "the max edge saturates — that is the point of trimming an oversized contact"
+        );
+        assert_eq!(
+            project_zone(&k, &entry(ContactMode::Speed, 30, 80), &unit_norms(), now),
+            0.9,
+            "and it does not gate the motion modes either"
+        );
+    }
+
+    #[test]
+    fn a_default_window_never_gates_a_motion_mode() {
+        let now = Instant::now();
+        let k = zone(0.0, 0.9);
+        let default = entry(ContactMode::Speed, ZoneEntry::THRESHOLD_MIN, ZoneEntry::THRESHOLD_MAX);
+        assert_eq!(
+            project_zone(&k, &default, &unit_norms(), now),
+            0.9,
+            "an untouched threshold must stay a no-op"
+        );
+    }
+
+    #[test]
+    fn a_stale_zone_stays_silent() {
+        let now = Instant::now() + ZONE_IDLE_TIMEOUT * 2;
+        let k = zone(0.50, 0.9);
+        assert_eq!(project_zone(&k, &entry(ContactMode::Speed, 1, 100), &unit_norms(), now), 0.0);
     }
 }
 
