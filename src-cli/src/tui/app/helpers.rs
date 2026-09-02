@@ -53,6 +53,21 @@ pub(super) fn slider_value_action(kind: SliderKind, rect: Rect, col: u16) -> Act
     }
 }
 
+pub(super) fn is_zone_preset_action(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::SelectZonePreset(_)
+            | Action::ApplyZonePreset
+            | Action::StartSaveZonePreset
+            | Action::CommitSaveZonePreset
+            | Action::CancelSaveZonePreset
+            | Action::RequestDeleteZonePreset(_)
+            | Action::ConfirmDeleteZonePreset
+            | Action::CancelDeleteZonePreset
+            | Action::CloseZonePresets
+    )
+}
+
 pub(super) fn step_index(cur: usize, delta: i32, len: usize) -> usize {
     if len == 0 {
         return 0;

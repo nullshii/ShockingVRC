@@ -4,3 +4,4 @@ pub mod device_config;
 pub mod presets;
 pub mod tui;
 pub mod tui_logger;
+pub mod zone_presets;

@@ -112,7 +112,7 @@ pub fn random_preset_name(channel_label: &str) -> String {
     )
 }
 
-fn slugify(name: &str) -> String {
+pub(crate) fn slugify(name: &str) -> String {
     let mut out = String::new();
     let mut prev_dash = true;
     for c in name.chars() {

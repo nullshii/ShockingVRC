@@ -1,3 +1,7 @@
+mod zones;
+
+pub use zones::{parse_zone_preset, ZonePreset, ZonePresetEntry, ZONE_PRESET_VERSION};
+
 use serde::{Deserialize, Serialize};
 
 use crate::cli::ChannelConfig;

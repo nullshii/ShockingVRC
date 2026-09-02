@@ -414,6 +414,17 @@ pub enum Action {
     AddAvatarZone(Channel, usize),
     AddAllZones(Channel),
 
+    OpenZonePresets,
+    CloseZonePresets,
+    SelectZonePreset(usize),
+    ApplyZonePreset,
+    StartSaveZonePreset,
+    CommitSaveZonePreset,
+    CancelSaveZonePreset,
+    RequestDeleteZonePreset(usize),
+    ConfirmDeleteZonePreset,
+    CancelDeleteZonePreset,
+
     SetFreq(Channel, usize, u8),
     StepFreq(Channel, usize, i32),
     SetIntensity(Channel, usize, u8),

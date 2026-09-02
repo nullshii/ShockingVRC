@@ -26,7 +26,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use shocking_vrc_core::cli::{AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus};
 use shocking_vrc_core::modulation::config::ModulationConfig;
-use shocking_vrc_core::presets::PresetEntry;
+use shocking_vrc_core::presets::{PresetEntry, ZonePresetEntry};
 use shocking_vrc_core::ZoneEvent;
 
 use crate::app_state::{AppState, DeviceSlotInfo};
@@ -115,6 +115,15 @@ pub struct App {
     pub preset_save_field: PresetSaveField,
 
     pub preset_delete_confirm: Option<usize>,
+
+    pub zone_presets: Vec<ZonePresetEntry>,
+    pub zone_presets_open: bool,
+    pub sel_zone_preset: usize,
+    pub zone_preset_scroll: u16,
+    pub zone_presets_viewport_h: u16,
+    pub zone_preset_save_editing: bool,
+    pub zone_preset_save_input: String,
+    pub zone_preset_delete_confirm: Option<usize>,
 
     pub tutorial_active: bool,
     pub tutorial_step: crate::tui::tutorial::steps::TutorialStep,
@@ -216,6 +225,14 @@ impl App {
             preset_save_nickname: String::new(),
             preset_save_field: PresetSaveField::Name,
             preset_delete_confirm: None,
+            zone_presets: Vec::new(),
+            zone_presets_open: false,
+            sel_zone_preset: 0,
+            zone_preset_scroll: 0,
+            zone_presets_viewport_h: 0,
+            zone_preset_save_editing: false,
+            zone_preset_save_input: String::new(),
+            zone_preset_delete_confirm: None,
             tutorial_active: false,
             tutorial_step: crate::tui::tutorial::steps::TutorialStep::Welcome,
             tutorial_saved_tab: Tab::Status,
@@ -242,6 +259,7 @@ impl App {
             app.start_tutorial();
         }
         app.ensure_presets_loaded();
+        app.reload_zone_presets();
         app
     }
 
@@ -964,6 +982,151 @@ impl App {
         log::info!("[ch-{}] Preset applied: {} (limits unchanged)", ch.label(), entry.name);
         self.refresh_config().await;
         self.load_editor_from_config();
+    }
+}
+
+impl App {
+    pub(super) fn open_zone_presets(&mut self) {
+        self.reload_zone_presets();
+        self.zone_preset_save_editing = false;
+        self.zone_preset_save_input.clear();
+        self.zone_preset_delete_confirm = None;
+        self.zone_presets_open = true;
+    }
+
+    pub(super) fn close_zone_presets(&mut self) {
+        self.zone_presets_open = false;
+        self.zone_preset_save_editing = false;
+        self.zone_preset_save_input.clear();
+        self.zone_preset_delete_confirm = None;
+    }
+
+    pub(super) fn reload_zone_presets(&mut self) {
+        self.zone_presets = crate::zone_presets::load_zone_presets();
+        self.clamp_zone_preset_selection();
+    }
+
+    fn clamp_zone_preset_selection(&mut self) {
+        self.sel_zone_preset = match self.zone_presets.len() {
+            0 => 0,
+            n => self.sel_zone_preset.min(n - 1),
+        };
+        self.sync_zone_presets_scroll();
+    }
+
+    pub(super) fn sync_zone_presets_scroll(&mut self) {
+        let content_h = self.zone_presets.len() as u16;
+        self.zone_preset_scroll = crate::tui::ui::clamp_scroll(
+            crate::tui::ui::scroll_to_row(
+                self.zone_preset_scroll,
+                self.zone_presets_viewport_h,
+                self.sel_zone_preset as u16,
+            ),
+            content_h,
+            self.zone_presets_viewport_h,
+        );
+    }
+
+    pub(super) fn scroll_zone_presets(&mut self, delta: i32) {
+        let content_h = self.zone_presets.len() as u16;
+        self.zone_preset_scroll = crate::tui::ui::clamp_scroll(
+            crate::tui::ui::apply_scroll_delta(self.zone_preset_scroll, delta, 1),
+            content_h,
+            self.zone_presets_viewport_h,
+        );
+    }
+
+    pub(super) fn start_zone_preset_save(&mut self) {
+        self.zone_preset_delete_confirm = None;
+        self.zone_preset_save_input.clear();
+        self.zone_preset_save_editing = true;
+    }
+
+    pub(super) fn cancel_zone_preset_save(&mut self) {
+        self.zone_preset_save_editing = false;
+        self.zone_preset_save_input.clear();
+    }
+
+    pub(super) fn commit_zone_preset_save(&mut self) {
+        let name = if self.zone_preset_save_input.trim().is_empty() {
+            crate::zone_presets::default_zone_set_name()
+        } else {
+            self.zone_preset_save_input.trim().to_string()
+        };
+        match crate::zone_presets::save_zone_preset(&name, &self.config) {
+            Ok(entry) => {
+                let (a, b) = entry.preset.counts();
+                log::info!(
+                    "[zone-sets] Saved \"{}\" (A:{a}, B:{b}) → presets/zones/",
+                    entry.name()
+                );
+                self.cancel_zone_preset_save();
+                self.insert_zone_preset_entry(entry);
+            }
+            Err(e) => log::error!("[zone-sets] Save failed: {e}"),
+        }
+    }
+
+    fn insert_zone_preset_entry(&mut self, entry: ZonePresetEntry) {
+        let id = entry.id.clone();
+        match self.zone_presets.iter().position(|e| e.id == id) {
+            Some(i) => self.zone_presets[i] = entry,
+            None => self.zone_presets.push(entry),
+        }
+        crate::zone_presets::sort_zone_preset_entries(&mut self.zone_presets);
+        if let Some(i) = self.zone_presets.iter().position(|e| e.id == id) {
+            self.sel_zone_preset = i;
+        }
+        self.sync_zone_presets_scroll();
+    }
+
+    pub(super) fn request_zone_preset_delete(&mut self, i: usize) {
+        if i < self.zone_presets.len() {
+            self.sel_zone_preset = i;
+            self.zone_preset_save_editing = false;
+            self.zone_preset_delete_confirm = Some(i);
+            self.sync_zone_presets_scroll();
+        }
+    }
+
+    pub(super) fn cancel_zone_preset_delete(&mut self) {
+        self.zone_preset_delete_confirm = None;
+    }
+
+    pub(super) fn confirm_zone_preset_delete(&mut self) {
+        let Some(i) = self.zone_preset_delete_confirm.take() else { return };
+        let Some(entry) = self.zone_presets.get(i) else { return };
+        let id = entry.id.clone();
+        let name = entry.name().to_string();
+        match crate::zone_presets::delete_zone_preset(&id) {
+            Ok(()) => {
+                log::info!("[zone-sets] Deleted \"{name}\" from presets/zones/");
+                self.zone_presets.remove(i);
+                self.clamp_zone_preset_selection();
+            }
+            Err(e) => log::error!("[zone-sets] Delete failed: {e}"),
+        }
+    }
+
+    pub(super) async fn apply_selected_zone_preset(&mut self) {
+        let Some(entry) = self.zone_presets.get(self.sel_zone_preset).cloned() else {
+            log::warn!("[zone-sets] No zone set selected");
+            return;
+        };
+        let Some(engine) = self.active_engine() else {
+            log::warn!("[zone-sets] No device — connect one before loading a zone set");
+            return;
+        };
+        let mut cfg = engine.config().await;
+        entry.preset.apply_to(&mut cfg);
+        engine.set_config(cfg).await;
+        self.refresh_config().await;
+        self.clamp_selections();
+        let (a, b) = entry.preset.counts();
+        log::info!(
+            "[zone-sets] Loaded \"{}\" — A: {a} zone(s), B: {b} zone(s)",
+            entry.name()
+        );
     }
 }
 

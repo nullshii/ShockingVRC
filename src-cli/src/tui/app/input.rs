@@ -7,7 +7,9 @@ use super::{Action, Channel, ModParam, Tab, ZonesPane};
 use super::controls::{
     alarm_controls, channel_controls, mod_controls_len, setup_controls, tuning_controls,
 };
-use super::helpers::{point_in, slider_value_action, step_multiplier, HitResult};
+use super::helpers::{
+    is_zone_preset_action, point_in, slider_value_action, step_multiplier, HitResult,
+};
 
 impl App {
     pub async fn handle_key(&mut self, key: KeyEvent) {
@@ -77,6 +79,16 @@ impl App {
                 KeyCode::Backspace | KeyCode::Left => self.tutorial_prev(),
                 _ => {}
             }
+            return;
+        }
+
+        if self.zone_presets_open {
+            if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL)
+            {
+                self.should_quit = true;
+                return;
+            }
+            self.handle_zone_presets_key(key).await;
             return;
         }
 
@@ -234,6 +246,30 @@ impl App {
             return;
         }
 
+        if self.zone_presets_open {
+            match m.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    let hit = self
+                        .clickables
+                        .iter()
+                        .rev()
+                        .find(|c| point_in(c.rect, m.column, m.row))
+                        .and_then(|c| match &c.kind {
+                            super::ClickKind::Act(a) if is_zone_preset_action(a) => Some(a.clone()),
+                            _ => None,
+                        });
+                    if let Some(a) = hit {
+                        self.flash_button(a.clone());
+                        self.apply(a).await;
+                    }
+                }
+                MouseEventKind::ScrollDown => self.scroll_zone_presets(1),
+                MouseEventKind::ScrollUp => self.scroll_zone_presets(-1),
+                _ => {}
+            }
+            return;
+        }
+
         if self.preset_save_editing {
             if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
                 let hit = self.clickables.iter().rev()
@@ -320,6 +356,7 @@ impl App {
                 KeyCode::Char('a') => Some(Action::FocusZonesPane(ZonesPane::ConfiguredA)),
                 KeyCode::Char('b') => Some(Action::FocusZonesPane(ZonesPane::ConfiguredB)),
                 KeyCode::Char('v') => Some(Action::FocusZonesPane(ZonesPane::Avatar)),
+                KeyCode::Char('z') => Some(Action::OpenZonePresets),
                 KeyCode::Char('m') => Some(Action::ActivateFocused),
                 KeyCode::Char('x') | KeyCode::Delete => Some(match self.zones_pane {
                     ZonesPane::ConfiguredA => Action::RemoveZone(Channel::A, self.sel_conf_a),
@@ -472,6 +509,69 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    async fn handle_zone_presets_key(&mut self, key: KeyEvent) {
+        if self.zone_preset_save_editing {
+            match key.code {
+                KeyCode::Enter => self.apply(Action::CommitSaveZonePreset).await,
+                KeyCode::Esc => self.apply(Action::CancelSaveZonePreset).await,
+                KeyCode::Backspace => {
+                    self.zone_preset_save_input.pop();
+                }
+                KeyCode::Char(c) if !c.is_control() && self.zone_preset_save_input.len() < 48 => {
+                    self.zone_preset_save_input.push(c);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        if self.zone_preset_delete_confirm.is_some() {
+            match key.code {
+                KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    self.flash_button(Action::ConfirmDeleteZonePreset);
+                    self.apply(Action::ConfirmDeleteZonePreset).await;
+                }
+                KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                    self.apply(Action::CancelDeleteZonePreset).await;
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        let action = match key.code {
+            KeyCode::Esc => Some(Action::CloseZonePresets),
+            KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.should_quit = true;
+                None
+            }
+            KeyCode::Up => self.zone_preset_step_action(-1),
+            KeyCode::Down => self.zone_preset_step_action(1),
+            KeyCode::Enter => Some(Action::ApplyZonePreset),
+            KeyCode::Char('s') | KeyCode::Char('S') => Some(Action::StartSaveZonePreset),
+            KeyCode::Char('x') | KeyCode::Char('X') | KeyCode::Delete => {
+                Some(Action::RequestDeleteZonePreset(self.sel_zone_preset))
+            }
+            _ => None,
+        };
+        if let Some(a) = action {
+            self.flash_button(a.clone());
+            self.apply(a).await;
+        }
+    }
+
+    fn zone_preset_step_action(&self, delta: i32) -> Option<Action> {
+        use super::helpers::step_index;
+        if self.zone_presets.is_empty() {
+            return None;
+        }
+        Some(Action::SelectZonePreset(step_index(
+            self.sel_zone_preset,
+            delta,
+            self.zone_presets.len(),
+        )))
     }
 
     pub(super) fn move_focus(&mut self, delta: i32) {

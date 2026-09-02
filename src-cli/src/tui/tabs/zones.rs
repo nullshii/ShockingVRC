@@ -11,15 +11,33 @@ use crate::tui::theme;
 use crate::tui::ui;
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
+    let rows = Layout::vertical([Constraint::Min(4), Constraint::Length(1)]).split(area);
     let cols = Layout::horizontal([
         Constraint::Percentage(33),
         Constraint::Percentage(33),
         Constraint::Percentage(34),
     ])
-    .split(area);
+    .split(rows[0]);
     render_configured(app, frame, cols[0], Channel::A);
     render_configured(app, frame, cols[1], Channel::B);
     render_avatar(app, frame, cols[2]);
+    render_footer(app, frame, rows[1]);
+}
+
+fn render_footer(app: &mut App, frame: &mut Frame, area: Rect) {
+    let saved = app.zone_presets.len();
+    let cols = Layout::horizontal([Constraint::Length(13), Constraint::Min(0)])
+        .split(area);
+    ui::button(frame, app, cols[0], "Zone sets", false, Action::OpenZonePresets);
+    let hint = match saved {
+        0 => "  z — save the current zones as a reusable set".to_string(),
+        1 => "  z — 1 saved set".to_string(),
+        n => format!("  z — {n} saved sets"),
+    };
+    frame.render_widget(
+        Paragraph::new(hint).style(Style::default().fg(theme::TEXT_DIM)),
+        cols[1],
+    );
 }
 
 fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) {
@@ -327,5 +345,258 @@ fn render_rows(
         };
         frame.render_widget(Paragraph::new(format!(" {}", rows[idx])).style(style), rect);
         app.push_click(rect, make_action(idx));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, Mutex, RwLock};
+
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use ratatui::crossterm::event::{
+        KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
+    use shocking_vrc_core::AvatarScanner;
+    use shocking_vrc_core::cli::{AlarmConfig, AlarmController, CliConfig, ZoneEntry, ZoneId};
+    use shocking_vrc_core::presets::{ZonePreset, ZonePresetEntry};
+    use shocking_vrc_core::{OldZoneType, ZoneEvent};
+
+    use crate::app_state::AppState;
+    use crate::tui::app::{Action, App, ClickKind, Tab};
+
+    fn test_app() -> App {
+        let state = Arc::new(AppState {
+            scanner: AvatarScanner::new(None),
+            monitor_enabled: Arc::new(AtomicBool::new(false)),
+            default_config: CliConfig::default(),
+            device_slots: Arc::new(RwLock::new(Vec::new())),
+            alarm: AlarmController::new(AlarmConfig::default()),
+        });
+        let mut app = App::new(state, Arc::new(Mutex::new(Default::default())));
+        app.tutorial_active = false;
+        app.auto_save = false;
+        app.config = CliConfig::default();
+        app.active_tab = Tab::Zones;
+        app.zone_presets = vec![set("Alpha", 2, 1), set("Bravo", 0, 0)];
+        app.sel_zone_preset = 0;
+        app
+    }
+
+    fn set(name: &str, zones_a: usize, zones_b: usize) -> ZonePresetEntry {
+        let zone = |i: usize| {
+            ZoneEntry::with_default_mode(ZoneId::new(OldZoneType::DGB, format!("Zone{i}")))
+        };
+        let mut cfg = CliConfig::default();
+        cfg.channel_a.zones = (0..zones_a).map(zone).collect();
+        cfg.channel_b.zones = (0..zones_b).map(zone).collect();
+        ZonePresetEntry {
+            id: name.to_lowercase(),
+            preset: ZonePreset::from_config(name, &cfg),
+        }
+    }
+
+    fn draw_at(app: &mut App, w: u16, h: u16) {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
+        terminal
+            .draw(|frame| crate::tui::ui::draw(frame, app))
+            .unwrap();
+    }
+
+    fn draw_to_text(app: &mut App, w: u16, h: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
+        terminal
+            .draw(|frame| crate::tui::ui::draw(frame, app))
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        (0..buf.area.height)
+            .map(|y| {
+                (0..buf.area.width)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    async fn type_str(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_key(key(KeyCode::Char(c))).await;
+        }
+    }
+
+    async fn open_overlay(app: &mut App) {
+        app.handle_key(key(KeyCode::Char('z'))).await;
+        app.zone_presets = vec![set("Alpha", 2, 1), set("Bravo", 0, 0)];
+        app.sel_zone_preset = 0;
+    }
+
+    fn click_at(column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    fn rect_of(app: &App, action: &Action) -> Option<ratatui::layout::Rect> {
+        app.clickables
+            .iter()
+            .find(|c| matches!(&c.kind, ClickKind::Act(a) if a == action))
+            .map(|c| c.rect)
+    }
+
+    #[tokio::test]
+    async fn z_opens_the_overlay_and_lists_saved_sets() {
+        let mut app = test_app();
+        assert!(!app.zone_presets_open);
+
+        open_overlay(&mut app).await;
+        assert!(app.zone_presets_open);
+
+        let screen = draw_to_text(&mut app, 120, 30);
+        assert!(screen.contains("Zone sets"), "{screen}");
+        assert!(screen.contains("Alpha"), "{screen}");
+        assert!(screen.contains("A: 2"), "zone counts are shown: {screen}");
+    }
+
+    #[tokio::test]
+    async fn the_zones_tab_offers_a_button_for_it() {
+        let mut app = test_app();
+        draw_at(&mut app, 120, 30);
+        let rect = rect_of(&app, &Action::OpenZonePresets).expect("footer button");
+
+        app.handle_mouse(click_at(rect.x + 1, rect.y)).await;
+        assert!(app.zone_presets_open);
+    }
+
+    #[tokio::test]
+    async fn arrows_and_clicks_move_between_sets() {
+        let mut app = test_app();
+        open_overlay(&mut app).await;
+
+        app.handle_key(key(KeyCode::Down)).await;
+        assert_eq!(app.sel_zone_preset, 1);
+        app.handle_key(key(KeyCode::Up)).await;
+        assert_eq!(app.sel_zone_preset, 0);
+
+        draw_at(&mut app, 120, 30);
+        let rect = rect_of(&app, &Action::SelectZonePreset(1)).expect("second row");
+        app.handle_mouse(click_at(rect.x + 1, rect.y)).await;
+        assert_eq!(app.sel_zone_preset, 1);
+    }
+
+    #[tokio::test]
+    async fn typing_a_name_swallows_the_global_hotkeys() {
+        let mut app = test_app();
+        open_overlay(&mut app).await;
+        app.handle_key(key(KeyCode::Char('s'))).await;
+        assert!(app.zone_preset_save_editing);
+
+        type_str(&mut app, "quest 3 avatar").await;
+
+        assert_eq!(app.zone_preset_save_input, "quest 3 avatar");
+        assert!(!app.should_quit, "q must type, not quit");
+        assert_eq!(app.active_tab, Tab::Zones, "3 must type, not switch tabs");
+
+        app.handle_key(key(KeyCode::Backspace)).await;
+        assert_eq!(app.zone_preset_save_input, "quest 3 avata");
+    }
+
+    #[tokio::test]
+    async fn esc_backs_out_one_layer_at_a_time() {
+        let mut app = test_app();
+        open_overlay(&mut app).await;
+
+        app.handle_key(key(KeyCode::Char('s'))).await;
+        app.handle_key(key(KeyCode::Esc)).await;
+        assert!(!app.zone_preset_save_editing, "name field closes first");
+        assert!(app.zone_presets_open, "overlay stays up");
+
+        app.handle_key(key(KeyCode::Char('x'))).await;
+        assert_eq!(app.zone_preset_delete_confirm, Some(0));
+        app.handle_key(key(KeyCode::Char('n'))).await;
+        assert_eq!(app.zone_preset_delete_confirm, None, "N cancels the delete");
+
+        app.handle_key(key(KeyCode::Esc)).await;
+        assert!(!app.zone_presets_open, "then the overlay closes");
+        assert!(!app.should_quit, "without quitting the app");
+    }
+
+    #[tokio::test]
+    async fn the_overlay_shields_the_tab_below() {
+        let mut app = test_app();
+        app.avatar_zones = vec![
+            ZoneEvent {
+                zone_type: OldZoneType::DGB,
+                id: "FrontR".into(),
+                is_tps: false,
+                level: 0.0,
+                velocity: 0.0,
+                acceleration: 0.0,
+                recoil: 0.0,
+            },
+            ZoneEvent {
+                zone_type: OldZoneType::DGB,
+                id: "FrontL".into(),
+                is_tps: false,
+                level: 0.0,
+                velocity: 0.0,
+                acceleration: 0.0,
+                recoil: 0.0,
+            },
+        ];
+        draw_at(&mut app, 120, 30);
+        let avatar_row = rect_of(&app, &Action::SelectAvatar(1)).expect("avatar row");
+
+        open_overlay(&mut app).await;
+        draw_at(&mut app, 120, 30);
+        app.handle_mouse(click_at(avatar_row.x + 1, avatar_row.y)).await;
+
+        assert_eq!(app.sel_avatar, 0, "the click never reached the avatar list");
+    }
+
+    #[tokio::test]
+    async fn leaving_the_tab_closes_the_overlay() {
+        let mut app = test_app();
+        open_overlay(&mut app).await;
+        app.handle_key(key(KeyCode::Char('s'))).await;
+
+        app.apply(Action::SwitchTab(Tab::Status)).await;
+
+        assert!(!app.zone_presets_open);
+        assert!(!app.zone_preset_save_editing);
+    }
+
+    #[tokio::test]
+    async fn the_overlay_renders_at_any_size() {
+        let mut app = test_app();
+        open_overlay(&mut app).await;
+        for (w, h) in [(120, 40), (80, 24), (60, 16), (30, 10), (20, 6)] {
+            draw_at(&mut app, w, h);
+        }
+
+        app.zone_preset_save_editing = true;
+        for (w, h) in [(120, 40), (60, 16), (20, 6)] {
+            draw_at(&mut app, w, h);
+        }
+
+        app.zone_preset_save_editing = false;
+        app.zone_preset_delete_confirm = Some(1);
+        for (w, h) in [(120, 40), (60, 16), (20, 6)] {
+            draw_at(&mut app, w, h);
+        }
+
+        app.zone_preset_delete_confirm = None;
+        app.zone_presets.clear();
+        for (w, h) in [(120, 40), (60, 16), (20, 6)] {
+            draw_at(&mut app, w, h);
+        }
     }
 }

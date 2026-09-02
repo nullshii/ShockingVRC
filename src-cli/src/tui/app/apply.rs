@@ -19,6 +19,7 @@ impl App {
                 }
                 self.cancel_preset_save_edit();
                 self.cancel_preset_delete_confirm();
+                self.close_zone_presets();
                 self.close_mod_function_picker();
                 self.active_tab = t;
                 self.reset_tab_scrolls();
@@ -198,6 +199,21 @@ impl App {
                 }
                 log::info!("[ch-{}] Added {added} zone(s) from avatar", ch.label());
             }
+            Action::OpenZonePresets => self.open_zone_presets(),
+            Action::CloseZonePresets => self.close_zone_presets(),
+            Action::SelectZonePreset(i) => {
+                if i < self.zone_presets.len() {
+                    self.sel_zone_preset = i;
+                    self.sync_zone_presets_scroll();
+                }
+            }
+            Action::ApplyZonePreset => self.apply_selected_zone_preset().await,
+            Action::StartSaveZonePreset => self.start_zone_preset_save(),
+            Action::CommitSaveZonePreset => self.commit_zone_preset_save(),
+            Action::CancelSaveZonePreset => self.cancel_zone_preset_save(),
+            Action::RequestDeleteZonePreset(i) => self.request_zone_preset_delete(i),
+            Action::ConfirmDeleteZonePreset => self.confirm_zone_preset_delete(),
+            Action::CancelDeleteZonePreset => self.cancel_zone_preset_delete(),
             Action::SetFreq(ch, seg, v) => {
                 let mut f = self.channel_config(ch).frequency;
                 f[seg] = v.clamp(10, 255);

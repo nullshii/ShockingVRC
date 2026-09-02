@@ -71,6 +71,7 @@ pub(super) fn should_persist_config(action: &Action) -> bool {
             | Action::SetZoneThresholdMax(_, _, _)
             | Action::AddAvatarZone(_, _)
             | Action::AddAllZones(_)
+            | Action::ApplyZonePreset
             | Action::SetFreq(_, _, _)
             | Action::StepFreq(_, _, _)
             | Action::SetIntensity(_, _, _)

@@ -136,7 +136,7 @@ impl TutorialStep {
             Self::ChannelsFreq => &[
                 "Each channel has 4 frequency segments (seg 0-3).",
                 "Frequency controls the Hz of the DG-Lab waveform.",
-                "Range: 10-255 (lower = faster pulsing).",
+                "Range: 1-100 (Higher = faster pulsing).",
                 "",
                 "Use  <- ->  arrows or drag the slider to adjust.",
                 "Hold  Shift  for +/-10 steps.",

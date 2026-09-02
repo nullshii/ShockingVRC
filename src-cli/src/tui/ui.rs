@@ -10,6 +10,7 @@ use super::tabs;
 use super::theme;
 use super::tutorial;
 use super::update_overlay;
+use super::zone_presets_overlay;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     app.clickables.clear();
@@ -44,6 +45,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     render_status_bar(frame, app, rows[3]);
+
+    if app.zone_presets_open {
+        zone_presets_overlay::render(app, frame, content);
+    }
 
     if app.update_popup {
         update_overlay::render(app, frame, area);
@@ -230,7 +235,7 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
         Tab::Status => "  Q/Esc — quit",
         Tab::Setup => "  ↑↓ select  ·  ←→ / Enter toggle  ·  OSC & OSCQuery auto-configured",
         Tab::Presets => "  ↑↓ select  ·  × delete mine  ·  → A/B apply  ·  Save A/B  ·  R refresh",
-        Tab::Zones => "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  R reset  ·  drag threshold sliders  ·  M mode  ·  X remove",
+        Tab::Zones => "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  R reset  ·  drag threshold sliders  ·  M mode  ·  X remove  ·  Z sets",
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",
         Tab::Modulation => "  Enter — function list  ·  source buttons  ·  ↑↓ field  ·  wheel — scroll",

@@ -6,6 +6,7 @@ pub mod tabs;
 pub mod theme;
 pub mod tutorial;
 pub mod update_overlay;
+pub mod zone_presets_overlay;
 pub mod ui;
 
 use std::io::{self, Stdout};

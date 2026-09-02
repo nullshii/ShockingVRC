@@ -19,6 +19,7 @@ cli_config.json
 alarm.json
 shockingvrc_prefs.json
 devices/
+presets/zones/
 
 # Editor directories and files
 .vscode/*
