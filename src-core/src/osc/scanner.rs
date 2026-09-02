@@ -383,8 +383,16 @@ fn extract_osc_value(args: &[OscType]) -> Option<OscValue> {
 /// | `OGB/<Type>/<id>/<contact…>` | `OGB/Pen/Cock/PenOthers` |
 /// | `TPS_Internal/<Type>/<id>/<contact…>` | `TPS_Internal/Orf/Anal/Depth_In` |
 /// | `VFH/Zone/<Type>/<id>/<contact>` | `VFH/Zone/Pen/Cock/PenOthers` |
-/// | `DGB/<name>` | `DGB/TouchAreaA` |
+/// | `DGB/<name>` | `DGB/TouchAreaA`, `Control/Contact/DGB/FrontR` |
 fn parse_sps_param(parts: &[&str]) -> Option<(OldZoneType, String, String, bool)> {
+    parts
+        .iter()
+        .enumerate()
+        .filter(|(_, seg)| matches!(**seg, "DGB" | "OGB" | "TPS_Internal" | "VFH"))
+        .find_map(|(i, _)| parse_sps_tail(&parts[i..]))
+}
+
+fn parse_sps_tail(parts: &[&str]) -> Option<(OldZoneType, String, String, bool)> {
     match parts {
         // DGB: flat zone — value IS the level
         ["DGB", name] => Some((OldZoneType::DGB, name.to_string(), "Value".to_string(), false)),
@@ -413,5 +421,65 @@ fn parse_zone_type(s: &str) -> Option<OldZoneType> {
         "Orf" => Some(OldZoneType::Orf),
         "Touch" => Some(OldZoneType::Touch),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(param: &str) -> Option<(OldZoneType, String, String, bool)> {
+        let parts: Vec<&str> = param.split('/').collect();
+        parse_sps_param(&parts)
+    }
+
+    #[test]
+    fn parses_flat_dgb() {
+        assert_eq!(
+            parse("DGB/TouchAreaA"),
+            Some((OldZoneType::DGB, "TouchAreaA".into(), "Value".into(), false))
+        );
+    }
+
+    #[test]
+    fn parses_prefixed_dgb() {
+        let expected = Some((OldZoneType::DGB, "FrontR".into(), "Value".into(), false));
+        assert_eq!(parse("Contact/DGB/FrontR"), expected);
+        assert_eq!(parse("Control/Contact/DGB/FrontR"), expected);
+        assert_eq!(parse("a/b/c/d/e/DGB/FrontR"), expected);
+    }
+
+    #[test]
+    fn parses_prefixed_ogb_and_tps() {
+        assert_eq!(
+            parse("Control/OGB/Pen/Cock/PenOthers"),
+            Some((OldZoneType::Pen, "Cock".into(), "PenOthers".into(), false))
+        );
+        assert_eq!(
+            parse("Control/TPS_Internal/Orf/Anal/Depth_In"),
+            Some((OldZoneType::Orf, "Anal".into(), "Depth_In".into(), true))
+        );
+        assert_eq!(
+            parse("Control/VFH/Zone/Touch/Chest/TouchOthers"),
+            Some((OldZoneType::Touch, "Chest".into(), "TouchOthers".into(), false))
+        );
+    }
+
+    #[test]
+    fn skips_markers_that_do_not_parse() {
+        assert_eq!(
+            parse("DGB/OGB/Pen/Cock/PenOthers"),
+            Some((OldZoneType::Pen, "Cock".into(), "PenOthers".into(), false))
+        );
+    }
+
+    #[test]
+    fn rejects_unrelated_params() {
+        assert_eq!(parse("VelocityX"), None);
+        assert_eq!(parse("Control/EQ/EQShow"), None);
+        assert_eq!(parse("Control/Contact/Front_ON"), None);
+        assert_eq!(parse("DGB"), None);
+        assert_eq!(parse("DGB/Front/R"), None);
+        assert_eq!(parse("Control/OGB/Bogus/Cock/PenOthers"), None);
     }
 }
