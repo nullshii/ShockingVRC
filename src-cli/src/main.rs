@@ -6,6 +6,7 @@ use shocking_vrc_cli::{tui, tui_logger};
 
 #[tokio::main]
 async fn main() {
+    shocking_vrc_core::update::set_flavor(shocking_vrc_core::update::Flavor::Cli);
     shocking_vrc_core::update::cleanup_staging_files();
 
     let log_buffer = tui_logger::init("info");

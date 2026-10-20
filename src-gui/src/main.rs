@@ -6,6 +6,7 @@ use shocking_vrc_app::runtime::{self, SessionOptions};
 use shocking_vrc_gui::{GuiApp, bridge};
 
 fn main() -> eframe::Result<()> {
+    shocking_vrc_core::update::set_flavor(shocking_vrc_core::update::Flavor::Gui);
     shocking_vrc_core::update::cleanup_staging_files();
 
     let log_buffer = shocking_vrc_app::logger::init("info");

@@ -68,23 +68,40 @@ fn parse_tag_version(tag: &str) -> Result<Version, String> {
     Version::parse(trimmed).map_err(|e| format!("invalid release tag {tag:?}: {e}"))
 }
 
-fn platform_asset_name() -> Option<&'static str> {
-    #[cfg(target_os = "windows")]
-    {
-        return Some("shocking_vrc_cli.exe");
-    }
-    #[cfg(target_os = "linux")]
-    {
-        return Some("shocking_vrc_cli");
-    }
-    #[cfg(target_os = "macos")]
-    {
-        return Some("shocking_vrc_cli-macos");
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-    {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Flavor {
+    Cli,
+    Gui,
+}
+
+static FLAVOR: std::sync::OnceLock<Flavor> = std::sync::OnceLock::new();
+
+pub fn set_flavor(flavor: Flavor) {
+    let _ = FLAVOR.set(flavor);
+}
+
+pub fn flavor() -> Flavor {
+    FLAVOR.get().copied().unwrap_or(Flavor::Cli)
+}
+
+fn asset_name_for(flavor: Flavor) -> Option<&'static str> {
+    let (windows, linux, macos) = match flavor {
+        Flavor::Cli => ("shocking_vrc_cli.exe", "shocking_vrc_cli", "shocking_vrc_cli-macos"),
+        Flavor::Gui => ("shockingvrc.exe", "shockingvrc", "shockingvrc-macos"),
+    };
+    if cfg!(target_os = "windows") {
+        Some(windows)
+    } else if cfg!(target_os = "linux") {
+        Some(linux)
+    } else if cfg!(target_os = "macos") {
+        Some(macos)
+    } else {
         None
     }
+}
+
+fn platform_asset_name() -> Option<&'static str> {
+    asset_name_for(flavor())
 }
 
 fn http_client() -> Result<reqwest::Client, String> {
@@ -177,7 +194,7 @@ pub async fn download_release(
         .or((release.asset_size > 0).then_some(release.asset_size));
 
     let tmp = std::env::temp_dir().join(format!(
-        "shocking_vrc_cli_{}_{}",
+        "shockingvrc_{}_{}",
         release.tag.replace('/', "_"),
         release.asset_name
     ));
@@ -298,5 +315,14 @@ mod tests {
     fn parses_release_tags() {
         assert_eq!(parse_tag_version("1.0.1").unwrap(), Version::new(1, 0, 1));
         assert_eq!(parse_tag_version("v2.3.4").unwrap(), Version::new(2, 3, 4));
+    }
+
+    #[test]
+    fn each_flavor_updates_to_its_own_asset() {
+        let cli = asset_name_for(Flavor::Cli).unwrap();
+        let gui = asset_name_for(Flavor::Gui).unwrap();
+        assert!(cli.starts_with("shocking_vrc_cli"));
+        assert!(gui.starts_with("shockingvrc"));
+        assert_ne!(cli, gui);
     }
 }
