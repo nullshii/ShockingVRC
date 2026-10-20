@@ -11,7 +11,7 @@ use crate::tui::ui;
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     let rows = Layout::vertical([
         Constraint::Min(0),
-        Constraint::Length(5),
+        Constraint::Length(6),
         Constraint::Length(3),
     ])
     .split(area);
@@ -150,6 +150,7 @@ fn render_prefs(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Setu
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .split(inner);
 
@@ -182,6 +183,18 @@ fn render_prefs(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Setu
         Action::SetAlarmTabVisible(true),
         Action::SetAlarmTabVisible(false),
         alarm_hint,
+    );
+
+    toggle_row(
+        app,
+        frame,
+        rows[3],
+        "Spoof guard",
+        app.spoof_guard,
+        focus == Some(SetupControl::SpoofGuard),
+        Action::SetSpoofGuard(true),
+        Action::SetSpoofGuard(false),
+        "Ignore contacts that jump from idle straight to a high level",
     );
 }
 

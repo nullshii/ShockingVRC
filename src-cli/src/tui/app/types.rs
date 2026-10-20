@@ -441,6 +441,8 @@ pub enum Action {
     ToggleAutoSave,
     SetAlarmTabVisible(bool),
     ToggleAlarmTabVisible,
+    SetSpoofGuard(bool),
+    ToggleSpoofGuard,
 
     StepUkf(UkfField, i32),
     ResetUkf,

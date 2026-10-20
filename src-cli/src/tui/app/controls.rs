@@ -199,13 +199,15 @@ pub fn tuning_control_row(ctrl: TuningControl) -> u16 {
 pub enum SetupControl {
     AutoSave,
     AlarmTab,
+    SpoofGuard,
     Tutorial,
 }
 
 impl SetupControl {
-    pub const ALL: [SetupControl; 3] = [
+    pub const ALL: [SetupControl; 4] = [
         SetupControl::AutoSave,
         SetupControl::AlarmTab,
+        SetupControl::SpoofGuard,
         SetupControl::Tutorial,
     ];
 
@@ -213,6 +215,7 @@ impl SetupControl {
         match self {
             SetupControl::AutoSave => Some(Action::SetAutoSave(d > 0)),
             SetupControl::AlarmTab => Some(Action::SetAlarmTabVisible(d > 0)),
+            SetupControl::SpoofGuard => Some(Action::SetSpoofGuard(d > 0)),
             SetupControl::Tutorial => None,
         }
     }
@@ -221,12 +224,13 @@ impl SetupControl {
         match self {
             SetupControl::AutoSave => Some(Action::ToggleAutoSave),
             SetupControl::AlarmTab => Some(Action::ToggleAlarmTabVisible),
+            SetupControl::SpoofGuard => Some(Action::ToggleSpoofGuard),
             SetupControl::Tutorial => Some(Action::TutorialStart),
         }
     }
 }
 
-pub fn setup_controls() -> &'static [SetupControl; 3] {
+pub fn setup_controls() -> &'static [SetupControl; 4] {
     &SetupControl::ALL
 }
 

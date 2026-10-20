@@ -307,6 +307,11 @@ impl App {
                 let on = !self.auto_save;
                 self.set_auto_save(on).await;
             }
+            Action::SetSpoofGuard(on) => self.set_spoof_guard(on),
+            Action::ToggleSpoofGuard => {
+                let on = !self.spoof_guard;
+                self.set_spoof_guard(on);
+            }
             Action::SetAlarmTabVisible(on) => self.set_alarm_tab_visible(on),
             Action::ToggleAlarmTabVisible => {
                 let on = !self.alarm_tab_visible;
@@ -508,6 +513,15 @@ impl App {
         if on {
             self.auto_save_config().await;
         }
+    }
+
+    fn set_spoof_guard(&mut self, on: bool) {
+        self.spoof_guard = on;
+        shocking_vrc_core::cli::set_spoof_guard(on);
+        if let Err(e) = shocking_vrc_app::prefs::update_ui_prefs(|p| p.spoof_guard = on) {
+            log::error!("[prefs] Failed to save: {e}");
+        }
+        log::info!("[prefs] Spoofed-contact guard {}", if on { "enabled" } else { "disabled" });
     }
 
     fn set_alarm_tab_visible(&mut self, on: bool) {

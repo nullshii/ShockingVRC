@@ -19,6 +19,19 @@ use super::config::{ChannelConfig, CliConfig, ContactMode, MotionNorms, PowerLim
 const ZONE_IDLE_TIMEOUT: Duration = Duration::from_millis(500);
 const WATCHDOG_INTERVAL: Duration = Duration::from_millis(50);
 
+static SPOOF_GUARD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub fn set_spoof_guard(on: bool) {
+    SPOOF_GUARD.store(on, Ordering::Relaxed);
+}
+
+pub fn spoof_guard_enabled() -> bool {
+    SPOOF_GUARD.load(Ordering::Relaxed)
+}
+
+const ENTRY_JUMP_LIMIT: f32 = 0.6;
+const RELEASE_LEVEL: f32 = 0.02;
+
 /// Per-channel runtime status snapshot.
 #[derive(Debug, Clone)]
 pub struct ChannelStatus {
@@ -44,6 +57,7 @@ struct ZoneKinematics {
     acceleration: f32,
     recoil: f32,
     last_update: Instant,
+    blocked: bool,
 }
 
 impl ZoneKinematics {
@@ -389,9 +403,28 @@ impl CliEngine {
         let now = Instant::now();
         let mut kinematics = self.state.zone_kinematics.write().await;
         for event in events {
+            let id = ZoneId::from_event(event);
+            let was_idle = kinematics
+                .get(&id)
+                .is_none_or(|p| p.is_stale(now) || p.level <= RELEASE_LEVEL);
+            let was_blocked = kinematics.get(&id).is_some_and(|p| p.blocked);
+            let blocked = if event.level <= RELEASE_LEVEL || !spoof_guard_enabled() {
+                false
+            } else if was_idle {
+                event.level > ENTRY_JUMP_LIMIT
+            } else {
+                was_blocked
+            };
+            if blocked && !was_blocked {
+                warn!(
+                    "[cli] Ignored {id}: jumped from idle to {:.0}% in one update (possible spoofed contact)",
+                    event.level * 100.0
+                );
+            }
             kinematics.insert(
-                ZoneId::from_event(event),
+                id,
                 ZoneKinematics {
+                    blocked,
                     level: event.level,
                     velocity: event.velocity,
                     acceleration: event.acceleration,
@@ -521,7 +554,7 @@ fn threshold_window_is_open(min_threshold: u8, max_threshold: u8) -> bool {
 }
 
 fn project_zone(k: &ZoneKinematics, entry: &ZoneEntry, norms: &MotionNorms, now: Instant) -> f32 {
-    if k.is_stale(now) {
+    if k.is_stale(now) || k.blocked {
         return 0.0;
     }
     let depth = apply_threshold(k.level.clamp(0.0, 1.0), entry.min_threshold, entry.max_threshold);
@@ -813,6 +846,7 @@ mod threshold_is_a_depth_calibration_tests {
             acceleration: velocity,
             recoil: velocity,
             last_update: Instant::now(),
+            blocked: false,
         }
     }
 
@@ -907,6 +941,7 @@ mod staleness_tests {
             acceleration: 0.0,
             recoil: 0.0,
             last_update: base,
+            blocked: false,
         }
     }
 
@@ -924,5 +959,69 @@ mod staleness_tests {
         let k = zone_at(base);
         assert!(k.is_stale(base + ZONE_IDLE_TIMEOUT * 2));
         assert!(ZONE_IDLE_TIMEOUT <= Duration::from_millis(600), "phantom-stim window too long");
+    }
+}
+
+#[cfg(test)]
+mod spoof_guard_tests {
+    use super::*;
+    use crate::osc::types::OldZoneType;
+
+    fn event(level: f32) -> ZoneEvent {
+        ZoneEvent {
+            zone_type: OldZoneType::Pen,
+            id: "Z".into(),
+            is_tps: false,
+            level,
+            velocity: 0.0,
+            acceleration: 0.0,
+            recoil: 0.0,
+        }
+    }
+
+    static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    async fn output_after(levels: &[f32]) -> f32 {
+        let _g = LOCK.lock().await;
+        set_spoof_guard(true);
+        run(levels).await
+    }
+
+    async fn run(levels: &[f32]) -> f32 {
+        let mut cfg = CliConfig::default();
+        cfg.channel_a.zones = vec![ZoneEntry::new(
+            ZoneId::from_event(&event(0.0)),
+            ContactMode::Depth,
+        )];
+        let engine = CliEngine::new(cfg, AlarmController::new(AlarmConfig::default()));
+        for l in levels {
+            engine.process_events(&[event(*l)]).await;
+        }
+        engine.current_status().await.channel_a.raw_level
+    }
+
+    #[tokio::test]
+    async fn instant_full_level_from_idle_is_ignored() {
+        assert_eq!(output_after(&[1.0]).await, 0.0);
+        assert_eq!(output_after(&[0.0, 1.0, 1.0]).await, 0.0);
+    }
+
+    #[tokio::test]
+    async fn disabled_guard_lets_instant_contact_through() {
+        let _g = LOCK.lock().await;
+        set_spoof_guard(false);
+        let out = run(&[1.0]).await;
+        set_spoof_guard(true);
+        assert!(out > 0.9);
+    }
+
+    #[tokio::test]
+    async fn a_ramping_touch_passes() {
+        assert!(output_after(&[0.05, 0.3, 0.7, 1.0]).await > 0.9);
+    }
+
+    #[tokio::test]
+    async fn guard_rearms_after_release() {
+        assert!(output_after(&[1.0, 0.0, 0.1, 0.5]).await > 0.4);
     }
 }

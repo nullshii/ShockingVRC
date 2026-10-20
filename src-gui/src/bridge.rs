@@ -224,6 +224,7 @@ pub enum Command {
 
     SetAutoSave(bool),
     SetAlarmTabVisible(bool),
+    SetSpoofGuard(bool),
 
     CheckUpdate,
     StartUpdateDownload,
@@ -298,6 +299,7 @@ impl Bridge {
 pub fn spawn(state: Arc<AppState>, repaint: impl Fn() + Send + Sync + 'static) -> Bridge {
     let (tx, rx) = unbounded_channel();
     let shared = Arc::new(Shared::new());
+    shocking_vrc_core::cli::set_spoof_guard(prefs::load_ui_prefs().spoof_guard);
     let bridge = Bridge {
         tx,
         shared: Arc::clone(&shared),
@@ -861,6 +863,16 @@ impl Worker {
                 if on {
                     self.persist_config().await;
                 }
+            }
+            Command::SetSpoofGuard(on) => {
+                shocking_vrc_core::cli::set_spoof_guard(on);
+                if let Err(e) = prefs::update_ui_prefs(|p| p.spoof_guard = on) {
+                    log::error!("[prefs] Failed to save: {e}");
+                }
+                log::info!(
+                    "[prefs] Spoofed-contact guard {}",
+                    if on { "enabled" } else { "disabled" }
+                );
             }
             Command::SetAlarmTabVisible(on) => {
                 if let Err(e) = prefs::save_alarm_tab_pref(on) {

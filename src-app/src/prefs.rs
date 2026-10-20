@@ -21,6 +21,12 @@ pub struct UiPrefs {
     pub backdrop_speed: Option<f32>,
     #[serde(default)]
     pub backdrop_density: Option<f32>,
+    #[serde(default = "default_spoof_guard")]
+    pub spoof_guard: bool,
+}
+
+fn default_spoof_guard() -> bool {
+    true
 }
 
 fn default_auto_save() -> bool {
@@ -38,6 +44,7 @@ impl Default for UiPrefs {
             theme: None,
             backdrop_speed: None,
             backdrop_density: None,
+            spoof_guard: default_spoof_guard(),
         }
     }
 }

@@ -71,6 +71,7 @@ pub struct App {
     pub alarm_focus: usize,
     pub setup_focus: usize,
     pub alarm_tab_visible: bool,
+    pub spoof_guard: bool,
 
     pub mod_channel: Channel,
     pub mod_kind: ModKind,
@@ -190,6 +191,7 @@ impl App {
             alarm_focus: 0,
             setup_focus: 0,
             alarm_tab_visible: false,
+            spoof_guard: true,
             mod_channel: Channel::A,
             mod_kind: ModKind::Freq,
             mod_seg: 0,
@@ -254,6 +256,8 @@ impl App {
         let p = load_ui_prefs();
         app.auto_save = p.auto_save;
         app.alarm_tab_visible = p.alarm_tab;
+        app.spoof_guard = p.spoof_guard;
+        shocking_vrc_core::cli::set_spoof_guard(p.spoof_guard);
         app.preset_save_nickname = p.nickname;
         if !p.has_seen_tutorial {
             app.start_tutorial();

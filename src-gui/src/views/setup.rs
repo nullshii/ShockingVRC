@@ -165,6 +165,18 @@ fn preferences(ui: &mut Ui, cx: &mut Ctx) {
         );
 
         ui.add_space(space::ROW_GAP);
+
+        toggle_row(
+            ui,
+            cx,
+            "Spoof guard",
+            "Ignore contacts that jump from idle straight to a high level (avatar mods that shock without touch)",
+            |s| s.spoof_guard,
+            |s, v| s.spoof_guard = v,
+            Command::SetSpoofGuard,
+        );
+
+        ui.add_space(space::ROW_GAP);
         ui.horizontal(|ui| {
             w::field_label(ui, pal, "Nickname", 120.0, true);
             let resp = w::text_field(

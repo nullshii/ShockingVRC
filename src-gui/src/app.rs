@@ -46,6 +46,7 @@ pub struct UiState {
 
     pub auto_save: bool,
     pub alarm_section_visible: bool,
+    pub spoof_guard: bool,
     pub nickname: String,
 
     pub show_theme_panel: bool,
@@ -121,6 +122,7 @@ impl UiState {
             log_levels: LogLevels::default(),
             auto_save: p.auto_save,
             alarm_section_visible: p.alarm_tab,
+            spoof_guard: p.spoof_guard,
             nickname: p.nickname.clone(),
             show_theme_panel: false,
             show_about: false,
@@ -253,9 +255,10 @@ impl GuiApp {
         let theme = self.theme.id.clone();
         let speed = self.backdrop.speed;
         let density = self.backdrop.density;
-        let (auto_save, alarm_tab, nickname) = (
+        let (auto_save, alarm_tab, spoof_guard, nickname) = (
             self.state.auto_save,
             self.state.alarm_section_visible,
+            self.state.spoof_guard,
             self.state.nickname.clone(),
         );
         if let Err(e) = prefs::update_ui_prefs(|p| {
@@ -264,6 +267,7 @@ impl GuiApp {
             p.backdrop_density = Some(density);
             p.auto_save = auto_save;
             p.alarm_tab = alarm_tab;
+            p.spoof_guard = spoof_guard;
             p.nickname = nickname;
         }) {
             log::warn!("[prefs] Failed to save: {e}");
