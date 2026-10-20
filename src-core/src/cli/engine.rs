@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use log::{debug, info, warn};
@@ -69,6 +70,8 @@ struct EngineState {
     last_wave_tick: Mutex<Instant>,
     alarm: AlarmController,
     last_bf: Mutex<Option<(u8, u8)>>,
+    pending_bf: std::sync::Mutex<Option<(u8, u8)>>,
+    bf_sender_running: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Clone)]
@@ -91,6 +94,8 @@ impl CliEngine {
                 last_wave_tick: Mutex::new(Instant::now()),
                 alarm,
                 last_bf: Mutex::new(None),
+                pending_bf: std::sync::Mutex::new(None),
+                bf_sender_running: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }
@@ -273,26 +278,49 @@ impl CliEngine {
     }
 
     async fn push_bf(&self, a: u8, b: u8) {
-        let device = self.state.device.lock().await.clone();
-        let Some(device) = device else {
+        if self.state.device.lock().await.is_none() {
             *self.state.last_bf.lock().await = None;
             return;
-        };
-        {
-            let mut last = self.state.last_bf.lock().await;
-            if *last == Some((a, b)) {
-                return;
-            }
-            *last = Some((a, b));
         }
-        let bf = WaveformBF::new(a, b, 0, 0, 0, 0);
-        match device.set_wave_bf(&bf).await {
-            Ok(_) => info!("[cli] BF ceiling set to A={a} B={b}"),
-            Err(e) => {
-                warn!("[cli] Failed to send BF ceiling: {e}");
-                *self.state.last_bf.lock().await = None;
-            }
+        *self.state.pending_bf.lock().unwrap() = Some((a, b));
+        if self.state.bf_sender_running.swap(true, Ordering::AcqRel) {
+            return;
         }
+        let state = Arc::clone(&self.state);
+        tokio::spawn(async move {
+            loop {
+                let target = state.pending_bf.lock().unwrap().take();
+                let Some((a, b)) = target else {
+                    state.bf_sender_running.store(false, Ordering::Release);
+                    if state.pending_bf.lock().unwrap().is_some()
+                        && !state.bf_sender_running.swap(true, Ordering::AcqRel)
+                    {
+                        continue;
+                    }
+                    return;
+                };
+                let device = state.device.lock().await.clone();
+                let Some(device) = device else {
+                    *state.last_bf.lock().await = None;
+                    continue;
+                };
+                {
+                    let mut last = state.last_bf.lock().await;
+                    if *last == Some((a, b)) {
+                        continue;
+                    }
+                    *last = Some((a, b));
+                }
+                let bf = WaveformBF::new(a, b, 0, 0, 0, 0);
+                match device.set_wave_bf(&bf).await {
+                    Ok(_) => debug!("[cli] BF ceiling set to A={a} B={b}"),
+                    Err(e) => {
+                        warn!("[cli] Failed to send BF ceiling: {e}");
+                        *state.last_bf.lock().await = None;
+                    }
+                }
+            }
+        });
     }
 
     pub async fn start(&self, scanner: &AvatarScanner) -> CliStopHandle {

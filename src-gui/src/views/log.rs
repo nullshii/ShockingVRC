@@ -116,7 +116,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
         if cx.ui_state.log_follow {
             area = area.stick_to_bottom(true);
         }
-        area.show(ui, |ui| {
+        area.show_rows(ui, 17.0, visible.len().max(1), |ui, range| {
             ui.set_min_height(320.0);
             if visible.is_empty() {
                 w::empty_state(
@@ -130,7 +130,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
                 );
                 return;
             }
-            for line in &visible {
+            for line in &visible[range.start.min(visible.len())..range.end.min(visible.len())] {
                 let (rect, _) =
                     ui.allocate_exact_size(vec2(ui.available_width(), 17.0), Sense::hover());
                 let (tag, rest) = split_tag(line);

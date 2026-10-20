@@ -308,6 +308,7 @@ pub fn spawn(state: Arc<AppState>, repaint: impl Fn() + Send + Sync + 'static) -
         shared: Arc::clone(&shared),
         active_device: 0,
         auto_save: prefs::load_ui_prefs().auto_save,
+        dirty: false,
         repaint: Box::new(repaint),
     };
     tokio::spawn(worker.run(rx));
@@ -320,6 +321,7 @@ struct Worker {
     shared: Arc<Shared>,
     active_device: usize,
     auto_save: bool,
+    dirty: bool,
     repaint: Box<dyn Fn() + Send + Sync>,
 }
 
@@ -337,6 +339,10 @@ impl Worker {
                 cmd = rx.recv() => {
                     let Some(cmd) = cmd else { break };
                     self.apply(cmd).await;
+                    while let Ok(next) = rx.try_recv() {
+                        self.apply(next).await;
+                    }
+                    self.flush_persist().await;
                     self.publish().await;
                     (self.repaint)();
                 }
@@ -547,16 +553,10 @@ impl Worker {
             Command::SetLimitMin(ch, v) => {
                 self.mutate_channel(ch, |c| c.limits = PowerLimits::new(v, c.limits.max))
                     .await;
-                if let Some(e) = self.engine() {
-                    e.sync_hardware_limits().await;
-                }
             }
             Command::SetLimitMax(ch, v) => {
                 self.mutate_channel(ch, |c| c.limits = PowerLimits::new(c.limits.min, v))
                     .await;
-                if let Some(e) = self.engine() {
-                    e.sync_hardware_limits().await;
-                }
             }
             Command::SetAggregation(ch, mode) => {
                 if self.mutate_channel(ch, |c| c.aggregation = mode).await {
@@ -901,7 +901,11 @@ impl Worker {
             Command::DismissUpdate => self.dismiss_update(),
         }
 
-        if persists {
+        self.dirty |= persists;
+    }
+
+    async fn flush_persist(&mut self) {
+        if std::mem::take(&mut self.dirty) {
             self.persist_config().await;
         }
     }
@@ -1151,6 +1155,7 @@ mod tests {
             shared: Arc::new(Shared::new()),
             active_device: 0,
             auto_save: false,
+            dirty: false,
             repaint: Box::new(|| {}),
         }
     }
