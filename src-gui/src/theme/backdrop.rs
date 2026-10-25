@@ -82,6 +82,7 @@ impl Backdrop {
         }
     }
 
+    #[allow(clippy::approx_constant)]
     fn make_box(&mut self, anywhere: bool) -> Box3 {
         let s = self.rng.range(0.09, 0.30);
         Box3 {

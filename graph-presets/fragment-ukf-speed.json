@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "kind": "Fragment",
+  "name": "UKF speed tap",
+  "description": "Contact → UKF → smoothed speed, with a scope — wire it in",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Ukf"
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          560.0,
+          196.0
+        ],
+        "kind": {
+          "type": "Scope",
+          "count": 2,
+          "window_s": 4.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 1,
+          "pin": "level"
+        },
+        "to": {
+          "node": 2,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in2"
+        }
+      }
+    ]
+  }
+}

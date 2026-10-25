@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Feather",
+  "description": "Soft: a gentle 55–75 Hz touch that fades in over a second and out over 2.5 s, capped at 10",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -136.0
+        ],
+        "title": "Soft · feather",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            106.0
+          ],
+          "text": "Gentle on purpose: Limit Max is 10 and intensity breathes between 25 and 55 % (clamped to 15–60). Depth fades in over about a second and out over two and a half, so nothing ever starts or stops abruptly. The pitch drifts slowly through 55–75 Hz; A and B breathe in turn."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 900.0,
+          "release_ms": 2500.0
+        },
+        "title": "Slow fade"
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          196.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.85
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          344.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Sine",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "title": "Pitch drift",
+        "defaults": {
+          "hz": 0.05
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Sine",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "title": "Breath A",
+        "defaults": {
+          "hz": 0.08,
+          "amp": 0.15,
+          "bias": 0.4
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          316.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Sine",
+          "phase": 0.5,
+          "one_shot": false,
+          "seed": 2
+        },
+        "title": "Breath B",
+        "defaults": {
+          "hz": 0.08,
+          "amp": 0.15,
+          "bias": 0.4
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                55.0,
+                75.0
+              ],
+              "intensity_clamp": [
+                15,
+                60
+              ]
+            },
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                55.0,
+                75.0
+              ],
+              "intensity_clamp": [
+                15,
+                60
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 10.0,
+          "b.limit_max": 10.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.power"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int"
+        }
+      }
+    ]
+  }
+}

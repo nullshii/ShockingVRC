@@ -1,0 +1,462 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Drifting polyrhythm",
+  "description": "Long-form: four clocks at 3·4·5·7 per four seconds, slightly detuned, one per intensity segment",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -152.0
+        ],
+        "title": "Long-form · four clocks",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            620.0,
+            122.0
+          ],
+          "text": "Each intensity segment has its own Metronome — close to 3, 4, 5 and 7 beats per four seconds but detuned, so the accents slide against each other and line up again only after minutes. Off-beats drop to a 20 % intensity floor instead of silence. Channel B fires every beat at once in a tight 16–20 band: short, hard accents. A slow two-minute saw sweeps segment 3's pitch."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Clocks ×4",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 0.75,
+                  "width": 0.35
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  216.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 1.0,
+                  "width": 0.5
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  40.0,
+                  432.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 1.27,
+                  "width": 0.3
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  40.0,
+                  648.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 1.73,
+                  "width": 0.2
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "≈3 / 4 s"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "4 / 4 s"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "≈5 / 4 s"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "≈7 / 4 s"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "gate"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "gate"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "gate"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "gate"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out4"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Saw",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "title": "Pitch sweep",
+        "defaults": {
+          "hz": 0.008,
+          "amp": 0.45,
+          "bias": 0.5
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Max",
+          "count": 4,
+          "weights": []
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          200.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                10.0,
+                90.0
+              ],
+              "intensity_clamp": [
+                20,
+                100
+              ]
+            },
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                10.0,
+                100.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_min": 4.0,
+          "a.limit_max": 24.0,
+          "b.limit_min": 16.0,
+          "b.limit_max": 20.0,
+          "a.freq1": 0.1,
+          "a.freq2": 0.85,
+          "a.freq4": 0.6,
+          "b.freq1": 0.9,
+          "b.freq2": 0.7,
+          "b.freq3": 0.5,
+          "b.freq4": 0.3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "level"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

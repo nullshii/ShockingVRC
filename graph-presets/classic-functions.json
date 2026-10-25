@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Classic functions on a clock",
+  "description": "Any Classic modulation function, driven by time, shapes frequency and intensity",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Classic modulation as nodes",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "The Function node runs any Classic modulation function — here sin∘triangle and perlin. Its Cycles input is the phase: Time × rate. Deviation and offset map the result into 0–1."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Time"
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          140.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.5
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          288.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.3
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          140.0
+        ],
+        "kind": {
+          "type": "Function",
+          "function": {
+            "Compose": {
+              "outer": "Sin",
+              "inner": "Triangle"
+            }
+          },
+          "phase": 0.0,
+          "frequency_multiplier": 1.0,
+          "power": 1.0,
+          "offset": 0.5,
+          "max_deviation": 0.5,
+          "clamp_min": 0.0,
+          "clamp_max": 1.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          308.0
+        ],
+        "kind": {
+          "type": "Function",
+          "function": "Perlin",
+          "phase": 0.0,
+          "frequency_multiplier": 1.0,
+          "power": 1.0,
+          "offset": 0.5,
+          "max_deviation": 0.5,
+          "clamp_min": 0.0,
+          "clamp_max": 1.0
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "t"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "t"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "cycles"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "cycles"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.freq"
+        }
+      }
+    ]
+  }
+}

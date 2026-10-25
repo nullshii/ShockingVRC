@@ -1,0 +1,1039 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Glitch rain",
+  "description": "Long-form: random stepped pitch and intensity per segment, with a floor that jumps every 5 s",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -136.0
+        ],
+        "title": "Long-form · sample & hold rain",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            620.0,
+            106.0
+          ],
+          "text": "Every segment samples its own noise on its own clock: pitch jumps 3, 5, 7 and 11 times a second, intensity 1, 1.5, 2 and 3 times. The floor itself is random — every 5 s Limit Min jumps somewhere between 2 and 10, so even the softest moments change. Channel B replays A's depth 300 ms later with the segments reversed."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Metronome"
+        },
+        "title": "Every 5 s",
+        "defaults": {
+          "hz": 0.2
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          216.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 41
+        },
+        "defaults": {
+          "rate": 0.05
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          40.0,
+          412.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "SampleHold"
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          128.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 2.0,
+          "out_max": 10.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          300.0,
+          460.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 300
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Rain ×4",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 3.0
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  216.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Value",
+                  "seed": 21
+                },
+                "defaults": {
+                  "rate": 0.7
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  40.0,
+                  412.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 5.0
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  40.0,
+                  628.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Value",
+                  "seed": 22
+                },
+                "defaults": {
+                  "rate": 1.1
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  230.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  40.0,
+                  824.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 7.0
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  40.0,
+                  1040.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Value",
+                  "seed": 23
+                },
+                "defaults": {
+                  "rate": 1.3
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  300.0,
+                  460.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  40.0,
+                  1236.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 11.0
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  40.0,
+                  1452.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Value",
+                  "seed": 24
+                },
+                "defaults": {
+                  "rate": 1.9
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  300.0,
+                  690.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  560.0,
+                  300.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Seg 1"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "Seg 2"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "Seg 3"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "Seg 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out4"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          560.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Steps ×4",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 1.0
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  216.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Perlin",
+                  "seed": 31
+                },
+                "defaults": {
+                  "rate": 0.4
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  40.0,
+                  412.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 1.5
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  40.0,
+                  628.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Perlin",
+                  "seed": 32
+                },
+                "defaults": {
+                  "rate": 0.6
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  230.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  40.0,
+                  824.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 2.0
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  40.0,
+                  1040.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Perlin",
+                  "seed": 33
+                },
+                "defaults": {
+                  "rate": 0.8
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  300.0,
+                  460.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  40.0,
+                  1236.0
+                ],
+                "kind": {
+                  "type": "Metronome"
+                },
+                "defaults": {
+                  "hz": 3.0
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  40.0,
+                  1452.0
+                ],
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Perlin",
+                  "seed": 34
+                },
+                "defaults": {
+                  "rate": 1.0
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  300.0,
+                  690.0
+                ],
+                "kind": {
+                  "type": "SampleHold"
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  560.0,
+                  300.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Seg 1"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "Seg 2"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "Seg 3"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "Seg 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "beat"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "trig"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "out4"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                5.0,
+                100.0
+              ],
+              "intensity_clamp": [
+                15,
+                100
+              ]
+            },
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                5.0,
+                100.0
+              ],
+              "intensity_clamp": [
+                15,
+                100
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 24.0,
+          "b.limit_max": 22.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 8,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "beat"
+        },
+        "to": {
+          "node": 5,
+          "pin": "trig"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "level"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "level"
+        },
+        "to": {
+          "node": 7,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Ping-pong A/B",
+  "description": "A triangle LFO pans the contact between channel A and channel B",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Panning between channels",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "A triangle LFO multiplies the depth on channel A; Invert (1 − x) gives channel B the opposite phase, so the sensation travels back and forth. The LFO's Hz input sets the speed."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          40.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          188.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Triangle",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "defaults": {
+          "hz": 0.5
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          330.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Invert"
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          40.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          330.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 5,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

@@ -1,5 +1,7 @@
 use egui::Context;
 
+use shocking_vrc_core::cli::EngineMode;
+
 use crate::app::UiState;
 use crate::model::Section;
 use crate::theme::Palette;
@@ -9,6 +11,7 @@ use crate::theme::widgets::{self as w, font, space};
 pub enum Step {
     Welcome,
     StatusOverview,
+    GraphIntro,
     ZonesIntro,
     ZonesAddZone,
     ZonesDgbTip,
@@ -27,9 +30,10 @@ pub enum Step {
 }
 
 impl Step {
-    pub const ALL: [Step; 17] = [
+    pub const ALL: [Step; 18] = [
         Step::Welcome,
         Step::StatusOverview,
+        Step::GraphIntro,
         Step::ZonesIntro,
         Step::ZonesAddZone,
         Step::ZonesDgbTip,
@@ -47,14 +51,24 @@ impl Step {
         Step::Done,
     ];
 
+    #[cfg(test)]
     fn index(self) -> usize {
         Self::ALL.iter().position(|s| *s == self).unwrap_or(0)
+    }
+
+    fn applies(self, mode: EngineMode) -> bool {
+        self.section().is_none_or(|s| s.in_mode(mode))
+    }
+
+    fn for_mode(mode: EngineMode) -> Vec<Step> {
+        Self::ALL.into_iter().filter(|s| s.applies(mode)).collect()
     }
 
     fn section(self) -> Option<Section> {
         match self {
             Step::Welcome | Step::Done => None,
             Step::StatusOverview => Some(Section::Status),
+            Step::GraphIntro => Some(Section::Graph),
             Step::ZonesIntro | Step::ZonesAddZone | Step::ZonesDgbTip => Some(Section::Zones),
             Step::ChannelsFreq
             | Step::ChannelsIntensity
@@ -71,6 +85,7 @@ impl Step {
         match self {
             Step::Welcome => "Welcome to ShockingVRC",
             Step::StatusOverview => "Status",
+            Step::GraphIntro => "Graph mode",
             Step::ZonesIntro => "Zones — overview",
             Step::ZonesAddZone => "Zones — adding a zone",
             Step::ZonesDgbTip => "DGB contacts — Unity setup",
@@ -110,6 +125,18 @@ impl Step {
                 "",
                 "With more than one Coyote, a device list appears — click a row",
                 "to switch. Each device keeps its own configuration.",
+            ],
+            Step::GraphIntro => &[
+                "In Graph mode you wire the signal yourself, like a shader editor.",
+                "",
+                "  · Right-click or Shift+A adds a node; drag from an output",
+                "    square to an input to connect it",
+                "  · Every Coyote gets its own Device node with Power,",
+                "    Frequency and Intensity pins for channels A and B",
+                "  · Minimal graph: Contact → Device · Channel A · Power",
+                "",
+                "Whatever the graph asks for, the Graph cap in Setup is the",
+                "ceiling. PANIC (or F12) holds every device at 0.",
             ],
             Step::ZonesIntro => &[
                 "Zones are avatar contact areas that drive the device.",
@@ -284,11 +311,12 @@ impl Tutorial {
     }
 
     fn advance(&mut self, delta: i32, state: &mut UiState) {
-        let i = self.step.index() as i32 + delta;
+        let steps = Step::for_mode(state.mode);
+        let i = steps.iter().position(|s| *s == self.step).unwrap_or(0) as i32 + delta;
         if i < 0 {
             return;
         }
-        match Step::ALL.get(i as usize) {
+        match steps.get(i as usize) {
             Some(s) => {
                 self.step = *s;
                 if let Some(section) = s.section()
@@ -309,8 +337,9 @@ impl Tutorial {
 
     pub fn show(&mut self, ctx: &Context, pal: &Palette, state: &mut UiState) {
         let step = self.step;
-        let n = Step::ALL.len();
-        let i = step.index();
+        let steps = Step::for_mode(state.mode);
+        let n = steps.len();
+        let i = steps.iter().position(|s| *s == step).unwrap_or(0);
 
         let mut next = false;
         let mut prev = false;
@@ -435,6 +464,7 @@ mod tests {
         let visited: Vec<Section> = Step::ALL.iter().filter_map(|s| s.section()).collect();
         for section in [
             Section::Status,
+            Section::Graph,
             Section::Zones,
             Section::Channels,
             Section::Tuning,
@@ -459,6 +489,16 @@ mod tests {
             t.advance(1, &mut state);
         }
         assert!(!t.active, "the tour ends after the last step");
+    }
+
+    #[test]
+    fn the_tour_follows_the_mode() {
+        let classic = Step::for_mode(EngineMode::Classic);
+        let graph = Step::for_mode(EngineMode::Graph);
+        assert!(!classic.contains(&Step::GraphIntro), "the Classic tour is unchanged");
+        assert_eq!(classic.len(), Step::ALL.len() - 1);
+        assert!(graph.contains(&Step::GraphIntro));
+        assert!(!graph.contains(&Step::ZonesIntro));
     }
 
     #[test]

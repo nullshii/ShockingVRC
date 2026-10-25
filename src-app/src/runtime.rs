@@ -5,20 +5,24 @@ use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use shocking_vrc_core::cli::{
-    AggregationMode, ChannelConfig, CliConfig, ContactMode, PowerLimits, ZoneEntry, ZoneId,
+    AggregationMode, ChannelConfig, CliConfig, ContactMode, EngineMode, PowerLimits, ZoneEntry,
+    ZoneId,
 };
 use shocking_vrc_core::{AlarmController, AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
 
 use crate::alarm_store;
 use crate::app_state::{AppState, DeviceSlot};
 use crate::device_config;
-use crate::prefs::{CONFIG_FILE, load_config_from_file};
+use crate::graph_runtime::GraphRuntime;
+use crate::graph_store;
+use crate::prefs::{CONFIG_FILE, load_config_from_file, load_ui_prefs};
 
 #[derive(Debug, Clone)]
 pub struct SessionOptions {
     pub port: Option<u16>,
     pub scan_timeout: u64,
     pub skip_update_check: bool,
+    pub mode: Option<EngineMode>,
 }
 
 impl Default for SessionOptions {
@@ -27,6 +31,7 @@ impl Default for SessionOptions {
             port: None,
             scan_timeout: 8,
             skip_update_check: false,
+            mode: None,
         }
     }
 }
@@ -52,6 +57,9 @@ impl SessionOptions {
                     );
                     println!("  --scan-timeout       BLE scan timeout in seconds (default: 8)");
                     println!("  --skip-update-check  Do not check GitHub for updates on startup");
+                    println!(
+                        "  --mode classic|graph Run this session in Classic or Graph mode (graph.json)"
+                    );
                     std::process::exit(0);
                 }
                 "--port" => {
@@ -67,6 +75,19 @@ impl SessionOptions {
                     }
                 }
                 "--skip-update-check" => opts.skip_update_check = true,
+                "--mode" => {
+                    if let Some(v) = args.get(i + 1) {
+                        opts.mode = match v.to_ascii_lowercase().as_str() {
+                            "graph" => Some(EngineMode::Graph),
+                            "classic" => Some(EngineMode::Classic),
+                            other => {
+                                eprintln!("unknown --mode '{other}' (classic|graph)");
+                                None
+                            }
+                        };
+                        i += 1;
+                    }
+                }
                 _ => {}
             }
             i += 1;
@@ -149,13 +170,36 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
     let alarm = AlarmController::new(alarm_store::load_alarm());
     alarm.spawn_ticker();
 
+    let prefs = load_ui_prefs();
+    let mode = opts.mode.unwrap_or(prefs.mode);
+    let loaded = graph_store::load_graph();
+    for note in &loaded.notes {
+        log::warn!("[graph] {note}");
+    }
+    let graph = GraphRuntime::new(
+        loaded.graph,
+        mode,
+        prefs.graph_power_cap,
+        prefs.auto_save,
+        loaded.notes,
+    );
+    log::info!("[mode] {} mode", mode.label());
+    if mode == EngineMode::Graph {
+        log::info!(
+            "[mode] {} drives every device; edit it in the desktop app (Classic tabs keep their own settings)",
+            graph_store::GRAPH_FILE
+        );
+    }
+
     let state = Arc::new(AppState {
         scanner: scanner.clone(),
         monitor_enabled: Arc::new(AtomicBool::new(true)),
         default_config,
         device_slots: Arc::new(RwLock::new(Vec::new())),
         alarm,
+        graph,
     });
+    state.graph.spawn(Arc::clone(&state));
 
     log::info!("[ble] Searching for DGLab Coyote V3 in background...");
     spawn_ble_coordinator(Arc::clone(&state), scanner, opts.scan_timeout);
@@ -164,6 +208,7 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
 }
 
 pub async fn shutdown_session(state: &Arc<AppState>) {
+    state.graph.flush_on_exit();
     state.disconnect_all();
     state.scanner.stop().await;
     tokio::time::sleep(Duration::from_millis(600)).await;
@@ -202,6 +247,7 @@ async fn add_device_slot(state: &Arc<AppState>, mut dev: CoyoteDevice, scanner: 
     let name = dev.name().to_string();
     let cfg = device_config::load_device_config(&mac, &state.default_config);
     let engine = CliEngine::new(cfg, state.alarm.clone());
+    state.graph.prepare_engine(&engine).await;
     let stop_handle = engine.start(scanner).await;
 
     dev.start();

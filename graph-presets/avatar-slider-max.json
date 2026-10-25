@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Avatar slider sets the max",
+  "description": "An avatar float parameter sets Limit Max live — never above the Graph cap",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -136.0
+        ],
+        "title": "Limits from the avatar",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            106.0
+          ],
+          "text": "Add a float parameter ShockMax (0–1) to your avatar, e.g. a radial puppet. ×200 turns it into Limit Max for both channels, live. Until VRChat sends it the max is 0 — nothing fires. The Graph cap in Setup always wins: the slider can lower the ceiling, never raise it past the cap."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "OscFloat",
+          "address": "/avatar/parameters/ShockMax",
+          "stale_ms": 600000
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 200.0
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          40.0,
+          128.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1"
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "value"
+        },
+        "to": {
+          "node": 3,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "b.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "level"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "level"
+        },
+        "to": {
+          "node": 5,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

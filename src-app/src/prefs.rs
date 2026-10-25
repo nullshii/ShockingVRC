@@ -1,4 +1,5 @@
-use shocking_vrc_core::cli::CliConfig;
+use shocking_vrc_core::cli::{CliConfig, EngineMode};
+use shocking_vrc_core::graph::safety::DEFAULT_POWER_CAP;
 
 pub const CONFIG_FILE: &str = "cli_config.json";
 pub const PREFS_FILE: &str = "shockingvrc_prefs.json";
@@ -23,6 +24,14 @@ pub struct UiPrefs {
     pub backdrop_density: Option<f32>,
     #[serde(default = "default_spoof_guard")]
     pub spoof_guard: bool,
+    #[serde(default)]
+    pub mode: EngineMode,
+    #[serde(default = "default_graph_power_cap")]
+    pub graph_power_cap: [u8; 2],
+}
+
+fn default_graph_power_cap() -> [u8; 2] {
+    [DEFAULT_POWER_CAP; 2]
 }
 
 fn default_spoof_guard() -> bool {
@@ -45,6 +54,8 @@ impl Default for UiPrefs {
             backdrop_speed: None,
             backdrop_density: None,
             spoof_guard: default_spoof_guard(),
+            mode: EngineMode::default(),
+            graph_power_cap: default_graph_power_cap(),
         }
     }
 }
@@ -89,4 +100,27 @@ pub fn save_config(path: &str, config: &CliConfig) -> Result<(), Box<dyn std::er
 pub fn load_config_from_file(path: &str) -> Result<CliConfig, Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_prefs_files_default_to_classic_with_a_conservative_cap() {
+        let p: UiPrefs = serde_json::from_str(r#"{"auto_save":false,"nickname":"x"}"#).unwrap();
+        assert_eq!(p.mode, EngineMode::Classic);
+        assert_eq!(p.graph_power_cap, [DEFAULT_POWER_CAP; 2]);
+        assert!(!p.auto_save);
+    }
+
+    #[test]
+    fn mode_round_trips() {
+        let p = UiPrefs {
+            mode: EngineMode::Graph,
+            ..UiPrefs::default()
+        };
+        let back: UiPrefs = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back.mode, EngineMode::Graph);
+    }
 }

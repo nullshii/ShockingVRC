@@ -1,0 +1,815 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Nightmare · no safe rhythm",
+  "description": "Nightmare: random bursts of random pitch, low thumps in between, pull-outs punish with a full burst",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -168.0
+        ],
+        "title": "Nightmare · no safe rhythm",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            640.0,
+            138.0
+          ],
+          "text": "Nothing settles. A fast noise decides when bursts start and stop — irregular by design, quicker the faster you move. During a burst the pitch jumps to a new random place nine times a second (4–100 Hz) at 75–100 % intensity; between bursts it thumps at 4 Hz at 45 %. A hard pull-out fires a full one-second burst and lifts the floor (Limit Min 8 → 18). A sits at 8–32, B 6–30 and replays A 90 ms late with its own pitch. The Graph cap in Setup still wins."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Ukf",
+          "norms": {
+            "speed": 4.0,
+            "acc": 25.0,
+            "recoil": 200.0
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Weighted",
+          "count": 3,
+          "weights": [
+            4.0,
+            2.0,
+            2.5
+          ]
+        },
+        "title": "Burst noise Hz",
+        "defaults": {
+          "in3": 1.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          188.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 61
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          384.0
+        ],
+        "kind": {
+          "type": "Schmitt"
+        },
+        "title": "Burst",
+        "defaults": {
+          "high": 0.52,
+          "low": 0.4
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          300.0,
+          532.0
+        ],
+        "kind": {
+          "type": "Metronome"
+        },
+        "title": "9 jumps / s",
+        "defaults": {
+          "hz": 9.0
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 67
+        },
+        "defaults": {
+          "rate": 13.0
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          560.0,
+          196.0
+        ],
+        "kind": {
+          "type": "SampleHold"
+        },
+        "title": "Random pitch"
+      },
+      {
+        "id": 10,
+        "pos": [
+          560.0,
+          324.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 73
+        },
+        "defaults": {
+          "rate": 11.0
+        }
+      },
+      {
+        "id": 11,
+        "pos": [
+          560.0,
+          520.0
+        ],
+        "kind": {
+          "type": "SampleHold"
+        },
+        "title": "B's pitch"
+      },
+      {
+        "id": 12,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Switch",
+          "count": 2
+        },
+        "title": "A pitch",
+        "defaults": {
+          "in1": 0.0
+        }
+      },
+      {
+        "id": 13,
+        "pos": [
+          820.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Switch",
+          "count": 2
+        },
+        "title": "B pitch",
+        "defaults": {
+          "in1": 0.0
+        }
+      },
+      {
+        "id": 14,
+        "pos": [
+          820.0,
+          336.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Burst intensity",
+        "defaults": {
+          "out_min": 0.75,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 15,
+        "pos": [
+          820.0,
+          544.0
+        ],
+        "kind": {
+          "type": "Switch",
+          "count": 2
+        },
+        "title": "A intensity",
+        "defaults": {
+          "in1": 0.45
+        }
+      },
+      {
+        "id": 16,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Schmitt"
+        },
+        "title": "Pull-out",
+        "defaults": {
+          "high": 0.4,
+          "low": 0.15
+        }
+      },
+      {
+        "id": 17,
+        "pos": [
+          1080.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Envelope",
+          "mode": "Ar"
+        },
+        "defaults": {
+          "attack": 0.01,
+          "release": 1.0
+        }
+      },
+      {
+        "id": 18,
+        "pos": [
+          1080.0,
+          404.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Floor lift",
+        "defaults": {
+          "out_min": 8.0,
+          "out_max": 18.0
+        }
+      },
+      {
+        "id": 19,
+        "pos": [
+          1340.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → power",
+        "defaults": {
+          "out_min": 0.4,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 20,
+        "pos": [
+          1340.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "While touched"
+      },
+      {
+        "id": 21,
+        "pos": [
+          1340.0,
+          356.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 22,
+        "pos": [
+          1340.0,
+          552.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Max",
+          "count": 2,
+          "weights": []
+        },
+        "title": "Depth or punishment"
+      },
+      {
+        "id": 23,
+        "pos": [
+          1340.0,
+          720.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 0.0,
+          "release_ms": 700.0
+        },
+        "title": "Touched (lingers)"
+      },
+      {
+        "id": 24,
+        "pos": [
+          1340.0,
+          916.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 25,
+        "pos": [
+          1860.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                4.0,
+                100.0
+              ]
+            },
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                4.0,
+                100.0
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 32.0,
+          "b.limit_min": 6.0,
+          "b.limit_max": 30.0
+        }
+      },
+      {
+        "id": 26,
+        "pos": [
+          1600.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 90
+        },
+        "title": "B 90 ms later"
+      },
+      {
+        "id": 27,
+        "pos": [
+          1600.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 90
+        },
+        "title": "B 90 ms later"
+      },
+      {
+        "id": 28,
+        "pos": [
+          1600.0,
+          296.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 90
+        },
+        "title": "B 90 ms later"
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "acc_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 19,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 19,
+          "pin": "out"
+        },
+        "to": {
+          "node": 20,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 20,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 20,
+          "pin": "out"
+        },
+        "to": {
+          "node": 21,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "rate"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 9,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "beat"
+        },
+        "to": {
+          "node": 9,
+          "pin": "trig"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 11,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "beat"
+        },
+        "to": {
+          "node": 11,
+          "pin": "trig"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 12,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 12,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 14,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 15,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 14,
+          "pin": "out"
+        },
+        "to": {
+          "node": 15,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "recoil_n"
+        },
+        "to": {
+          "node": 16,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 16,
+          "pin": "out"
+        },
+        "to": {
+          "node": 17,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 17,
+          "pin": "out"
+        },
+        "to": {
+          "node": 18,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 18,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "a.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 21,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 17,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 23,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 22,
+          "pin": "out"
+        },
+        "to": {
+          "node": 24,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 23,
+          "pin": "out"
+        },
+        "to": {
+          "node": 24,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 13,
+          "pin": "out"
+        },
+        "to": {
+          "node": 26,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 26,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "b.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 15,
+          "pin": "out"
+        },
+        "to": {
+          "node": 27,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 27,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "b.int"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "out"
+        },
+        "to": {
+          "node": 28,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 28,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "b.power"
+        }
+      },
+      {
+        "from": {
+          "node": 15,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "out"
+        },
+        "to": {
+          "node": 25,
+          "pin": "a.power"
+        }
+      }
+    ]
+  }
+}

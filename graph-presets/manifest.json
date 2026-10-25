@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "simple-depth-power",
+      "name": "Simple depth → power",
+      "description": "Start here: any contact's depth drives power on both channels",
+      "file": "simple-depth-power.json"
+    },
+    {
+      "id": "depth-lfo-frequency",
+      "name": "Depth + LFO frequency",
+      "description": "Depth sets power while a slow sine sweeps the pulse rate",
+      "file": "depth-lfo-frequency.json"
+    },
+    {
+      "id": "speed-intensity-smoothing",
+      "name": "Speed-driven intensity with smoothing",
+      "description": "UKF speed, smoothed, shapes the intensity; depth sets power",
+      "file": "speed-intensity-smoothing.json"
+    },
+    {
+      "id": "two-zone-blend",
+      "name": "Two-zone blend A/B",
+      "description": "Crossfade socket and plug contacts on A, strongest of both on B",
+      "file": "two-zone-blend.json"
+    },
+    {
+      "id": "two-devices-one-contact",
+      "name": "Two devices from one contact",
+      "description": "One contact drives Device 1 directly and Device 2 through an ease-in curve",
+      "file": "two-devices-one-contact.json"
+    },
+    {
+      "id": "guarded-soft-start",
+      "name": "Guarded soft start",
+      "description": "A soft-start group, a deadman and a panic node between the contact and the device",
+      "file": "guarded-soft-start.json"
+    },
+    {
+      "id": "heartbeat-touch",
+      "name": "Heartbeat while touched",
+      "description": "A sequenced thump-thump that only beats while the contact is held",
+      "file": "heartbeat-touch.json"
+    },
+    {
+      "id": "four-segment-texture",
+      "name": "Four-segment texture",
+      "description": "Frequency and intensity split into four 25 ms segments, one swept by an LFO",
+      "file": "four-segment-texture.json"
+    },
+    {
+      "id": "tease-timer",
+      "name": "Tease timer",
+      "description": "The longer the contact is held, the stronger it gets",
+      "file": "tease-timer.json"
+    },
+    {
+      "id": "echo-tail",
+      "name": "Echo tail (feedback)",
+      "description": "Feedback through a Delay leaves a fading echo after every touch",
+      "file": "echo-tail.json"
+    },
+    {
+      "id": "breathing-noise",
+      "name": "Breathing noise",
+      "description": "Slow noise makes pulse rate and intensity drift on their own",
+      "file": "breathing-noise.json"
+    },
+    {
+      "id": "ping-pong-ab",
+      "name": "Ping-pong A/B",
+      "description": "A triangle LFO pans the contact between channel A and channel B",
+      "file": "ping-pong-ab.json"
+    },
+    {
+      "id": "classic-functions",
+      "name": "Classic functions on a clock",
+      "description": "Any Classic modulation function, driven by time, shapes frequency and intensity",
+      "file": "classic-functions.json"
+    },
+    {
+      "id": "speed-to-frequency",
+      "name": "Faster strokes, faster pulses",
+      "description": "Stroke speed sets the pulse rate; depth sets the power",
+      "file": "speed-to-frequency.json"
+    },
+    {
+      "id": "touch-envelope",
+      "name": "Touch envelope (ADSR)",
+      "description": "Touch starts an envelope that swells, settles and fades after release",
+      "file": "touch-envelope.json"
+    },
+    {
+      "id": "recoil-spike",
+      "name": "Pull-out spike",
+      "description": "A fast pull-out fires a short burst on top of half-strength depth",
+      "file": "recoil-spike.json"
+    },
+    {
+      "id": "avatar-slider-max",
+      "name": "Avatar slider sets the max",
+      "description": "An avatar float parameter sets Limit Max live — never above the Graph cap",
+      "file": "avatar-slider-max.json"
+    },
+    {
+      "id": "hotkey-modes",
+      "name": "Hotkey pattern switch",
+      "description": "F3 flips between a smooth and a choppy pattern; hold F4 for a manual burst",
+      "file": "hotkey-modes.json"
+    },
+    {
+      "id": "long-four-voice-drift",
+      "name": "Four-voice drift",
+      "description": "Long-form: eight slow voices on every segment of both channels, hours before it repeats",
+      "file": "long-four-voice-drift.json"
+    },
+    {
+      "id": "long-slow-escalation",
+      "name": "Slow escalation",
+      "description": "Long-form: a ten-minute climb — the ceiling and the floor rise while a melody plays as a canon",
+      "file": "long-slow-escalation.json"
+    },
+    {
+      "id": "long-breathing-cathedral",
+      "name": "Breathing cathedral",
+      "description": "Long-form: a 20 s breath opens one channel's ceiling as it closes the other's, over polyrhythmic bells",
+      "file": "long-breathing-cathedral.json"
+    },
+    {
+      "id": "long-drifting-polyrhythm",
+      "name": "Drifting polyrhythm",
+      "description": "Long-form: four clocks at 3·4·5·7 per four seconds, slightly detuned, one per intensity segment",
+      "file": "long-drifting-polyrhythm.json"
+    },
+    {
+      "id": "long-depth-ceiling",
+      "name": "Depth moves the ceiling",
+      "description": "Long-form: touch opens the power, depth sets the ceiling, and intensity orbits all eight segments",
+      "file": "long-depth-ceiling.json"
+    },
+    {
+      "id": "long-glitch-rain",
+      "name": "Glitch rain",
+      "description": "Long-form: random stepped pitch and intensity per segment, with a floor that jumps every 5 s",
+      "file": "long-glitch-rain.json"
+    },
+    {
+      "id": "high-rolling-buzz",
+      "name": "High buzz, rolling intensity",
+      "description": "High frequency: 85–100 Hz on every segment while four waves roll the intensity, faster with speed",
+      "file": "high-rolling-buzz.json"
+    },
+    {
+      "id": "high-hummingbird",
+      "name": "Hummingbird",
+      "description": "High frequency: 95–100 Hz chopped 5–14 times a second by velocity, A and B in turn",
+      "file": "high-hummingbird.json"
+    },
+    {
+      "id": "nightmare-no-rhythm",
+      "name": "Nightmare · no safe rhythm",
+      "description": "Nightmare: random bursts of random pitch, low thumps in between, pull-outs punish with a full burst",
+      "file": "nightmare-no-rhythm.json"
+    },
+    {
+      "id": "nightmare-ratchet",
+      "name": "Nightmare · ratchet",
+      "description": "Nightmare: every pull-out ratchets the floor and ceiling up; it only lets go after 3 s untouched",
+      "file": "nightmare-ratchet.json"
+    },
+    {
+      "id": "low-thump",
+      "name": "Low thump",
+      "description": "Low frequency: 3–12 Hz thumps that slow down the deeper you go, B a softer echo",
+      "file": "low-thump.json"
+    },
+    {
+      "id": "low-deep-rumble",
+      "name": "Deep rumble",
+      "description": "Low frequency: 1–6 Hz, a slow wandering rumble that quickens with velocity",
+      "file": "low-deep-rumble.json"
+    },
+    {
+      "id": "mid-roll",
+      "name": "Mid-range roll",
+      "description": "Mid frequency: four segments roll through 25–50 Hz; velocity brings the intensity up",
+      "file": "mid-roll.json"
+    },
+    {
+      "id": "low-mid-wander",
+      "name": "Low–mid wander",
+      "description": "Low to mid frequency: 6–40 Hz wandering in opposite directions on A and B; velocity widens the range",
+      "file": "low-mid-wander.json"
+    },
+    {
+      "id": "soft-feather",
+      "name": "Feather",
+      "description": "Soft: a gentle 55–75 Hz touch that fades in over a second and out over 2.5 s, capped at 10",
+      "file": "soft-feather.json"
+    },
+    {
+      "id": "soft-warm-tide",
+      "name": "Warm tide",
+      "description": "Soft: a slow 10 s tide of power flowing from A to B over a gently rolling 30–45 Hz, capped at 14",
+      "file": "soft-warm-tide.json"
+    },
+    {
+      "id": "drop-freefall",
+      "name": "Freefall",
+      "description": "Algorithmic: high pulses fall away abruptly by a chaotic amount on a motion-driven clock — never the same twice",
+      "file": "drop-freefall.json"
+    },
+    {
+      "id": "drop-undertow",
+      "name": "Undertow",
+      "description": "Algorithmic: turbulence crossing a moving threshold drops the pulse rate onto random rungs; it climbs back at the speed of your motion",
+      "file": "drop-undertow.json"
+    },
+    {
+      "id": "drop-fault-line",
+      "name": "Fault line",
+      "description": "Algorithmic: motion loads stress until it slips — the pulse rate shatters downward across all four segments, each climbing back at its own speed",
+      "file": "drop-fault-line.json"
+    },
+    {
+      "id": "fragment-ukf-speed",
+      "name": "UKF speed tap",
+      "description": "Contact → UKF → smoothed speed, with a scope — wire it in",
+      "file": "fragment-ukf-speed.json"
+    },
+    {
+      "id": "fragment-stale-safe-osc",
+      "name": "Stale-safe OSC input",
+      "description": "An avatar parameter, smoothed, that drops to 0 when VRChat stops sending it",
+      "file": "fragment-stale-safe-osc.json"
+    },
+    {
+      "id": "fragment-soft-start",
+      "name": "Soft-start group",
+      "description": "A ramp limiter and a hard limit, grouped — reusable",
+      "file": "fragment-soft-start.json"
+    }
+  ]
+}

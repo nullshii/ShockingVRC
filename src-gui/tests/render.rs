@@ -45,9 +45,19 @@ impl Scene {
     }
 
     fn render_section(&self, section: Section, theme_id: &str) -> image::RgbaImage {
+        self.render_section_with(section, theme_id, |_| {})
+    }
+
+    fn render_section_with(
+        &self,
+        section: Section,
+        theme_id: &str,
+        prep: impl Fn(&mut UiState),
+    ) -> image::RgbaImage {
         let theme = ThemeState::new(theme_id);
         let pal: Palette = *theme.palette();
         let mut state = UiState::default_for(section);
+        prep(&mut state);
 
         let mut harness = Harness::builder()
             .with_size(egui::vec2(W, H))
@@ -77,6 +87,7 @@ impl Scene {
                             views::setup::show(ui, &mut cx);
                         }
                         Section::Alarm => views::alarm::show(ui, &mut cx),
+                        Section::Graph => views::graph::show(ui, &mut cx),
                     });
             });
 
@@ -119,6 +130,7 @@ impl Scene {
                     shocking_vrc_gui::overlays::preset_save::show(&ctx, &mut cx);
                 }
                 shocking_vrc_gui::overlays::confirm::show(&ctx, &mut cx);
+                shocking_vrc_gui::overlays::graph_dialogs::show(&ctx, &mut cx);
                 shocking_vrc_gui::overlays::update::show(&ctx, &mut cx);
                 if cx.snap.alarm_status.phase.is_ringing() {
                     shocking_vrc_gui::overlays::alarm_ring::show(&ctx, &mut cx);
@@ -188,6 +200,78 @@ fn every_palette_renders() {
 }
 
 #[test]
+fn the_graph_section_renders() {
+    let scene = Scene::new(fixtures::graph_snapshot());
+    for theme_id in ["terminal", theme::THEMES[theme::THEMES.len() - 1].id] {
+        let img = scene.render_section(Section::Graph, theme_id);
+        assert_not_blank(&img, "graph");
+        save(&img, &format!("section-graph-{theme_id}"));
+    }
+}
+
+fn set_graph(scene: &Scene, graph: shocking_vrc_core::graph::Graph) {
+    if let Ok(mut d) = scene.bridge.shared.graph_doc.write() {
+        d.graph = std::sync::Arc::new(graph);
+        d.rev += 1;
+    }
+}
+
+#[test]
+fn the_graph_stays_sharp_at_every_zoom() {
+    let scene = Scene::new(fixtures::graph_snapshot());
+    for zoom in [0.5f32, 1.0, 1.8] {
+        let mut g = fixtures::demo_graph();
+        g.view.zoom = zoom;
+        g.view.pan = [20.0, 120.0 * zoom];
+        set_graph(&scene, g);
+        let img = scene.render_section(Section::Graph, "terminal");
+        assert_not_blank(&img, "zoomed graph");
+        save(&img, &format!("graph-zoom-{:03}", (zoom * 100.0) as u32));
+    }
+}
+
+#[test]
+fn every_built_in_graph_preset_renders() {
+    let scene = Scene::new(fixtures::graph_snapshot());
+    let macs = vec!["AA:BB:CC:DD:EE:FF".to_string(), "11:22:33:44:55:66".to_string()];
+    for e in shocking_vrc_app::graph_presets::builtin_presets() {
+        set_graph(&scene, e.preset.instantiate(&macs));
+        let img = scene.render_section_with(Section::Graph, "terminal", |s| s.graph.frame_request = true);
+        assert_not_blank(&img, &e.id);
+        save(&img, &format!("preset-{}", e.id));
+    }
+}
+
+#[test]
+fn the_device_inspector_renders() {
+    use shocking_vrc_core::graph::{NodeId, NodeKind};
+    let scene = Scene::new(fixtures::graph_snapshot());
+    let mut g = fixtures::demo_graph();
+    if let Some(NodeKind::Device(d)) = g.node_mut(NodeId(106)).map(|n| &mut n.kind) {
+        for ch in &mut d.channels {
+            ch.set_expanded("freq", true);
+            ch.set_expanded("int", true);
+        }
+    }
+    set_graph(&scene, g);
+    let img = scene.render_section_with(Section::Graph, "terminal", |s| {
+        s.graph.sync(&scene.bridge.shared.graph_doc());
+        s.graph.selection = [NodeId(106)].into_iter().collect();
+    });
+    assert_not_blank(&img, "device inspector");
+    save(&img, "graph-device-inspector");
+}
+
+#[test]
+fn the_graph_section_renders_with_nothing_connected() {
+    let mut snap = Snapshot::empty_for_test();
+    snap.mode = shocking_vrc_core::cli::EngineMode::Graph;
+    let scene = Scene::new(snap);
+    let img = scene.render_section(Section::Graph, "terminal");
+    assert_not_blank(&img, "empty graph");
+}
+
+#[test]
 fn a_ringing_alarm_renders() {
     let scene = Scene::new(fixtures::ringing_snapshot());
     let img = scene.render_section(Section::Alarm, "terminal");
@@ -216,6 +300,39 @@ fn every_overlay_renders() {
         }),
     ];
 
+    for (name, open) in cases {
+        let img = scene.render_overlay(open);
+        assert_not_blank(&img, name);
+        save(&img, &format!("overlay-{name}"));
+    }
+}
+
+#[test]
+fn every_graph_dialog_renders() {
+    use shocking_vrc_gui::overlays::graph_dialogs::GraphDialog;
+    let scene = Scene::new(fixtures::graph_snapshot());
+    let cases: [OverlayCase; 5] = [
+        ("mode-confirm", |s| {
+            s.mode_confirm = Some(shocking_vrc_core::cli::EngineMode::Graph)
+        }),
+        ("graph-preset-save", |s| {
+            s.graph_dialog = Some(GraphDialog::save_preset("Amigo_FPS", false))
+        }),
+        ("graph-preset-apply", |s| {
+            s.graph_dialog = Some(GraphDialog::ConfirmApply {
+                id: "simple-depth-power".into(),
+            })
+        }),
+        ("graph-preset-delete", |s| {
+            s.graph_dialog = Some(GraphDialog::ConfirmDelete {
+                id: "my-evening".into(),
+                name: "My evening".into(),
+            })
+        }),
+        ("graph-import", |s| {
+            s.graph_dialog = Some(GraphDialog::ImportGraph { path: String::new() })
+        }),
+    ];
     for (name, open) in cases {
         let img = scene.render_overlay(open);
         assert_not_blank(&img, name);

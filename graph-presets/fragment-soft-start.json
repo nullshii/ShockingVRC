@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "kind": "Fragment",
+  "name": "Soft-start group",
+  "description": "A ramp limiter and a hard limit, grouped — reusable",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Soft start",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "in1",
+                      "label": "In"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "RampLimiter"
+                },
+                "defaults": {
+                  "rise": 0.5
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "HardLimit"
+                },
+                "defaults": {
+                  "max": 0.8
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  820.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Out"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "in1"
+                },
+                "to": {
+                  "node": 2,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "out1"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "edges": []
+  }
+}

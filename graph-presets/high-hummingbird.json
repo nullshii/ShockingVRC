@@ -1,0 +1,426 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Hummingbird",
+  "description": "High frequency: 95–100 Hz chopped 5–14 times a second by velocity, A and B in turn",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -136.0
+        ],
+        "title": "High frequency · chopped",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            106.0
+          ],
+          "text": "A steady 95–100 Hz buzz, chopped by a clock that runs 5 times a second when still and 14 when you stroke fast. A plays on the beat, B between beats, so the buzz flickers from side to side. Depth lifts the floor between chops from 15 to 55 % intensity, so deep strokes turn the flicker into a shimmer."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Ukf",
+          "norms": {
+            "speed": 4.0,
+            "acc": 25.0,
+            "recoil": 200.0
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Velocity → chop Hz",
+        "defaults": {
+          "out_min": 5.0,
+          "out_max": 14.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Metronome"
+        },
+        "defaults": {
+          "width": 0.5
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          424.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → floor",
+        "defaults": {
+          "out_min": 0.15,
+          "out_max": 0.55
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          300.0,
+          632.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Perlin",
+          "seed": 71
+        },
+        "title": "Flutter",
+        "defaults": {
+          "rate": 3.0
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Mix"
+        },
+        "title": "A on the beat",
+        "defaults": {
+          "b": 1.0
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          560.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Logic",
+          "op": "Not"
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          560.0,
+          276.0
+        ],
+        "kind": {
+          "type": "Mix"
+        },
+        "title": "B between beats",
+        "defaults": {
+          "b": 1.0
+        }
+      },
+      {
+        "id": 11,
+        "pos": [
+          560.0,
+          424.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → power",
+        "defaults": {
+          "out_min": 0.35,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 12,
+        "pos": [
+          560.0,
+          632.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "While touched"
+      },
+      {
+        "id": 13,
+        "pos": [
+          560.0,
+          780.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 14,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                95.0,
+                100.0
+              ]
+            },
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                95.0,
+                100.0
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 22.0,
+          "b.limit_max": 22.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 11,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 12,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 12,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "hz"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "gate"
+        },
+        "to": {
+          "node": 8,
+          "pin": "t"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "gate"
+        },
+        "to": {
+          "node": 9,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "t"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.int"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 13,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 13,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

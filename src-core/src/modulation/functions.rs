@@ -31,6 +31,7 @@ pub fn eval(func: &ModulationFunction, x: f32) -> f32 {
             let c = x.cos();
             c * c
         }
+        #[allow(clippy::approx_constant)]
         ModulationFunction::SinPlusCos => (x.sin() + x.cos()) * 0.7071,
         ModulationFunction::SinPow(n) => x.sin().abs().powf(*n) * x.sin().signum(),
         ModulationFunction::CosPow(n) => x.cos().abs().powf(*n) * x.cos().signum(),

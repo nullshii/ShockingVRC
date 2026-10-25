@@ -1,0 +1,715 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Nightmare · ratchet",
+  "description": "Nightmare: every pull-out ratchets the floor and ceiling up; it only lets go after 3 s untouched",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -168.0
+        ],
+        "title": "Nightmare · ratchet",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            640.0,
+            138.0
+          ],
+          "text": "Every hard pull-out ratchets the tension up a notch, and so does every minute you stay touched. Tension lifts the floor (Limit Min 4 → 20) and the ceiling (Limit Max 22 → 36) together, so it only gets harder. The pitch lurches between 2 Hz thuds and a 100 Hz buzz on an irregular step clock; intensity jumps between 55 and 100 %. Let go for three seconds and the ratchet releases. B lurches 140 ms behind A. The Graph cap in Setup still wins."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Ukf",
+          "norms": {
+            "speed": 4.0,
+            "acc": 25.0,
+            "recoil": 200.0
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Schmitt"
+        },
+        "title": "Pull-out",
+        "defaults": {
+          "high": 0.35,
+          "low": 0.12
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "Notch size",
+        "defaults": {
+          "b": 4.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          296.0
+        ],
+        "kind": {
+          "type": "Logic",
+          "op": "Not"
+        },
+        "title": "Let go"
+      },
+      {
+        "id": 7,
+        "pos": [
+          300.0,
+          424.0
+        ],
+        "kind": {
+          "type": "Timer"
+        },
+        "title": "3 s untouched",
+        "defaults": {
+          "hold": 3.0,
+          "ramp": 0.0
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Integrate",
+          "leak": 0.003,
+          "min": 0.0,
+          "max": 1.0
+        },
+        "title": "Ratchet"
+      },
+      {
+        "id": 9,
+        "pos": [
+          560.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Timer"
+        },
+        "title": "Minutes touched",
+        "defaults": {
+          "hold": 5.0,
+          "ramp": 240.0
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          560.0,
+          316.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Weighted",
+          "count": 2,
+          "weights": [
+            0.7,
+            0.4
+          ]
+        },
+        "title": "Tension"
+      },
+      {
+        "id": 11,
+        "pos": [
+          560.0,
+          484.0
+        ],
+        "kind": {
+          "type": "Clamp"
+        }
+      },
+      {
+        "id": 12,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Floor",
+        "defaults": {
+          "out_min": 4.0,
+          "out_max": 20.0
+        }
+      },
+      {
+        "id": 13,
+        "pos": [
+          820.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Ceiling",
+        "defaults": {
+          "out_min": 22.0,
+          "out_max": 36.0
+        }
+      },
+      {
+        "id": 14,
+        "pos": [
+          820.0,
+          416.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 81
+        },
+        "title": "Lurch clock",
+        "defaults": {
+          "rate": 0.6
+        }
+      },
+      {
+        "id": 15,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Steps / s",
+        "defaults": {
+          "out_min": 1.5,
+          "out_max": 6.0
+        }
+      },
+      {
+        "id": 16,
+        "pos": [
+          1080.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Sequencer",
+          "steps": [
+            0.0,
+            1.0,
+            0.05,
+            0.95,
+            0.0,
+            1.0,
+            0.1,
+            1.0,
+            0.0,
+            0.9,
+            0.02,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            0.08
+          ]
+        },
+        "title": "Thud / buzz"
+      },
+      {
+        "id": 17,
+        "pos": [
+          1080.0,
+          406.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 83
+        },
+        "defaults": {
+          "rate": 7.0
+        }
+      },
+      {
+        "id": 18,
+        "pos": [
+          1080.0,
+          602.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Intensity jabs",
+        "defaults": {
+          "out_min": 0.55,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 19,
+        "pos": [
+          1340.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → power",
+        "defaults": {
+          "out_min": 0.5,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 20,
+        "pos": [
+          1340.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "While touched"
+      },
+      {
+        "id": 21,
+        "pos": [
+          1340.0,
+          356.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 22,
+        "pos": [
+          1860.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                2.0,
+                100.0
+              ]
+            },
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                2.0,
+                100.0
+              ]
+            }
+          ]
+        },
+        "title": "Device 1"
+      },
+      {
+        "id": 23,
+        "pos": [
+          1600.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 140
+        },
+        "title": "B 140 ms later"
+      },
+      {
+        "id": 24,
+        "pos": [
+          1600.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 140
+        },
+        "title": "B 140 ms later"
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 19,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 19,
+          "pin": "out"
+        },
+        "to": {
+          "node": 20,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 20,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 20,
+          "pin": "out"
+        },
+        "to": {
+          "node": 21,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "recoil_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "reset"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 9,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out"
+        },
+        "to": {
+          "node": 11,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 12,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "a.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 13,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "a.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "b.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 13,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "b.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 14,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 15,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 15,
+          "pin": "out"
+        },
+        "to": {
+          "node": 16,
+          "pin": "rate"
+        }
+      },
+      {
+        "from": {
+          "node": 17,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 18,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 16,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 16,
+          "pin": "out"
+        },
+        "to": {
+          "node": 23,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 23,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "b.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 18,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 18,
+          "pin": "out"
+        },
+        "to": {
+          "node": 24,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "b.int"
+        }
+      },
+      {
+        "from": {
+          "node": 21,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 21,
+          "pin": "out"
+        },
+        "to": {
+          "node": 22,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

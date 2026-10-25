@@ -1,0 +1,735 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Slow escalation",
+  "description": "Long-form: a ten-minute climb — the ceiling and the floor rise while a melody plays as a canon",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -152.0
+        ],
+        "title": "Long-form · ten-minute climb",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            620.0,
+            122.0
+          ],
+          "text": "Keep the contact and the Ramp Timer lifts Limit Max from 14 to 38 and the floor from 0 to 12 over ten minutes (the Graph cap in Setup still wins). The four frequency segments play one 16-step melody as a canon, each 2.5 s behind the last; channel B hears it backwards. The intensity segments swell in a 50 s rotation. Let go and it starts over."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Timer"
+        },
+        "defaults": {
+          "hold": 10.0,
+          "ramp": 600.0
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Sequencer",
+          "steps": [
+            0.1,
+            0.5,
+            0.3,
+            0.8,
+            0.2,
+            0.9,
+            0.4,
+            0.6,
+            0.15,
+            0.7,
+            0.35,
+            1.0,
+            0.05,
+            0.55,
+            0.25,
+            0.75
+          ]
+        },
+        "defaults": {
+          "rate": 0.4
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 14.0,
+          "out_max": 38.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 0.0,
+          "out_max": 12.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 2500
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          820.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 5000
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          820.0,
+          296.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 7500
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          820.0,
+          444.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Swell ×4",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "hz": 0.02,
+                  "amp": 0.3,
+                  "bias": 0.7
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  316.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.25,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "hz": 0.02,
+                  "amp": 0.3,
+                  "bias": 0.7
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  40.0,
+                  632.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.5,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "hz": 0.02,
+                  "amp": 0.3,
+                  "bias": 0.7
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  40.0,
+                  948.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.75,
+                  "one_shot": false,
+                  "seed": 4
+                },
+                "defaults": {
+                  "hz": 0.02,
+                  "amp": 0.3,
+                  "bias": 0.7
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Seg 1"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "Seg 2"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "Seg 3"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "Seg 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out4"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 11,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Curve",
+          "curve": {
+            "points": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                1.0,
+                1.0
+              ]
+            ],
+            "interp": "Smooth"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "pos": [
+          1080.0,
+          222.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.85
+        }
+      },
+      {
+        "id": 13,
+        "pos": [
+          1080.0,
+          370.0
+        ],
+        "kind": {
+          "type": "Scope",
+          "count": 2,
+          "window_s": 10.0
+        }
+      },
+      {
+        "id": 14,
+        "pos": [
+          1340.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                12.0,
+                80.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            },
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                20.0,
+                70.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            }
+          ]
+        },
+        "title": "Device 1"
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 3,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.limit_min"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 9,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 11,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 12,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 14,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

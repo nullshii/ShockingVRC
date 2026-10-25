@@ -4,11 +4,15 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use shocking_vrc_app::app_state::{AppState, DeviceSlotInfo};
-use shocking_vrc_app::{device_config, prefs, presets as preset_store, zone_presets};
+use shocking_vrc_app::graph_runtime::GraphStatus;
+use shocking_vrc_app::{
+    device_config, graph_presets, graph_store, prefs, presets as preset_store, zone_presets,
+};
 use shocking_vrc_core::cli::{
     AggregationMode, AlarmChannels, AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus,
-    ContactMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId,
+    ContactMode, EngineMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId,
 };
+use shocking_vrc_core::graph::{Graph, GraphPreset, GraphPresetEntry};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::{ChannelPreset, PresetEntry, ZonePresetEntry};
 use shocking_vrc_core::{DownloadProgress, ReleaseInfo, ZoneEvent};
@@ -28,6 +32,8 @@ pub struct Snapshot {
     pub devices: Vec<DeviceSlotInfo>,
     pub active_device: usize,
     pub revision: u64,
+    pub mode: EngineMode,
+    pub graph: GraphStatus,
 }
 
 impl Snapshot {
@@ -48,6 +54,8 @@ impl Snapshot {
             devices: Vec::new(),
             active_device: 0,
             revision: 0,
+            mode: EngineMode::Classic,
+            graph: GraphStatus::default(),
         }
     }
 
@@ -111,6 +119,18 @@ pub struct ZonePresetState {
 }
 
 #[derive(Clone, Default)]
+pub struct GraphDocShared {
+    pub graph: Arc<Graph>,
+    pub rev: u64,
+    pub replaced: u64,
+}
+
+#[derive(Clone, Default)]
+pub struct GraphPresetState {
+    pub entries: Vec<GraphPresetEntry>,
+}
+
+#[derive(Clone, Default)]
 pub struct UpdateState {
     pub available: Option<ReleaseInfo>,
     pub checking: bool,
@@ -128,6 +148,9 @@ pub struct Shared {
     pub zone_presets: RwLock<ZonePresetState>,
     pub update: RwLock<UpdateState>,
     pub toast: RwLock<Option<Toast>>,
+    pub graph_doc: RwLock<GraphDocShared>,
+    pub graph_presets: RwLock<GraphPresetState>,
+    pub known_devices: RwLock<Vec<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -152,7 +175,14 @@ impl Shared {
             zone_presets: RwLock::new(ZonePresetState::default()),
             update: RwLock::new(UpdateState::default()),
             toast: RwLock::new(None),
+            graph_doc: RwLock::new(GraphDocShared::default()),
+            graph_presets: RwLock::new(GraphPresetState::default()),
+            known_devices: RwLock::new(Vec::new()),
         }
+    }
+
+    pub fn graph_doc(&self) -> GraphDocShared {
+        self.graph_doc.read().map(|d| d.clone()).unwrap_or_default()
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -225,6 +255,21 @@ pub enum Command {
     SetAutoSave(bool),
     SetAlarmTabVisible(bool),
     SetSpoofGuard(bool),
+
+    SetMode(EngineMode),
+    SetGraph(Box<Graph>),
+    GraphPanic(bool),
+    SetGraphCaps([u8; 2]),
+    SaveGraph,
+    ReloadGraph,
+    ExportGraph(String),
+    ImportGraph(std::path::PathBuf),
+    RefreshGraphPresets,
+    SaveGraphPreset(Box<GraphPreset>),
+    DeleteGraphPreset(String),
+    RenameGraphPreset(String, String),
+    ImportGraphPreset(std::path::PathBuf),
+    ExportGraphPreset(String),
 
     CheckUpdate,
     StartUpdateDownload,
@@ -331,6 +376,12 @@ impl Worker {
     async fn run(mut self, mut rx: UnboundedReceiver<Command>) {
         self.reload_zone_presets();
         self.start_preset_refresh();
+        self.reload_graph_presets();
+        if let Ok(mut k) = self.shared.known_devices.write() {
+            *k = shocking_vrc_core::ble::known_devices::KnownDeviceList::load()
+                .addresses()
+                .to_vec();
+        }
         self.publish().await;
 
         let mut ticker = tokio::time::interval(Duration::from_millis(50));
@@ -391,6 +442,8 @@ impl Worker {
             oscquery_port: self.state.scanner.oscquery_port().await,
             devices,
             active_device: self.active_device,
+            mode: self.state.graph.mode(),
+            graph: self.state.graph.status(),
             revision: self
                 .shared
                 .snapshot
@@ -401,6 +454,38 @@ impl Worker {
         if let Ok(mut slot) = self.shared.snapshot.write() {
             *slot = snap;
         }
+        self.publish_graph_doc(false);
+    }
+
+    fn publish_graph_doc(&self, replaced: bool) {
+        let rev = self.state.graph.doc_rev();
+        let current = self.shared.graph_doc.read().map(|d| d.rev).unwrap_or(0);
+        if rev == current && !replaced {
+            return;
+        }
+        let (graph, rev) = self.state.graph.graph();
+        if let Ok(mut d) = self.shared.graph_doc.write() {
+            d.graph = Arc::new(graph);
+            d.rev = rev;
+            if replaced {
+                d.replaced = d.replaced.wrapping_add(1);
+            }
+        }
+    }
+
+    fn reload_graph_presets(&self) {
+        let entries = graph_presets::load_graph_presets();
+        if let Ok(mut p) = self.shared.graph_presets.write() {
+            p.entries = entries;
+        }
+    }
+
+    fn graph_preset(&self, id: &str) -> Option<GraphPresetEntry> {
+        self.shared
+            .graph_presets
+            .read()
+            .ok()
+            .and_then(|p| p.entries.iter().find(|e| e.id == id).cloned())
     }
 
     fn expire_toast(&self) {
@@ -853,6 +938,7 @@ impl Worker {
 
             Command::SetAutoSave(on) => {
                 self.auto_save = on;
+                self.state.graph.set_auto_save(on);
                 match prefs::save_ui_prefs(on) {
                     Ok(()) => log::info!(
                         "[prefs] Auto-save {}",
@@ -888,6 +974,114 @@ impl Worker {
                         self.write_alarm(cfg);
                     }
                     log::info!("[prefs] Alarm section hidden — alarm disarmed");
+                }
+            }
+
+            Command::SetMode(mode) => {
+                let engines = self.state.engines();
+                self.state.graph.set_mode(mode, &engines).await;
+                if let Err(e) = prefs::update_ui_prefs(|p| p.mode = mode) {
+                    log::error!("[prefs] Failed to save: {e}");
+                }
+                log::info!("[mode] Switched to {} mode — outputs zeroed, ramping in", mode.label());
+                self.notify(ToastKind::Success, format!("{} mode — outputs ramp back in", mode.label()));
+            }
+            Command::SetGraph(graph) => {
+                self.state.graph.set_graph(*graph);
+            }
+            Command::GraphPanic(on) => self.state.graph.set_ui_panic(on),
+            Command::SetGraphCaps(caps) => {
+                let caps = caps.map(|c| c.min(200));
+                self.state.graph.set_caps(caps, &self.state.engines());
+                if let Err(e) = prefs::update_ui_prefs(|p| p.graph_power_cap = caps) {
+                    log::error!("[prefs] Failed to save: {e}");
+                }
+            }
+            Command::SaveGraph => match self.state.graph.save_now() {
+                Ok(()) => {
+                    log::info!("[graph] Saved {}", graph_store::GRAPH_FILE);
+                    self.notify(ToastKind::Success, format!("Saved {}", graph_store::GRAPH_FILE));
+                }
+                Err(e) => {
+                    log::error!("[graph] Save failed: {e}");
+                    self.notify(ToastKind::Error, format!("Save failed: {e}"));
+                }
+            },
+            Command::ReloadGraph => {
+                let path = std::path::Path::new(graph_store::GRAPH_FILE);
+                match graph_store::load_graph_from(path) {
+                    Ok(g) => {
+                        self.state.graph.set_graph(g);
+                        self.publish_graph_doc(true);
+                        log::info!("[graph] Reloaded {}", graph_store::GRAPH_FILE);
+                        self.notify(ToastKind::Success, "Graph reloaded from disk");
+                    }
+                    Err(e) => self.notify(ToastKind::Error, format!("Reload failed: {e}")),
+                }
+            }
+            Command::ExportGraph(name) => {
+                let (graph, _) = self.state.graph.graph();
+                match graph_store::export_graph(&name, &graph) {
+                    Ok(path) => {
+                        log::info!("[graph] Exported to {}", path.display());
+                        self.notify(ToastKind::Success, format!("Exported to {}", path.display()));
+                    }
+                    Err(e) => self.notify(ToastKind::Error, format!("Export failed: {e}")),
+                }
+            }
+            Command::ImportGraph(path) => match graph_store::load_graph_from(&path) {
+                Ok(g) => {
+                    self.state.graph.set_graph(g);
+                    self.publish_graph_doc(true);
+                    log::info!("[graph] Imported {}", path.display());
+                    self.notify(ToastKind::Success, format!("Imported {}", path.display()));
+                }
+                Err(e) => self.notify(ToastKind::Error, format!("Import failed: {e}")),
+            },
+            Command::RefreshGraphPresets => self.reload_graph_presets(),
+            Command::SaveGraphPreset(preset) => {
+                match graph_presets::save_user_graph_preset(&preset) {
+                    Ok(entry) => {
+                        log::info!(
+                            "[graph-presets] Saved \"{}\" ({} node(s)) → graph-presets/user/",
+                            entry.name(),
+                            entry.preset.node_count()
+                        );
+                        self.notify(ToastKind::Success, format!("Saved preset “{}”", entry.name()));
+                        self.reload_graph_presets();
+                    }
+                    Err(e) => self.notify(ToastKind::Error, format!("Save failed: {e}")),
+                }
+            }
+            Command::DeleteGraphPreset(id) => match graph_presets::delete_user_graph_preset(&id) {
+                Ok(()) => {
+                    log::info!("[graph-presets] Deleted {id}");
+                    self.notify(ToastKind::Info, "Preset deleted");
+                    self.reload_graph_presets();
+                }
+                Err(e) => self.notify(ToastKind::Error, format!("Delete failed: {e}")),
+            },
+            Command::RenameGraphPreset(id, name) => {
+                match graph_presets::rename_user_graph_preset(&id, &name) {
+                    Ok(entry) => {
+                        self.notify(ToastKind::Success, format!("Renamed to “{}”", entry.name()));
+                        self.reload_graph_presets();
+                    }
+                    Err(e) => self.notify(ToastKind::Error, format!("Rename failed: {e}")),
+                }
+            }
+            Command::ImportGraphPreset(path) => match graph_presets::import_graph_preset(&path) {
+                Ok(entry) => {
+                    self.notify(ToastKind::Success, format!("Imported “{}”", entry.name()));
+                    self.reload_graph_presets();
+                }
+                Err(e) => self.notify(ToastKind::Error, format!("Import failed: {e}")),
+            },
+            Command::ExportGraphPreset(id) => {
+                let Some(entry) = self.graph_preset(&id) else { return };
+                match graph_presets::export_graph_preset(&entry) {
+                    Ok(path) => self.notify(ToastKind::Success, format!("Exported to {}", path.display())),
+                    Err(e) => self.notify(ToastKind::Error, format!("Export failed: {e}")),
                 }
             }
 
@@ -1160,6 +1354,7 @@ mod tests {
                 reconnecting: false,
             }])),
             alarm,
+            graph: Default::default(),
         });
 
         Worker {

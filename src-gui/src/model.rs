@@ -1,4 +1,4 @@
-use shocking_vrc_core::cli::{AlarmConfig, MotionNorms, UkfConfig};
+use shocking_vrc_core::cli::{AlarmConfig, EngineMode, MotionNorms, UkfConfig};
 use shocking_vrc_core::modulation::config::{
     ModulationConfig, ModulationFunction, ModulationSource,
 };
@@ -59,11 +59,13 @@ pub enum Section {
     Presets,
     Setup,
     Alarm,
+    Graph,
 }
 
 impl Section {
-    pub const ALL: [Section; 9] = [
+    pub const ALL: [Section; 10] = [
         Section::Status,
+        Section::Graph,
         Section::Zones,
         Section::Channels,
         Section::Tuning,
@@ -85,7 +87,31 @@ impl Section {
             Section::Presets => "Presets",
             Section::Setup => "Setup",
             Section::Alarm => "Alarm",
+            Section::Graph => "Graph",
         }
+    }
+
+    pub fn classic_only(self) -> bool {
+        matches!(
+            self,
+            Section::Zones
+                | Section::Channels
+                | Section::Tuning
+                | Section::Modulation
+                | Section::Presets
+        )
+    }
+
+    pub fn in_mode(self, mode: EngineMode) -> bool {
+        match self {
+            Section::Graph => mode == EngineMode::Graph,
+            s if s.classic_only() => mode == EngineMode::Classic,
+            _ => true,
+        }
+    }
+
+    pub fn for_mode(mode: EngineMode) -> impl Iterator<Item = Section> {
+        Section::ALL.into_iter().filter(move |s| s.in_mode(mode))
     }
 
     pub fn key(self) -> char {
@@ -99,6 +125,7 @@ impl Section {
             Section::Presets => '7',
             Section::Setup => '8',
             Section::Alarm => '9',
+            Section::Graph => '2',
         }
     }
 
@@ -113,6 +140,7 @@ impl Section {
             Section::Presets => "Waveform presets from the catalogue and your own.",
             Section::Setup => "Connection, preferences and the guided tour.",
             Section::Alarm => "Wake-up alarm — drives every connected device.",
+            Section::Graph => "Wire avatar inputs through nodes into each device.",
         }
     }
 }
@@ -872,10 +900,26 @@ mod tests {
 
     #[test]
     fn section_keys_are_unique() {
-        let mut keys: Vec<char> = Section::ALL.iter().map(|s| s.key()).collect();
-        keys.sort_unstable();
-        keys.dedup();
-        assert_eq!(keys.len(), Section::ALL.len());
+        for mode in [EngineMode::Classic, EngineMode::Graph] {
+            let sections: Vec<Section> = Section::for_mode(mode).collect();
+            let mut keys: Vec<char> = sections.iter().map(|s| s.key()).collect();
+            keys.sort_unstable();
+            keys.dedup();
+            assert_eq!(keys.len(), sections.len(), "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn each_mode_shows_its_own_sections() {
+        let classic: Vec<Section> = Section::for_mode(EngineMode::Classic).collect();
+        let graph: Vec<Section> = Section::for_mode(EngineMode::Graph).collect();
+        assert_eq!(classic.len(), 9, "Classic navigation is unchanged");
+        assert!(!classic.contains(&Section::Graph));
+        assert!(graph.contains(&Section::Graph));
+        for s in [Section::Status, Section::Log, Section::Setup, Section::Alarm] {
+            assert!(classic.contains(&s) && graph.contains(&s), "{s:?} is shared");
+        }
+        assert!(graph.iter().all(|s| !s.classic_only()));
     }
 
     #[test]

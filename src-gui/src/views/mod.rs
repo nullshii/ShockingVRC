@@ -1,5 +1,6 @@
 pub mod alarm;
 pub mod channels;
+pub mod graph;
 pub mod log;
 pub mod modulation;
 pub mod presets;

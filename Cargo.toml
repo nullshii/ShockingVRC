@@ -3,7 +3,7 @@ resolver = "2"
 members = ["src-app", "src-cli", "src-core", "src-gui"]
 
 [workspace.package]
-version = "1.4.3"
+version = "2.0.4"
 edition = "2024"
 authors = ["nullshii", "Amigo_FPS"]
 
@@ -39,8 +39,10 @@ crossterm = "0.29.0"
 
 [profile.release]
 debug = "limited"
-strip = false
+strip = "debuginfo"
 
 [profile.distribution]
 inherits = "release"
 lto = true
+strip = true
+codegen-units = 1

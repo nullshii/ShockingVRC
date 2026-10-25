@@ -1,0 +1,696 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Depth moves the ceiling",
+  "description": "Long-form: touch opens the power, depth sets the ceiling, and intensity orbits all eight segments",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -136.0
+        ],
+        "title": "Long-form · depth as a ceiling",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            620.0,
+            106.0
+          ],
+          "text": "Unconventional on purpose: depth does not drive power — it moves the ceiling (Limit Max 10→34). Being touched opens the power gently and lets it fade over 2.5 s. Eight Function nodes 45° apart sweep intensity around all eight segments of both channels every 33 s. A is a slow, deep staircase (5–40 Hz), B a fast one (40–100 Hz)."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Time"
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          108.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.03
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Orbit ×8",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  200.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "cycles",
+                      "label": "Cycles"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.0,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  168.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.125,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  300.0,
+                  336.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.25,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  504.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.375,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.5,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  560.0,
+                  168.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.625,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  560.0,
+                  336.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.75,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  560.0,
+                  504.0
+                ],
+                "kind": {
+                  "type": "Function",
+                  "function": "Sin",
+                  "phase": 0.875,
+                  "frequency_multiplier": 1.0,
+                  "power": 1.0,
+                  "offset": 0.5,
+                  "max_deviation": 0.5,
+                  "clamp_min": 0.0,
+                  "clamp_max": 1.0
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  820.0,
+                  120.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "A 1"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "A 2"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "A 3"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "A 4"
+                    },
+                    {
+                      "key": "out5",
+                      "label": "B 1"
+                    },
+                    {
+                      "key": "out6",
+                      "label": "B 2"
+                    },
+                    {
+                      "key": "out7",
+                      "label": "B 3"
+                    },
+                    {
+                      "key": "out8",
+                      "label": "B 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 2,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out4"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out5"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out6"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out7"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "cycles"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "cycles"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "out8"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 600.0,
+          "release_ms": 2500.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          268.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 10.0,
+          "out_max": 34.0
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                5.0,
+                40.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            },
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                40.0,
+                100.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.freq1": 0.2,
+          "a.freq2": 0.4,
+          "a.freq3": 0.6,
+          "a.freq4": 0.8,
+          "b.freq1": 0.8,
+          "b.freq2": 0.6,
+          "b.freq3": 0.4,
+          "b.freq4": 0.2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "t"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "cycles"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out5"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out6"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out7"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out8"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "active"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "level"
+        },
+        "to": {
+          "node": 7,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.limit_max"
+        }
+      }
+    ]
+  }
+}

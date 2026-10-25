@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Echo tail (feedback)",
+  "description": "Feedback through a Delay leaves a fading echo after every touch",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Feedback needs a Delay",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "Max keeps the stronger of the live depth and the echo. The echo is Max itself, 100 ms ago, at 85 % — so after a touch the output fades out in steps. Loops are only allowed through a Delay node."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          40.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Max"
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Scope",
+          "count": 2,
+          "window_s": 4.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          300.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 100
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          820.0,
+          300.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.85
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 3,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in2"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,333 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Low thump",
+  "description": "Low frequency: 3–12 Hz thumps that slow down the deeper you go, B a softer echo",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Low frequency · thump",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            90.0
+          ],
+          "text": "Single, heavy pulses: 12 Hz at the entrance slowing to 3 Hz at full depth, so going deeper feels heavier, not faster. Intensity breathes between 80 and 100 % every 8 s. B is a softer echo 120 ms later in a narrower 4–8 Hz band."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Invert"
+        },
+        "title": "Deeper = slower"
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          128.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 300.0,
+          "release_ms": 300.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          324.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Sine",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "title": "Breath",
+        "defaults": {
+          "hz": 0.12,
+          "amp": 0.1,
+          "bias": 0.9
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → power",
+        "defaults": {
+          "out_min": 0.45,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "While touched"
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          356.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          560.0,
+          552.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "B softer",
+        "defaults": {
+          "b": 0.8
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                3.0,
+                12.0
+              ]
+            },
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                4.0,
+                8.0
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 26.0,
+          "b.limit_max": 26.0
+        }
+      },
+      {
+        "id": 11,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Delay",
+          "mode": "Ms",
+          "amount": 120
+        },
+        "title": "B 120 ms later"
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 9,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 11,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

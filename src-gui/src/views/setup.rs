@@ -1,5 +1,7 @@
 use egui::Ui;
 
+use shocking_vrc_core::cli::EngineMode;
+
 use crate::app::Ctx;
 use crate::bridge::Command;
 use crate::theme::widgets::{self as w, font, space};
@@ -142,6 +144,9 @@ fn preferences(ui: &mut Ui, cx: &mut Ctx) {
     w::sheet(ui, pal, |ui| {
         w::heading(ui, pal, "Preferences");
 
+        mode_row(ui, cx);
+        ui.add_space(space::ROW_GAP);
+
         toggle_row(
             ui,
             cx,
@@ -196,6 +201,43 @@ fn preferences(ui: &mut Ui, cx: &mut Ctx) {
             w::dim(ui, pal, "Credited as the author on presets you save");
         });
     });
+}
+
+fn mode_row(ui: &mut Ui, cx: &mut Ctx) {
+    let pal = cx.pal;
+    let cur = cx.ui_state.mode;
+    ui.horizontal(|ui| {
+        w::field_label(ui, pal, "Mode", 120.0, true);
+        let sel = match cur {
+            EngineMode::Classic => 0,
+            EngineMode::Graph => 1,
+        };
+        if let Some(i) = w::segmented(ui, pal, &["Classic", "Graph"], sel) {
+            let want = if i == 0 { EngineMode::Classic } else { EngineMode::Graph };
+            if want != cur {
+                cx.ui_state.mode_confirm = Some(want);
+            }
+        }
+        ui.add_space(6.0);
+        w::dim(ui, pal, "Classic maps zones onto channels; Graph lets you wire your own nodes");
+    });
+    if cur != EngineMode::Graph {
+        return;
+    }
+    for (ch, label) in ["Graph cap A", "Graph cap B"].iter().enumerate() {
+        ui.add_space(space::ROW_GAP);
+        ui.horizontal(|ui| {
+            w::field_label(ui, pal, label, 120.0, true);
+            let v = cx.ui_state.graph_caps[ch];
+            if let Some(d) = w::stepper(ui, pal, &v.to_string(), 48.0) {
+                let next = (v as i32 + d * 5).clamp(0, 200) as u8;
+                cx.ui_state.graph_caps[ch] = next;
+                cx.send(Command::SetGraphCaps(cx.ui_state.graph_caps));
+            }
+            ui.add_space(6.0);
+            w::dim(ui, pal, "Hard ceiling after the graph — no node or limit pin goes above it");
+        });
+    }
 }
 
 fn toggle_row(
@@ -254,6 +296,17 @@ fn help(ui: &mut Ui, cx: &mut Ctx) -> bool {
                 w::field_label(ui, pal, keys, 80.0, false);
                 w::dim(ui, pal, what);
             });
+        }
+        if cx.ui_state.mode == EngineMode::Graph {
+            for (keys, what) in [
+                ("F12", "panic — every device to 0 until released"),
+                ("Shift+A", "add a node on the canvas"),
+            ] {
+                ui.horizontal(|ui| {
+                    w::field_label(ui, pal, keys, 80.0, false);
+                    w::dim(ui, pal, what);
+                });
+            }
         }
 
         ui.add_space(space::ITEM_GAP);

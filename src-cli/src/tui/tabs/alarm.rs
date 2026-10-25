@@ -325,6 +325,7 @@ mod tests {
             default_config: CliConfig::default(),
             device_slots: Arc::new(RwLock::new(Vec::new())),
             alarm,
+            graph: Default::default(),
         });
         let mut app = App::new(state, Arc::new(Mutex::new(Default::default())));
         app.tutorial_active = false;

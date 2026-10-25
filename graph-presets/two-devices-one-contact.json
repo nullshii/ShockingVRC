@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Two devices from one contact",
+  "description": "One contact drives Device 1 directly and Device 2 through an ease-in curve",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Several Coyotes",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "One graph drives every device. The Contact feeds Device 1 directly and Device 2 through an ease-in Curve, so the second one starts softer. Preset slots bind to connected devices in order."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          120.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          380.0
+        ],
+        "kind": {
+          "type": "Curve",
+          "curve": {
+            "points": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.25,
+                0.0625
+              ],
+              [
+                0.5,
+                0.25
+              ],
+              [
+                0.75,
+                0.5625
+              ],
+              [
+                1.0,
+                1.0
+              ]
+            ],
+            "interp": "Linear"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          368.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 2
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 2",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a.power"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,716 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Breathing cathedral",
+  "description": "Long-form: a 20 s breath opens one channel's ceiling as it closes the other's, over polyrhythmic bells",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -152.0
+        ],
+        "title": "Long-form · breathing ceilings",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            620.0,
+            122.0
+          ],
+          "text": "A 20-second breath opens Limit Max on A (16→34) while it closes on B (34→12), so the sensation leans from one channel to the other. Four bell sequencers with 4, 3, 2.5 and 2 s steps ring in polyrhythm on the four segments: high pitch plays soft, low pitch plays hard. A floor of 14 on A means it never fully lets go while touched."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Sine",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "title": "Breath",
+        "defaults": {
+          "hz": 0.05
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 16.0,
+          "out_max": 34.0
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 34.0,
+          "out_max": 12.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          416.0
+        ],
+        "kind": {
+          "type": "Scope",
+          "count": 2,
+          "window_s": 10.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Bells ×4",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    1.0,
+                    0.2,
+                    0.6,
+                    0.0,
+                    0.8,
+                    0.3,
+                    0.5,
+                    0.1
+                  ]
+                },
+                "defaults": {
+                  "rate": 0.25
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  198.0
+                ],
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    0.3,
+                    0.9,
+                    0.1,
+                    0.7,
+                    0.4,
+                    1.0,
+                    0.2,
+                    0.6
+                  ]
+                },
+                "defaults": {
+                  "rate": 0.33
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  40.0,
+                  396.0
+                ],
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    0.5,
+                    0.0,
+                    1.0,
+                    0.4,
+                    0.7,
+                    0.2,
+                    0.9,
+                    0.3
+                  ]
+                },
+                "defaults": {
+                  "rate": 0.4
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  40.0,
+                  594.0
+                ],
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    0.0,
+                    0.6,
+                    0.3,
+                    0.9,
+                    0.1,
+                    0.8,
+                    0.4,
+                    1.0
+                  ]
+                },
+                "defaults": {
+                  "rate": 0.5
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Math",
+                  "op": "Invert"
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  128.0
+                ],
+                "kind": {
+                  "type": "Math",
+                  "op": "Invert"
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  300.0,
+                  256.0
+                ],
+                "kind": {
+                  "type": "Math",
+                  "op": "Invert"
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  300.0,
+                  384.0
+                ],
+                "kind": {
+                  "type": "Math",
+                  "op": "Invert"
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  560.0,
+                  120.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Pitch 1"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "Pitch 2"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "Pitch 3"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "Pitch 4"
+                    },
+                    {
+                      "key": "out5",
+                      "label": "Soft 1"
+                    },
+                    {
+                      "key": "out6",
+                      "label": "Soft 2"
+                    },
+                    {
+                      "key": "out7",
+                      "label": "Soft 3"
+                    },
+                    {
+                      "key": "out8",
+                      "label": "Soft 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out5"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out6"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out7"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out4"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "out8"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          248.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                6.0,
+                45.0
+              ],
+              "intensity_clamp": [
+                35,
+                100
+              ]
+            },
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                15.0,
+                70.0
+              ],
+              "intensity_clamp": [
+                25,
+                90
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_min": 14.0,
+          "a.bf": 34.0,
+          "b.limit_min": 8.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "out"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out5"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out6"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out7"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out8"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out8"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out7"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out6"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out5"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "level"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "level"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

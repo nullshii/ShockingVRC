@@ -24,6 +24,73 @@ const BULK_MAX_ATTEMPTS: u32 = 20;
 const OGB_ENABLED_PARAM: &str = "OGB_ENABLED";
 const OGB_ENABLED_INTERVAL: Duration = Duration::from_secs(5);
 
+const MAX_PARAMS: usize = 4096;
+
+#[derive(Debug, Clone)]
+pub struct RawContact {
+    pub zone_type: OldZoneType,
+    pub id: String,
+    pub level: f32,
+    pub updated: Instant,
+    pub blocked: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ParamSample {
+    pub value: f32,
+    pub updated: Instant,
+}
+
+#[derive(Debug, Default)]
+pub struct RawInputs {
+    pub contacts: Vec<RawContact>,
+    pub params: HashMap<String, ParamSample>,
+}
+
+impl RawInputs {
+    fn record_param(&mut self, addr: &str, value: f32, only_if_new: bool, now: Instant) {
+        if let Some(p) = self.params.get_mut(addr) {
+            if !only_if_new {
+                *p = ParamSample { value, updated: now };
+            }
+        } else if self.params.len() < MAX_PARAMS {
+            self.params
+                .insert(addr.to_string(), ParamSample { value, updated: now });
+        }
+    }
+
+    fn record_contact(&mut self, zone_type: OldZoneType, id: &str, level: f32, now: Instant) {
+        use crate::cli::engine::{ENTRY_JUMP_LIMIT, RELEASE_LEVEL, ZONE_IDLE_TIMEOUT};
+        let level = if level.is_finite() { level.clamp(0.0, 1.0) } else { 0.0 };
+        match self
+            .contacts
+            .iter_mut()
+            .find(|c| c.zone_type == zone_type && c.id == id)
+        {
+            Some(c) => {
+                let was_idle = now.saturating_duration_since(c.updated) > ZONE_IDLE_TIMEOUT
+                    || c.level <= RELEASE_LEVEL;
+                c.blocked = if level <= RELEASE_LEVEL {
+                    false
+                } else if was_idle {
+                    level > ENTRY_JUMP_LIMIT
+                } else {
+                    c.blocked
+                };
+                c.level = level;
+                c.updated = now;
+            }
+            None => self.contacts.push(RawContact {
+                zone_type,
+                id: id.to_string(),
+                level,
+                updated: now,
+                blocked: level > ENTRY_JUMP_LIMIT,
+            }),
+        }
+    }
+}
+
 // Internal shared state
 struct ScannerState {
     devices: RwLock<HashMap<(OldZoneType, String), GameDevice>>,
@@ -42,6 +109,7 @@ struct ScannerState {
     last_packet_ms: AtomicU64,
     has_received: AtomicBool,
     bulk_attempt: AtomicU64,
+    raw: std::sync::RwLock<RawInputs>,
 }
 
 #[derive(Clone)]
@@ -71,6 +139,7 @@ impl AvatarScanner {
                 last_packet_ms: AtomicU64::new(0),
                 has_received: AtomicBool::new(false),
                 bulk_attempt: AtomicU64::new(0),
+                raw: std::sync::RwLock::new(RawInputs::default()),
             }),
         }
     }
@@ -220,6 +289,31 @@ impl AvatarScanner {
         }
     }
 
+    pub fn with_raw_inputs<R>(&self, f: impl FnOnce(&RawInputs) -> R) -> R {
+        match self.state.raw.read() {
+            Ok(raw) => f(&raw),
+            Err(poisoned) => f(&poisoned.into_inner()),
+        }
+    }
+
+    pub fn seen_params(&self) -> Vec<(String, f32)> {
+        let mut v: Vec<(String, f32)> = self.with_raw_inputs(|raw| {
+            raw.params
+                .iter()
+                .map(|(k, p)| (k.clone(), p.value))
+                .collect()
+        });
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
+    }
+
+    fn with_raw_mut(&self, f: impl FnOnce(&mut RawInputs)) {
+        match self.state.raw.write() {
+            Ok(mut raw) => f(&mut raw),
+            Err(poisoned) => f(&mut poisoned.into_inner()),
+        }
+    }
+
     /// Snapshot of all zones seen so far (level may be 0.0 if no active contact).
     pub async fn zones(&self) -> Vec<ZoneEvent> {
         self.state.devices.read().await.values().map(|d| d.to_event()).collect()
@@ -261,6 +355,10 @@ impl AvatarScanner {
         if msg.addr == "/avatar/change" {
             log::info!("Avatar changed — clearing zone cache");
             self.state.devices.write().await.clear();
+            self.with_raw_mut(|raw| {
+                raw.contacts.clear();
+                raw.params.clear();
+            });
             let _ = self.state.refresh_tx.send(Vec::new());
             self.trigger_bulk();
             let me = self.clone();
@@ -276,6 +374,8 @@ impl AvatarScanner {
         let Some(value) = extract_osc_value(&msg.args) else {
             return;
         };
+        let now = Instant::now();
+        self.with_raw_mut(|raw| raw.record_param(&msg.addr, value.as_float(), false, now));
         self.received_param(param, value, false).await;
     }
 
@@ -297,7 +397,10 @@ impl AvatarScanner {
         }
         device.set_value(&contact, value);
         let event = device.to_event();
+        let raw_level = device.compute_level();
         drop(devices);
+        let now = Instant::now();
+        self.with_raw_mut(|raw| raw.record_contact(event.zone_type, &event.id, raw_level, now));
 
         let _ = self.state.event_tx.send(event);
         if is_new_zone {
@@ -337,6 +440,8 @@ impl AvatarScanner {
 
         log::debug!("Bulk OSCQuery: {} values received", params.len());
         for (path, value) in params {
+            let now = Instant::now();
+            self.with_raw_mut(|raw| raw.record_param(&path, value.as_float(), true, now));
             if let Some(param) = path.strip_prefix("/avatar/parameters/") {
                 self.received_param(param, value, true).await;
             }
@@ -471,6 +576,33 @@ mod tests {
             parse("DGB/OGB/Pen/Cock/PenOthers"),
             Some((OldZoneType::Pen, "Cock".into(), "PenOthers".into(), false))
         );
+    }
+
+    #[test]
+    fn raw_contacts_keep_the_unfiltered_level_and_guard_jumps() {
+        let mut raw = RawInputs::default();
+        let t0 = Instant::now();
+        raw.record_contact(OldZoneType::Pen, "Cock", 0.9, t0);
+        assert!(raw.contacts[0].blocked, "idle → 90% in one update is suspicious");
+        raw.record_contact(OldZoneType::Pen, "Cock", 0.0, t0);
+        assert!(!raw.contacts[0].blocked, "release re-arms");
+        raw.record_contact(OldZoneType::Pen, "Cock", 0.2, t0);
+        raw.record_contact(OldZoneType::Pen, "Cock", 0.95, t0);
+        assert!(!raw.contacts[0].blocked, "a ramp passes");
+        assert_eq!(raw.contacts[0].level, 0.95, "no filtering");
+        raw.record_contact(OldZoneType::Pen, "Cock", f32::NAN, t0);
+        assert_eq!(raw.contacts[0].level, 0.0);
+    }
+
+    #[test]
+    fn params_are_remembered_by_full_address() {
+        let mut raw = RawInputs::default();
+        let t0 = Instant::now();
+        raw.record_param("/avatar/parameters/Foo", 0.5, false, t0);
+        raw.record_param("/avatar/parameters/Foo", 0.9, true, t0);
+        assert_eq!(raw.params["/avatar/parameters/Foo"].value, 0.5, "bulk sync never overwrites live data");
+        raw.record_param("/avatar/parameters/Foo", 0.7, false, t0);
+        assert_eq!(raw.params["/avatar/parameters/Foo"].value, 0.7);
     }
 
     #[test]

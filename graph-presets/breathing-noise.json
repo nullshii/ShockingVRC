@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Breathing noise",
+  "description": "Slow noise makes pulse rate and intensity drift on their own",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Organic movement",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "Two slow Noise sources: one wanders the pulse rate (smoothed), the other the intensity between 55 and 100 %. Depth still sets the power. Change a Noise node's seed for a different drift."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Perlin",
+          "seed": 3
+        },
+        "defaults": {
+          "rate": 0.25
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          40.0,
+          344.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Value",
+          "seed": 7
+        },
+        "defaults": {
+          "rate": 0.15
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          160.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 300.0,
+          "release_ms": 300.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          356.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 0.55,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.int"
+        }
+      }
+    ]
+  }
+}

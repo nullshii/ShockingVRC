@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Speed-driven intensity with smoothing",
+  "description": "UKF speed, smoothed, shapes the intensity; depth sets power",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Filtering is opt-in",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "Contacts arrive raw. The UKF Filter turns depth into speed, acceleration and recoil — each UKF node has its own tuning in the inspector. Smooth evens out the speed before it shapes intensity; the Scope compares the two."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Ukf",
+          "ukf": {
+            "q": 50.0,
+            "r": 0.0025,
+            "alpha": 0.5,
+            "beta": 2.0,
+            "kappa": 0.0
+          },
+          "norms": {
+            "speed": 5.0,
+            "acc": 30.0,
+            "recoil": 100.0
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          196.0
+        ],
+        "kind": {
+          "type": "Scope",
+          "count": 2,
+          "window_s": 4.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in2"
+        }
+      }
+    ]
+  }
+}

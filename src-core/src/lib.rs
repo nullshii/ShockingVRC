@@ -3,6 +3,7 @@ pub mod cli;
 pub mod codec;
 pub mod dsp;
 pub mod error;
+pub mod graph;
 pub mod input_zone;
 pub mod modulation;
 pub mod presets;

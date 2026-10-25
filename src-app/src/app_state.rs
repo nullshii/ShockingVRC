@@ -5,6 +5,8 @@ use std::sync::RwLock;
 use shocking_vrc_core::cli::{AlarmController, CliConfig, CliEngine, CliStopHandle};
 use shocking_vrc_core::{AvatarScanner};
 
+use crate::graph_runtime::GraphRuntime;
+
 #[derive(Debug, Clone)]
 pub struct DeviceSlotInfo {
     pub mac: String,
@@ -42,6 +44,7 @@ pub struct AppState {
     pub default_config: CliConfig,
     pub device_slots: Arc<RwLock<Vec<DeviceSlot>>>,
     pub alarm: AlarmController,
+    pub graph: GraphRuntime,
 }
 
 impl AppState {
@@ -66,6 +69,14 @@ impl AppState {
             .read()
             .ok()
             .and_then(|slots| slots.get(index).map(|s| s.engine.clone()))
+    }
+
+    pub fn engines(&self) -> Vec<CliEngine> {
+        self.device_slots
+            .read()
+            .ok()
+            .map(|slots| slots.iter().map(|s| s.engine.clone()).collect())
+            .unwrap_or_default()
     }
 
     pub fn engine_for_mac(&self, mac: &str) -> Option<CliEngine> {

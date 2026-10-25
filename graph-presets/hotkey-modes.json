@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Hotkey pattern switch",
+  "description": "F3 flips between a smooth and a choppy pattern; hold F4 for a manual burst",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Keyboard control",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            90.0
+          ],
+          "text": "F3 flips the Toggle, so the Switch picks a smooth sine or a choppy step pattern for the pulse rate. Hold F4 (the Button) for a manual 60 % burst on top of the depth. Keys work while the Graph section is open; set them in the inspector."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Toggle",
+          "on": false,
+          "momentary": false,
+          "key": "F3"
+        },
+        "title": "Pattern (F3)"
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          108.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Sine",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "defaults": {
+          "hz": 1.0
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          40.0,
+          424.0
+        ],
+        "kind": {
+          "type": "Sequencer",
+          "steps": [
+            0.0,
+            1.0,
+            0.1,
+            0.9
+          ]
+        },
+        "defaults": {
+          "rate": 6.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          100.0
+        ],
+        "kind": {
+          "type": "Switch",
+          "count": 2
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          268.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          300.0,
+          416.0
+        ],
+        "kind": {
+          "type": "Toggle",
+          "on": false,
+          "momentary": true,
+          "key": "F4"
+        },
+        "title": "Burst (F4)"
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          520.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "defaults": {
+          "b": 0.6
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          820.0,
+          380.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Max",
+          "count": 2,
+          "weights": []
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "level"
+        },
+        "to": {
+          "node": 9,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 9,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.power"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,592 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Mid-range roll",
+  "description": "Mid frequency: four segments roll through 25–50 Hz; velocity brings the intensity up",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Mid frequency · roll",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            90.0
+          ],
+          "text": "Four slow sines (4, 3, 2.2 and 1.7 s) move each segment through 25–50 Hz, so the middle of the range rolls instead of buzzing. Smoothed velocity raises intensity from 45 to 100 %; depth sets the power. B rolls the segments in reverse."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Ukf",
+          "norms": {
+            "speed": 4.0,
+            "acc": 25.0,
+            "recoil": 200.0
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Roll ×4",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "hz": 0.25,
+                  "amp": 0.5,
+                  "bias": 0.5
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  316.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.25,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "hz": 0.33,
+                  "amp": 0.5,
+                  "bias": 0.5
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  40.0,
+                  632.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.5,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "hz": 0.45,
+                  "amp": 0.5,
+                  "bias": 0.5
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  40.0,
+                  948.0
+                ],
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.75,
+                  "one_shot": false,
+                  "seed": 4
+                },
+                "defaults": {
+                  "hz": 0.6,
+                  "amp": 0.5,
+                  "bias": 0.5
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Seg 1"
+                    },
+                    {
+                      "key": "out2",
+                      "label": "Seg 2"
+                    },
+                    {
+                      "key": "out3",
+                      "label": "Seg 3"
+                    },
+                    {
+                      "key": "out4",
+                      "label": "Seg 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out1"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out2"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out3"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "out4"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 150.0,
+          "release_ms": 900.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          364.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Velocity → intensity",
+        "defaults": {
+          "out_min": 0.45,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → power",
+        "defaults": {
+          "out_min": 0.35,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "While touched"
+      },
+      {
+        "id": 9,
+        "pos": [
+          560.0,
+          356.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                25.0,
+                50.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            },
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                25.0,
+                50.0
+              ],
+              "intensity_clamp": [
+                0,
+                100
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 26.0,
+          "b.limit_max": 26.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 7,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 8,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 8,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 9,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out4"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out3"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out2"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 10,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

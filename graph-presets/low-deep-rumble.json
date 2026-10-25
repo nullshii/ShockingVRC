@@ -1,0 +1,391 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Deep rumble",
+  "description": "Low frequency: 1–6 Hz, a slow wandering rumble that quickens with velocity",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Low frequency · rumble",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            600.0,
+            90.0
+          ],
+          "text": "The slowest pulses the device makes: 1 to 6 Hz. Two slow noises wander through the range — one per channel — and velocity pulls both towards 6 Hz. Intensity stays high (85–100 %), so each pulse lands as a distinct, deep knock."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Ukf",
+          "norms": {
+            "speed": 4.0,
+            "acc": 25.0,
+            "recoil": 200.0
+          }
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Perlin",
+          "seed": 91
+        },
+        "defaults": {
+          "rate": 0.15
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          196.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Perlin",
+          "seed": 97
+        },
+        "defaults": {
+          "rate": 0.11
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Weighted",
+          "count": 2,
+          "weights": [
+            0.6,
+            0.6
+          ]
+        },
+        "title": "A pitch"
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Weighted",
+          "count": 2,
+          "weights": [
+            0.6,
+            0.6
+          ]
+        },
+        "title": "B pitch"
+      },
+      {
+        "id": 8,
+        "pos": [
+          560.0,
+          336.0
+        ],
+        "kind": {
+          "type": "Noise",
+          "kind": "Perlin",
+          "seed": 93
+        },
+        "defaults": {
+          "rate": 0.2
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Intensity",
+        "defaults": {
+          "out_min": 0.85,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          820.0,
+          208.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "title": "Depth → power",
+        "defaults": {
+          "out_min": 0.4,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 11,
+        "pos": [
+          820.0,
+          416.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        },
+        "title": "While touched"
+      },
+      {
+        "id": 12,
+        "pos": [
+          820.0,
+          564.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 60.0,
+          "release_ms": 400.0
+        }
+      },
+      {
+        "id": 13,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                1.0,
+                6.0
+              ]
+            },
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                1.0,
+                6.0
+              ]
+            }
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 28.0,
+          "b.limit_max": 28.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 4,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 7,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 7,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 10,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out"
+        },
+        "to": {
+          "node": 11,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 11,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 12,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "b.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "uni"
+        },
+        "to": {
+          "node": 9,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "a.int"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "b.int"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 13,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

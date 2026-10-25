@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Four-segment texture",
+  "description": "Frequency and intensity split into four 25 ms segments, one swept by an LFO",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "One pin per 25 ms segment",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "F×4 and I×4 on the Device node split Frequency and Intensity into a pin per 25 ms segment of each 100 ms packet. Unwired segment pins hold the values typed on the node; segment 2's frequency is swept by an LFO."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Lfo",
+          "shape": "Triangle",
+          "phase": 0.0,
+          "one_shot": false,
+          "seed": 1
+        },
+        "defaults": {
+          "hz": 0.5
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ]
+            },
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0,
+          "a.freq1": 0.15,
+          "a.freq3": 0.4,
+          "a.freq4": 0.75,
+          "a.int1": 1.0,
+          "a.int2": 0.45,
+          "a.int3": 0.85,
+          "a.int4": 0.3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a.freq2"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Two-zone blend A/B",
+  "description": "Crossfade socket and plug contacts on A, strongest of both on B",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Mixing zones",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "Socket (Orf) and plug (Pen) contacts are crossfaded on channel A with the Blend slider. Channel B gets whichever is stronger (Combine · max — like Classic zone mixing)."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Orf",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Pen",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          40.0,
+          296.0
+        ],
+        "kind": {
+          "type": "Slider",
+          "value": 0.5,
+          "min": 0.0,
+          "max": 1.0,
+          "step": 0.05,
+          "key_up": "",
+          "key_down": ""
+        },
+        "title": "Blend"
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Crossfade",
+          "equal_power": true
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          300.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Combine",
+          "mode": "Max",
+          "count": 2,
+          "weights": []
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "level"
+        },
+        "to": {
+          "node": 5,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "t"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 6,
+          "pin": "out"
+        },
+        "to": {
+          "node": 7,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Faster strokes, faster pulses",
+  "description": "Stroke speed sets the pulse rate; depth sets the power",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Motion → frequency",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "The UKF's normalised speed, smoothed and eased, drives channel A's Frequency: still = 15 Hz, fast = 100 Hz (the Hz range is set on the Device node's channel A). Depth sets the power."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Ukf"
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 40.0,
+          "release_ms": 600.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          196.0
+        ],
+        "kind": {
+          "type": "Curve",
+          "curve": {
+            "points": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.125,
+                0.234
+              ],
+              [
+                0.25,
+                0.4375
+              ],
+              [
+                0.5,
+                0.75
+              ],
+              [
+                0.75,
+                0.9375
+              ],
+              [
+                1.0,
+                1.0
+              ]
+            ],
+            "interp": "Linear"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "freq_mode": "Normalized",
+              "freq_hz": [
+                15.0,
+                100.0
+              ]
+            },
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a.freq"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a.power"
+        }
+      }
+    ]
+  }
+}

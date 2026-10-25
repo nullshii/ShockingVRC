@@ -1,6 +1,6 @@
 use egui::{Align2, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 
-use shocking_vrc_core::cli::ChannelStatus;
+use shocking_vrc_core::cli::{ChannelStatus, EngineMode};
 use shocking_vrc_core::raw_to_hz;
 
 use crate::app::{Ctx, short_mac};
@@ -114,7 +114,14 @@ fn devices(ui: &mut Ui, cx: &mut Ctx) {
             "Devices",
             Some(&format!("{} connected", cx.snap.devices.len())),
         );
-        w::dim(ui, pal, "Each device keeps its own configuration. Click to switch.");
+        w::dim(
+            ui,
+            pal,
+            match cx.snap.mode {
+                EngineMode::Classic => "Each device keeps its own configuration. Click to switch.",
+                EngineMode::Graph => "One graph drives every device. Click to see a device's output.",
+            },
+        );
         ui.add_space(space::ROW_GAP);
 
         for (i, dev) in cx.snap.devices.iter().enumerate() {
@@ -216,7 +223,15 @@ fn devices(ui: &mut Ui, cx: &mut Ctx) {
 fn channel_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
     let pal = cx.pal;
     let st: &ChannelStatus = cx.snap.channel_status(ch);
-    let limit_max = cx.snap.channel(ch).limits.max;
+    let limit_max = match cx.snap.mode {
+        EngineMode::Classic => cx.snap.channel(ch).limits.max,
+        EngineMode::Graph => cx
+            .snap
+            .active()
+            .and_then(|d| cx.snap.graph.outputs.iter().find(|o| o.mac == d.mac))
+            .map(|o| o.channels[if ch == Channel::A { 0 } else { 1 }].safe.limit_max)
+            .unwrap_or(0),
+    };
 
     w::sheet(ui, pal, |ui| {
         w::heading_with_suffix(

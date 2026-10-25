@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "kind": "Fragment",
+  "name": "Stale-safe OSC input",
+  "description": "An avatar parameter, smoothed, that drops to 0 when VRChat stops sending it",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "OscFloat",
+          "address": "/avatar/parameters/MyFloat",
+          "stale_ms": 2000
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Smooth",
+          "attack_ms": 120.0,
+          "release_ms": 120.0
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Deadman"
+        },
+        "defaults": {
+          "timeout": 2.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 1,
+          "pin": "value"
+        },
+        "to": {
+          "node": 2,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "out"
+        },
+        "to": {
+          "node": 3,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 1,
+          "pin": "fresh"
+        },
+        "to": {
+          "node": 3,
+          "pin": "alive"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Tease timer",
+  "description": "The longer the contact is held, the stronger it gets",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Time as an input",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "A Ramp Timer counts while the contact is held: after a 3 s hold it ramps 0→1 over 20 s. Remap turns that into 30–100 %, which scales the depth. Letting go resets it."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Timer"
+        },
+        "defaults": {
+          "hold": 3.0,
+          "ramp": 20.0
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          168.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "out_min": 0.3,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          120.0
+        ],
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 3,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 5,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a.power"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Guarded soft start",
+  "description": "A soft-start group, a deadman and a panic node between the contact and the device",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -136.0
+        ],
+        "title": "Safety nodes",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            106.0
+          ],
+          "text": "The Soft start group (Tab or double-click to look inside) holds a ramp limiter and a hard limit. The Deadman drops to 0 when the contact goes stale for 3 s. The Panic node latches every device to 0 — the same as the toolbar button or F12."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          40.0,
+          148.0
+        ],
+        "kind": {
+          "type": "Panic",
+          "latched": false
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Soft start",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "in1",
+                      "label": "In"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "RampLimiter"
+                },
+                "defaults": {
+                  "rise": 0.5
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "kind": {
+                  "type": "HardLimit"
+                },
+                "defaults": {
+                  "max": 0.8
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  820.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "out1",
+                      "label": "Out"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "in1"
+                },
+                "to": {
+                  "node": 2,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "out1"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Deadman"
+        },
+        "defaults": {
+          "timeout": 3.0
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "level"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 4,
+          "pin": "out1"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 5,
+          "pin": "alive"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 6,
+          "pin": "a.power"
+        }
+      }
+    ]
+  }
+}

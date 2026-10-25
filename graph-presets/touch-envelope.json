@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Touch envelope (ADSR)",
+  "description": "Touch starts an envelope that swells, settles and fades after release",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -120.0
+        ],
+        "title": "Gates and envelopes",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            560.0,
+            90.0
+          ],
+          "text": "The Contact's Active output (a Bool) gates an ADSR envelope: it swells over 0.4 s, settles to 60 % and fades for 1.5 s after release — however deep the contact is."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Envelope",
+          "mode": "Adsr"
+        },
+        "defaults": {
+          "attack": 0.4,
+          "decay": 0.5,
+          "sustain": 0.6,
+          "release": 1.5
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          300.0,
+          256.0
+        ],
+        "kind": {
+          "type": "Scope",
+          "count": 2,
+          "window_s": 4.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {},
+            {}
+          ]
+        },
+        "title": "Device 1",
+        "defaults": {
+          "a.limit_max": 30.0,
+          "b.limit_max": 30.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 3,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 5,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "active"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "in2"
+        }
+      }
+    ]
+  }
+}

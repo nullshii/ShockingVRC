@@ -4,6 +4,7 @@ use egui::{Align2, Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 
 use shocking_vrc_app::logger::LogBuffer;
 use shocking_vrc_app::prefs;
+use shocking_vrc_core::cli::EngineMode;
 use shocking_vrc_core::modulation::config::ModulationConfig;
 
 use crate::bridge::{Bridge, Command, Snapshot, ToastKind};
@@ -51,6 +52,12 @@ pub struct UiState {
 
     pub show_theme_panel: bool,
     pub show_about: bool,
+
+    pub mode: EngineMode,
+    pub mode_confirm: Option<EngineMode>,
+    pub graph_caps: [u8; 2],
+    pub graph: crate::graph_editor::GraphEditor,
+    pub graph_dialog: Option<crate::overlays::graph_dialogs::GraphDialog>,
 }
 
 #[derive(Clone)]
@@ -126,6 +133,11 @@ impl UiState {
             nickname: p.nickname.clone(),
             show_theme_panel: false,
             show_about: false,
+            mode: p.mode,
+            mode_confirm: None,
+            graph_caps: p.graph_power_cap,
+            graph: crate::graph_editor::GraphEditor::default(),
+            graph_dialog: None,
         }
     }
 
@@ -177,9 +189,24 @@ impl UiState {
     }
 
     pub fn section_visible(&self, s: Section) -> bool {
-        match s {
-            Section::Alarm => self.alarm_section_visible,
-            _ => true,
+        s.in_mode(self.mode)
+            && match s {
+                Section::Alarm => self.alarm_section_visible,
+                _ => true,
+            }
+    }
+
+    pub fn follow_mode(&mut self, mode: EngineMode) {
+        if self.mode == mode {
+            return;
+        }
+        self.mode = mode;
+        if !self.section_visible(self.section) {
+            self.section = if mode == EngineMode::Graph {
+                Section::Graph
+            } else {
+                Section::Status
+            };
         }
     }
 
@@ -193,6 +220,9 @@ impl UiState {
             alarm_tab: true,
             ..prefs::UiPrefs::default()
         });
+        if section == Section::Graph {
+            s.mode = EngineMode::Graph;
+        }
         s.section = section;
         s
     }
@@ -288,6 +318,7 @@ impl eframe::App for GuiApp {
         let pal = *self.theme.palette();
 
         let snap = self.bridge.snapshot();
+        self.state.follow_mode(snap.mode);
         self.state.sync_mod_editor(&snap);
         self.clamp_selections(&snap);
 
@@ -372,10 +403,9 @@ impl GuiApp {
                 }
 
                 if let Some(n) = digit_of(*key)
-                    && let Some(s) = Section::ALL
-                        .get(n as usize - 1)
-                        .copied()
-                        .filter(|s| self.state.section_visible(*s))
+                    && let Some(s) = Section::ALL.iter().copied().find(|s| {
+                        s.key().to_digit(10) == Some(n) && self.state.section_visible(*s)
+                    })
                     {
                         self.state.section = s;
                     }
@@ -388,6 +418,12 @@ impl GuiApp {
 
     fn dismiss_topmost(&mut self) {
         let s = &mut self.state;
+        if s.mode_confirm.take().is_some() || s.graph_dialog.take().is_some() {
+            return;
+        }
+        if s.graph.dismiss() {
+            return;
+        }
         if s.preset_delete_confirm.take().is_some() {
             return;
         }
@@ -484,6 +520,10 @@ impl GuiApp {
         if rect.height() < 40.0 {
             return;
         }
+        if self.state.section == Section::Graph {
+            self.graph_body(ui, rect, pal, snap);
+            return;
+        }
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(rect)
@@ -523,11 +563,35 @@ impl GuiApp {
                                 }
                             }
                             Section::Alarm => views::alarm::show(ui, &mut cx),
+                            Section::Graph => views::graph::show(ui, &mut cx),
                         }
                         ui.add_space(28.0);
                     });
                 });
             });
+    }
+
+    fn graph_body(&mut self, ui: &mut Ui, rect: Rect, pal: &Palette, snap: &Snapshot) {
+        let pad = 18.0;
+        let inner = Rect::from_min_max(
+            egui::pos2(rect.left() + pad, rect.top() + 20.0),
+            egui::pos2((rect.right() - pad).max(rect.left() + pad + 1.0), rect.bottom() - 14.0),
+        );
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(inner)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+        );
+        let ui = &mut child;
+        self.section_header(ui, pal);
+        let mut cx = Ctx {
+            pal,
+            snap,
+            bridge: &self.bridge,
+            ui_state: &mut self.state,
+            log: &self.log,
+        };
+        views::graph::show(ui, &mut cx);
     }
 
     fn section_header(&self, ui: &mut Ui, pal: &Palette) {
@@ -654,6 +718,7 @@ impl GuiApp {
                 crate::overlays::preset_save::show(&ctx, &mut cx);
             }
             crate::overlays::confirm::show(&ctx, &mut cx);
+            crate::overlays::graph_dialogs::show(&ctx, &mut cx);
             crate::overlays::update::show(&ctx, &mut cx);
 
             if snap.alarm_status.phase.is_ringing() {
