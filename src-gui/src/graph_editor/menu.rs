@@ -1,6 +1,6 @@
 use egui::{Align2, Rect, Sense, Ui, vec2};
 
-use shocking_vrc_core::graph::kind::{Category, CatalogEntry, DeviceParams, catalog};
+use shocking_vrc_core::graph::kind::{CatalogEntry, Category, DeviceParams, catalog};
 use shocking_vrc_core::graph::{NodeKind, PinRef};
 
 use super::{Env, GraphEditor};
@@ -100,8 +100,7 @@ pub fn show(ctx: &egui::Context, ed: &mut GraphEditor, env: &Env) {
                         .id_salt("graph_add_list")
                         .show(ui, |ui| {
                             for cat in Category::ALL {
-                                let in_cat: Vec<&CatalogEntry> =
-                                    entries.iter().filter(|e| e.category == cat).collect();
+                                let in_cat: Vec<&CatalogEntry> = entries.iter().filter(|e| e.category == cat).collect();
                                 let devices_here = cat == Category::Output && !known.is_empty();
                                 if in_cat.is_empty() && !devices_here {
                                     continue;
@@ -152,11 +151,15 @@ pub fn show(ctx: &egui::Context, ed: &mut GraphEditor, env: &Env) {
             if let Some(node) = node {
                 let result = if from.output {
                     node.inputs().first().map(|p| {
-                        ed.edit(|g| g.connect(PinRef::new(from.node, from.key.clone()), PinRef::new(id, p.key.to_string())))
+                        ed.edit(|g| {
+                            g.connect(PinRef::new(from.node, from.key.clone()), PinRef::new(id, p.key.to_string()))
+                        })
                     })
                 } else {
                     node.outputs().first().map(|p| {
-                        ed.edit(|g| g.connect(PinRef::new(id, p.key.to_string()), PinRef::new(from.node, from.key.clone())))
+                        ed.edit(|g| {
+                            g.connect(PinRef::new(id, p.key.to_string()), PinRef::new(from.node, from.key.clone()))
+                        })
                     })
                 };
                 if let Some(Err(e)) = result {

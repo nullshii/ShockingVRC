@@ -4,19 +4,13 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
-use crate::tui::app::{setup_controls, Action, App, SetupControl};
+use crate::tui::app::{Action, App, SetupControl, setup_controls};
 use crate::tui::theme;
 use crate::tui::ui;
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
-    let rows = Layout::vertical([
-        Constraint::Min(0),
-        Constraint::Length(6),
-        Constraint::Length(3),
-    ])
-    .split(area);
-    let cols = Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
-        .split(rows[0]);
+    let rows = Layout::vertical([Constraint::Min(0), Constraint::Length(6), Constraint::Length(3)]).split(area);
+    let cols = Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)]).split(rows[0]);
     let focus = setup_controls().get(app.setup_focus).copied();
     render_osc(app, frame, cols[0]);
     render_connection(app, frame, cols[1]);
@@ -46,11 +40,7 @@ fn render_osc(app: &mut App, frame: &mut Frame, area: Rect) {
     } else {
         format!("OSC (UDP)  {}  (fixed, legacy mode)", app.osc_port)
     };
-    frame.render_widget(
-        Paragraph::new(port_line).style(theme::label_style(false)),
-        rows[1],
-    );
-
+    frame.render_widget(Paragraph::new(port_line).style(theme::label_style(false)), rows[1]);
 }
 
 fn render_connection(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -218,10 +208,7 @@ fn toggle_row(
     ])
     .split(area);
 
-    frame.render_widget(
-        Paragraph::new(label.to_string()).style(theme::label_style(focused)),
-        cols[0],
-    );
+    frame.render_widget(Paragraph::new(label.to_string()).style(theme::label_style(focused)), cols[0]);
     ui::choice_button(frame, app, cols[1], "ON", on, focused, on_action);
     ui::choice_button(frame, app, cols[2], "OFF", !on, focused, off_action);
     frame.render_widget(
@@ -230,12 +217,7 @@ fn toggle_row(
     );
 }
 
-fn render_tutorial_button(
-    app: &mut App,
-    frame: &mut Frame,
-    area: Rect,
-    focus: Option<SetupControl>,
-) {
+fn render_tutorial_button(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<SetupControl>) {
     let block = theme::panel_block("Tutorial");
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -250,8 +232,7 @@ fn render_tutorial_button(
         Action::TutorialStart,
     );
     frame.render_widget(
-        Paragraph::new("Re-open the interactive guide")
-            .style(Style::default().fg(theme::TEXT_DIM)),
+        Paragraph::new("Re-open the interactive guide").style(Style::default().fg(theme::TEXT_DIM)),
         cols[1],
     );
 }

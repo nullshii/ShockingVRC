@@ -6,9 +6,7 @@ use ratatui::widgets::canvas::{Canvas, Line as CanvasLine};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 
 use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationSource};
-use shocking_vrc_core::modulation::evaluator::{
-    advance_accumulator, evaluate_with_accumulator, KinematicsInput,
-};
+use shocking_vrc_core::modulation::evaluator::{KinematicsInput, advance_accumulator, evaluate_with_accumulator};
 use shocking_vrc_core::raw_to_hz;
 
 use super::app::ModKind;
@@ -81,13 +79,7 @@ fn y_bounds(min_v: f32, max_v: f32, base: f32) -> (f64, f64) {
     (lo as f64, hi as f64)
 }
 
-pub fn render_modulation_preview(
-    frame: &mut Frame,
-    area: Rect,
-    samples: &[f32],
-    base: f32,
-    kind: ModKind,
-) {
+pub fn render_modulation_preview(frame: &mut Frame, area: Rect, samples: &[f32], base: f32, kind: ModKind) {
     if samples.is_empty() || area.height < 6 || area.width < 16 {
         return;
     }
@@ -96,14 +88,8 @@ pub fn render_modulation_preview(
     let (y_min, y_max) = y_bounds(series.min_v, series.max_v, series.base);
 
     let stats = match kind {
-        ModKind::Freq => format!(
-            "base {:.0} Hz   range {:.0}–{:.0} Hz",
-            series.base, series.min_v, series.max_v
-        ),
-        ModKind::Intensity => format!(
-            "base {:.0}%   range {:.0}–{:.0}%",
-            series.base, series.min_v, series.max_v
-        ),
+        ModKind::Freq => format!("base {:.0} Hz   range {:.0}–{:.0} Hz", series.base, series.min_v, series.max_v),
+        ModKind::Intensity => format!("base {:.0}%   range {:.0}–{:.0}%", series.base, series.min_v, series.max_v),
     };
 
     let block = Block::default()
@@ -111,11 +97,7 @@ pub fn render_modulation_preview(
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme::ACCENT_DIM))
         .title(" Live preview ")
-        .title_style(
-            Style::default()
-                .fg(theme::ACCENT)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(theme::ACCENT).add_modifier(Modifier::BOLD))
         .style(Style::default().bg(theme::SURFACE));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -130,10 +112,7 @@ pub fn render_modulation_preview(
         width: inner.width,
         height: 1,
     };
-    frame.render_widget(
-        Paragraph::new(stats).style(Style::default().fg(theme::TEXT_DIM)),
-        stats_rect,
-    );
+    frame.render_widget(Paragraph::new(stats).style(Style::default().fg(theme::TEXT_DIM)), stats_rect);
 
     let graph_area = Rect {
         x: inner.x,

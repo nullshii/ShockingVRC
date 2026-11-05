@@ -66,22 +66,20 @@ fn harness_sized(width: f32) -> Harness<'static, Scene> {
         log: Default::default(),
         pal: *ThemeState::new("terminal").palette(),
     };
-    let mut h = Harness::builder()
-        .with_size(vec2(width, 860.0))
-        .build_ui_state(
-            |ui, s: &mut Scene| {
-                theme::install_style(ui.ctx(), &s.pal);
-                let mut cx = Ctx {
-                    pal: &s.pal,
-                    snap: &s.snap,
-                    bridge: &s.bridge,
-                    ui_state: &mut s.state,
-                    log: &s.log,
-                };
-                views::graph::show(ui, &mut cx);
-            },
-            scene,
-        );
+    let mut h = Harness::builder().with_size(vec2(width, 860.0)).build_ui_state(
+        |ui, s: &mut Scene| {
+            theme::install_style(ui.ctx(), &s.pal);
+            let mut cx = Ctx {
+                pal: &s.pal,
+                snap: &s.snap,
+                bridge: &s.bridge,
+                ui_state: &mut s.state,
+                log: &s.log,
+            };
+            views::graph::show(ui, &mut cx);
+        },
+        scene,
+    );
     h.run_steps(3);
     h
 }
@@ -167,7 +165,10 @@ fn dropping_a_wire_on_empty_canvas_opens_the_add_menu() {
     let empty = to_screen(&h, pos2(260.0, 420.0));
     drag(&mut h, from, empty);
     let menu = h.state().state.graph.menu.clone();
-    assert!(menu.is_some_and(|m| m.from_wire.is_some()), "menu should open with the wire attached");
+    assert!(
+        menu.is_some_and(|m| m.from_wire.is_some()),
+        "menu should open with the wire attached"
+    );
 }
 
 #[test]
@@ -354,12 +355,28 @@ fn the_side_panel_fits_every_inspector() {
         n.id = NodeId(100 + i as u64);
         ids.push(g.add(n));
     }
-    let port = |key: &str| GroupPort { key: key.into(), label: "a fairly long port label".into() };
+    let port = |key: &str| GroupPort {
+        key: key.into(),
+        label: "a fairly long port label".into(),
+    };
     let mut inner = Graph::default();
-    inner.add(Node::new(NodeKind::GroupInput(PortsParams { ports: vec![port("in1"), port("in2")] }), [0.0, 0.0]));
-    inner.add(Node::new(NodeKind::GroupOutput(PortsParams { ports: vec![port("out1")] }), [300.0, 0.0]));
+    inner.add(Node::new(
+        NodeKind::GroupInput(PortsParams {
+            ports: vec![port("in1"), port("in2")],
+        }),
+        [0.0, 0.0],
+    ));
+    inner.add(Node::new(
+        NodeKind::GroupOutput(PortsParams {
+            ports: vec![port("out1")],
+        }),
+        [300.0, 0.0],
+    ));
     let mut group = Node::new(
-        NodeKind::Group(GroupParams { name: "Group".into(), graph: Box::new(inner.clone()) }),
+        NodeKind::Group(GroupParams {
+            name: "Group".into(),
+            graph: Box::new(inner.clone()),
+        }),
         [40.0, 300.0],
     );
     group.id = NodeId(90);
@@ -391,7 +408,14 @@ fn the_side_panel_fits_every_inspector() {
         check(&mut h, "graph summary");
         for id in &ids {
             h.state_mut().state.graph.selection = [*id].into_iter().collect();
-            let label = h.state().state.graph.doc.node(*id).map(|n| n.kind.label()).unwrap_or_default();
+            let label = h
+                .state()
+                .state
+                .graph
+                .doc
+                .node(*id)
+                .map(|n| n.kind.label())
+                .unwrap_or_default();
             check(&mut h, &label);
         }
         h.state_mut().snap.devices[0].connected = false;

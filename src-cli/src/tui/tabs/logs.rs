@@ -7,8 +7,6 @@ use ratatui::widgets::Paragraph;
 use crate::tui::app::App;
 use crate::tui::theme;
 
-
-
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     let lines: Vec<String> = {
         let buf = app.log_buffer.lock().unwrap_or_else(|e| e.into_inner());
@@ -37,10 +35,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
 
     if lines.is_empty() {
         frame.render_widget(
-            Paragraph::new(Span::styled(
-                "  Waiting for events…",
-                Style::default().fg(theme::TEXT_DIM),
-            )),
+            Paragraph::new(Span::styled("  Waiting for events…", Style::default().fg(theme::TEXT_DIM))),
             inner,
         );
         return;
@@ -52,8 +47,6 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
         .collect();
     frame.render_widget(Paragraph::new(rendered), inner);
 }
-
-
 
 fn color_for(line: &str) -> Style {
     if line.starts_with("[ERROR]") {

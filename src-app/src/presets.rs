@@ -3,12 +3,10 @@ use std::time::Duration;
 
 use shocking_vrc_core::cli::ChannelConfig;
 use shocking_vrc_core::presets::{
-    entry_from_file, entry_from_ref, parse_manifest, parse_preset, ChannelPreset, PresetEntry,
-    PresetManifest,
+    ChannelPreset, PresetEntry, PresetManifest, entry_from_file, entry_from_ref, parse_manifest, parse_preset,
 };
 
-const GITHUB_RAW_BASE: &str =
-    "https://raw.githubusercontent.com/nullshii/ShockingVRC/tui/presets";
+const GITHUB_RAW_BASE: &str = "https://raw.githubusercontent.com/nullshii/ShockingVRC/tui/presets";
 const USER_PRESETS_DIR: &str = "presets/user";
 
 pub struct CatalogLoadResult {
@@ -46,9 +44,7 @@ pub async fn load_catalog() -> Result<CatalogLoadResult, String> {
     }
 
     if entries.is_empty() {
-        return Err(
-            "No presets found — check network or add .json files to ./presets/".into(),
-        );
+        return Err("No presets found — check network or add .json files to ./presets/".into());
     }
 
     sort_preset_entries(&mut entries);
@@ -64,11 +60,7 @@ pub fn sort_preset_entries(entries: &mut [PresetEntry]) {
     });
 }
 
-pub fn save_user_preset(
-    ch: &ChannelConfig,
-    name: &str,
-    author: &str,
-) -> Result<PresetEntry, String> {
+pub fn save_user_preset(ch: &ChannelConfig, name: &str, author: &str) -> Result<PresetEntry, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Preset name cannot be empty".into());
@@ -81,8 +73,7 @@ pub fn save_user_preset(
     let filename = format!("{id}.json");
     let preset = ChannelPreset::from_channel(name, author, ch);
     let json = serde_json::to_string_pretty(&preset).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(&filename), &json)
-        .map_err(|e| format!("{}: {e}", dir.join(&filename).display()))?;
+    std::fs::write(dir.join(&filename), &json).map_err(|e| format!("{}: {e}", dir.join(&filename).display()))?;
 
     Ok(entry_from_file(id, preset, true))
 }
@@ -91,8 +82,7 @@ pub fn delete_user_preset(id: &str) -> Result<(), String> {
     let dir = user_preset_dir();
     let file_path = dir.join(format!("{id}.json"));
     if file_path.exists() {
-        std::fs::remove_file(&file_path)
-            .map_err(|e| format!("{}: {e}", file_path.display()))?;
+        std::fs::remove_file(&file_path).map_err(|e| format!("{}: {e}", file_path.display()))?;
     } else {
         return Err(format!("preset file '{}' not found", file_path.display()));
     }
@@ -106,10 +96,7 @@ pub fn user_preset_dir() -> PathBuf {
 pub fn random_preset_name(channel_label: &str) -> String {
     use rand::RngExt;
     let n: u32 = rand::rng().random_range(10_000..99_999);
-    format!(
-        "preset-{}-{n}",
-        channel_label.to_ascii_lowercase()
-    )
+    format!("preset-{}-{n}", channel_label.to_ascii_lowercase())
 }
 
 pub fn slugify(name: &str) -> String {
@@ -125,11 +112,7 @@ pub fn slugify(name: &str) -> String {
         }
     }
     let out = out.trim_matches('-').to_string();
-    if out.is_empty() {
-        "preset".into()
-    } else {
-        out
-    }
+    if out.is_empty() { "preset".into() } else { out }
 }
 
 fn local_official_dirs() -> Vec<PathBuf> {
@@ -211,11 +194,7 @@ fn scan_json_dir(dir: &Path, user: bool) -> Result<Vec<PresetEntry>, String> {
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
         if stem == "manifest" {
             continue;
         }

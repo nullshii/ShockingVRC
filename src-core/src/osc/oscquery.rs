@@ -226,10 +226,7 @@ fn broadcast_on_interface(packet: &[u8], addr: Ipv4Addr) -> std::io::Result<()> 
     socket.set_multicast_ttl_v4(255)?;
     socket.set_multicast_loop_v4(true)?;
     socket.set_multicast_if_v4(&addr)?;
-    socket.send_to(
-        packet,
-        &SocketAddr::new(IpAddr::V4(MDNS_MULTICAST_ADDR), MDNS_PORT).into(),
-    )?;
+    socket.send_to(packet, &SocketAddr::new(IpAddr::V4(MDNS_MULTICAST_ADDR), MDNS_PORT).into())?;
     Ok(())
 }
 
@@ -529,9 +526,7 @@ async fn rescan(inner: &Arc<ClientInner>) -> bool {
                 log::debug!("Skipping mDNS candidate {ip}:{port} (not a local address)");
                 continue;
             }
-            if !ip.is_loopback()
-                && check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port))
-                    .await
+            if !ip.is_loopback() && check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await
             {
                 return true;
             }
@@ -565,11 +560,7 @@ async fn check_endpoint(inner: &Arc<ClientInner>, http_addr: SocketAddr) -> bool
 
     let had_address = inner.address.read().is_ok_and(|a| a.is_some());
     if !had_address {
-        log::info!(
-            "VRChat OSCQuery found at {http_addr} (OSC {}:{})",
-            info.osc_ip,
-            info.osc_port
-        );
+        log::info!("VRChat OSCQuery found at {http_addr} (OSC {}:{})", info.osc_ip, info.osc_port);
     }
     if let Ok(mut slot) = inner.address.write() {
         *slot = Some(VrchatAddress {
@@ -619,10 +610,7 @@ async fn oscquery_port_from_logs(inner: &Arc<ClientInner>) -> Option<u16> {
     let inner = Arc::clone(inner);
     tokio::task::spawn_blocking(move || {
         let mut scan = inner.log_scan.lock().unwrap_or_else(|e| e.into_inner());
-        if scan
-            .last_scan
-            .is_some_and(|t| t.elapsed() < LOG_SCAN_COOLDOWN)
-        {
+        if scan.last_scan.is_some_and(|t| t.elapsed() < LOG_SCAN_COOLDOWN) {
             return scan.port;
         }
         scan.last_scan = Some(std::time::Instant::now());
@@ -640,11 +628,7 @@ fn scan_log_for_port(scan: &mut LogScan, dir: &std::path::Path) -> Option<u16> {
     let newest = std::fs::read_dir(dir)
         .ok()?
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .starts_with("output_log_")
-        })
+        .filter(|e| e.file_name().to_string_lossy().starts_with("output_log_"))
         .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())?;
     let path = newest.path();
 
@@ -861,11 +845,7 @@ mod tests {
 
         assert!(get("/avatar").await.contains("404"));
         assert!(get("/?EXPLORER").await.contains("400"));
-        assert!(
-            send("POST / HTTP/1.1\r\nHost: x\r\n\r\n".into())
-                .await
-                .contains("405")
-        );
+        assert!(send("POST / HTTP/1.1\r\nHost: x\r\n\r\n".into()).await.contains("405"));
 
         server.shutdown();
     }

@@ -350,13 +350,7 @@ impl MathOp {
     pub fn is_unary(self) -> bool {
         matches!(
             self,
-            MathOp::Abs
-                | MathOp::Negate
-                | MathOp::Invert
-                | MathOp::Sqrt
-                | MathOp::Round
-                | MathOp::Floor
-                | MathOp::Ceil
+            MathOp::Abs | MathOp::Negate | MathOp::Invert | MathOp::Sqrt | MathOp::Round | MathOp::Floor | MathOp::Ceil
         )
     }
 
@@ -817,9 +811,7 @@ impl GroupParams {
             .nodes
             .iter()
             .find_map(|n| match (&n.kind, input) {
-                (NodeKind::GroupInput(p), true) | (NodeKind::GroupOutput(p), false) => {
-                    Some(p.ports.clone())
-                }
+                (NodeKind::GroupInput(p), true) | (NodeKind::GroupOutput(p), false) => Some(p.ports.clone()),
                 _ => None,
             })
             .unwrap_or_default()
@@ -931,7 +923,6 @@ pub struct MissingParams {
     pub raw: serde_json::Value,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum NodeKind {
@@ -1000,11 +991,7 @@ pub fn deserialize_kind<'de, D: Deserializer<'de>>(d: D) -> Result<NodeKind, D::
     match NodeKind::deserialize(&raw) {
         Ok(k) => Ok(k),
         Err(_) => {
-            let type_name = raw
-                .get("type")
-                .and_then(|t| t.as_str())
-                .unwrap_or("?")
-                .to_string();
+            let type_name = raw.get("type").and_then(|t| t.as_str()).unwrap_or("?").to_string();
             Ok(NodeKind::Missing(MissingParams { type_name, raw }))
         }
     }
@@ -1175,10 +1162,9 @@ impl NodeKind {
             | NodeKind::Group(_)
             | NodeKind::GroupInput(_)
             | NodeKind::GroupOutput(_) => Category::Logic,
-            NodeKind::HardLimit(_)
-            | NodeKind::RampLimiter(_)
-            | NodeKind::Deadman(_)
-            | NodeKind::Panic(_) => Category::Safety,
+            NodeKind::HardLimit(_) | NodeKind::RampLimiter(_) | NodeKind::Deadman(_) | NodeKind::Panic(_) => {
+                Category::Safety
+            }
             NodeKind::Scope(_) | NodeKind::Device(_) => Category::Output,
             NodeKind::Frame(_) | NodeKind::Missing(_) => Category::Layout,
         }
@@ -1290,23 +1276,14 @@ impl NodeKind {
                 fl("high", "High", 0.6, (0.0, 1.0)),
                 fl("low", "Low", 0.4, (0.0, 1.0)),
             ],
-            NodeKind::Metronome(_) => vec![
-                fl("hz", "Hz", 2.0, (0.0, 10.0)),
-                fl("width", "Width", 0.5, (0.0, 1.0)),
-            ],
+            NodeKind::Metronome(_) => vec![fl("hz", "Hz", 2.0, (0.0, 10.0)), fl("width", "Width", 0.5, (0.0, 1.0))],
             NodeKind::Timer(_) => vec![
                 bl("gate", "Gate", 0.0),
                 fl("hold", "Hold s", 1.0, (0.0, 30.0)),
                 fl("ramp", "Ramp s", 2.0, (0.0, 30.0)),
             ],
-            NodeKind::Sequencer(_) => vec![
-                fl("rate", "Rate Hz", 2.0, (0.0, 10.0)),
-                bl("reset", "Reset", 0.0),
-            ],
-            NodeKind::Compare(_) => vec![
-                fl("a", "a", 0.0, (0.0, 1.0)),
-                fl("b", "b", 0.5, (0.0, 1.0)),
-            ],
+            NodeKind::Sequencer(_) => vec![fl("rate", "Rate Hz", 2.0, (0.0, 10.0)), bl("reset", "Reset", 0.0)],
+            NodeKind::Compare(_) => vec![fl("a", "a", 0.0, (0.0, 1.0)), fl("b", "b", 0.5, (0.0, 1.0))],
             NodeKind::Logic(p) => {
                 if p.op == LogicOp::Not {
                     vec![bl("a", "a", 0.0)]
@@ -1316,15 +1293,13 @@ impl NodeKind {
             }
             NodeKind::Switch(p) => {
                 let mut v = vec![fl("index", "Index", 0.0, (0.0, (MAX_FAN - 1) as f32))];
-                v.extend((0..p.count.clamp(2, MAX_FAN)).map(|i| {
-                    owned(format!("in{}", i + 1), format!("In {}", i + 1), 0.0, (0.0, 1.0))
-                }));
+                v.extend(
+                    (0..p.count.clamp(2, MAX_FAN))
+                        .map(|i| owned(format!("in{}", i + 1), format!("In {}", i + 1), 0.0, (0.0, 1.0))),
+                );
                 v
             }
-            NodeKind::Router(_) => vec![
-                x(),
-                fl("index", "Index", 0.0, (0.0, (MAX_FAN - 1) as f32)),
-            ],
+            NodeKind::Router(_) => vec![x(), fl("index", "Index", 0.0, (0.0, (MAX_FAN - 1) as f32))],
             NodeKind::Group(p) => p
                 .ports(true)
                 .into_iter()
@@ -1568,9 +1543,12 @@ pub fn catalog() -> Vec<CatalogEntry> {
             })
         }),
         entry!("Alarm", Input, "wake alarm strength", || NodeKind::Alarm(NoParams {})),
-        entry!("UKF Filter", Conditioning, "kalman ukf velocity speed acceleration recoil", || {
-            NodeKind::Ukf(UkfNodeParams::default())
-        }),
+        entry!(
+            "UKF Filter",
+            Conditioning,
+            "kalman ukf velocity speed acceleration recoil",
+            || { NodeKind::Ukf(UkfNodeParams::default()) }
+        ),
         entry!("Derivative", Conditioning, "rate change slope", || {
             NodeKind::Derivative(NoParams {})
         }),

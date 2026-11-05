@@ -52,10 +52,7 @@ fn render_list(app: &mut App, frame: &mut Frame, area: Rect) {
     if app.zone_presets.is_empty() {
         frame.render_widget(
             Paragraph::new(vec![
-                Line::from(Span::styled(
-                    "  No zone sets saved yet.",
-                    Style::default().fg(theme::TEXT_DIM),
-                )),
+                Line::from(Span::styled("  No zone sets saved yet.", Style::default().fg(theme::TEXT_DIM))),
                 Line::from(Span::styled(
                     "  Map the zones you want, then Save current.",
                     Style::default().fg(theme::TEXT_DIM),
@@ -86,15 +83,7 @@ fn render_list(app: &mut App, frame: &mut Frame, area: Rect) {
     }
 }
 
-fn render_row(
-    app: &mut App,
-    frame: &mut Frame,
-    rect: Rect,
-    index: usize,
-    name: &str,
-    zones_a: usize,
-    zones_b: usize,
-) {
+fn render_row(app: &mut App, frame: &mut Frame, rect: Rect, index: usize, name: &str, zones_a: usize, zones_b: usize) {
     let selected = index == app.sel_zone_preset;
     let marker = if selected { "▸" } else { " " };
     let name_style = if selected {
@@ -104,17 +93,10 @@ fn render_row(
     };
 
     let delete_w = DELETE_BTN_W.min(rect.width.saturating_sub(6));
-    let cols = Layout::horizontal([
-        Constraint::Length(2),
-        Constraint::Min(0),
-        Constraint::Length(delete_w),
-    ])
-    .split(rect);
+    let cols =
+        Layout::horizontal([Constraint::Length(2), Constraint::Min(0), Constraint::Length(delete_w)]).split(rect);
 
-    frame.render_widget(
-        Paragraph::new(marker).style(Style::default().fg(theme::ACCENT)),
-        cols[0],
-    );
+    frame.render_widget(Paragraph::new(marker).style(Style::default().fg(theme::ACCENT)), cols[0]);
 
     let count_style = if zones_a + zones_b == 0 {
         Style::default().fg(theme::WARNING)
@@ -131,14 +113,7 @@ fn render_row(
     app.push_click(cols[1], Action::SelectZonePreset(index));
 
     if delete_w > 0 {
-        ui::icon_button(
-            frame,
-            app,
-            cols[2],
-            "×",
-            false,
-            Action::RequestDeleteZonePreset(index),
-        );
+        ui::icon_button(frame, app, cols[2], "×", false, Action::RequestDeleteZonePreset(index));
     }
 }
 
@@ -164,14 +139,7 @@ fn render_action_row(app: &mut App, frame: &mut Frame, area: Rect) {
     if !app.zone_presets.is_empty() {
         ui::button(frame, app, cols[0], "Load", false, Action::ApplyZonePreset);
     }
-    ui::button(
-        frame,
-        app,
-        cols[2],
-        "Save current",
-        false,
-        Action::StartSaveZonePreset,
-    );
+    ui::button(frame, app, cols[2], "Save current", false, Action::StartSaveZonePreset);
     ui::button(frame, app, cols[4], "Close", false, Action::CloseZonePresets);
 }
 
@@ -217,31 +185,15 @@ fn render_delete_row(app: &mut App, frame: &mut Frame, area: Rect) {
             Span::styled(" Delete ", Style::default().fg(theme::TEXT)),
             Span::styled(
                 format!("\"{name}\""),
-                Style::default()
-                    .fg(theme::HIGHLIGHT)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" ?", Style::default().fg(theme::TEXT)),
         ])),
         cols[0],
     );
 
-    ui::button(
-        frame,
-        app,
-        cols[1],
-        "Delete",
-        false,
-        Action::ConfirmDeleteZonePreset,
-    );
-    ui::button(
-        frame,
-        app,
-        cols[3],
-        "Cancel",
-        false,
-        Action::CancelDeleteZonePreset,
-    );
+    ui::button(frame, app, cols[1], "Delete", false, Action::ConfirmDeleteZonePreset);
+    ui::button(frame, app, cols[3], "Cancel", false, Action::CancelDeleteZonePreset);
 }
 
 fn render_hints(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -252,8 +204,5 @@ fn render_hints(app: &mut App, frame: &mut Frame, area: Rect) {
     } else {
         " Enter — load  ·  s — save  ·  x — delete  ·  Esc — close"
     };
-    frame.render_widget(
-        Paragraph::new(Span::styled(hint, Style::default().fg(theme::TEXT_DIM))),
-        area,
-    );
+    frame.render_widget(Paragraph::new(Span::styled(hint, Style::default().fg(theme::TEXT_DIM))), area);
 }

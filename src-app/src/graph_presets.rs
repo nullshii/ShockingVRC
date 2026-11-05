@@ -10,34 +10,91 @@ const EXPORT_DIR: &str = "graphs";
 
 const BUILTIN_MANIFEST: &str = include_str!("../../graph-presets/manifest.json");
 const BUILTIN_FILES: &[(&str, &str)] = &[
-    ("simple-depth-power.json", include_str!("../../graph-presets/simple-depth-power.json")),
-    ("depth-lfo-frequency.json", include_str!("../../graph-presets/depth-lfo-frequency.json")),
-    ("speed-intensity-smoothing.json", include_str!("../../graph-presets/speed-intensity-smoothing.json")),
+    (
+        "simple-depth-power.json",
+        include_str!("../../graph-presets/simple-depth-power.json"),
+    ),
+    (
+        "depth-lfo-frequency.json",
+        include_str!("../../graph-presets/depth-lfo-frequency.json"),
+    ),
+    (
+        "speed-intensity-smoothing.json",
+        include_str!("../../graph-presets/speed-intensity-smoothing.json"),
+    ),
     ("two-zone-blend.json", include_str!("../../graph-presets/two-zone-blend.json")),
-    ("two-devices-one-contact.json", include_str!("../../graph-presets/two-devices-one-contact.json")),
-    ("guarded-soft-start.json", include_str!("../../graph-presets/guarded-soft-start.json")),
+    (
+        "two-devices-one-contact.json",
+        include_str!("../../graph-presets/two-devices-one-contact.json"),
+    ),
+    (
+        "guarded-soft-start.json",
+        include_str!("../../graph-presets/guarded-soft-start.json"),
+    ),
     ("heartbeat-touch.json", include_str!("../../graph-presets/heartbeat-touch.json")),
-    ("four-segment-texture.json", include_str!("../../graph-presets/four-segment-texture.json")),
+    (
+        "four-segment-texture.json",
+        include_str!("../../graph-presets/four-segment-texture.json"),
+    ),
     ("tease-timer.json", include_str!("../../graph-presets/tease-timer.json")),
     ("echo-tail.json", include_str!("../../graph-presets/echo-tail.json")),
     ("breathing-noise.json", include_str!("../../graph-presets/breathing-noise.json")),
     ("ping-pong-ab.json", include_str!("../../graph-presets/ping-pong-ab.json")),
-    ("classic-functions.json", include_str!("../../graph-presets/classic-functions.json")),
-    ("speed-to-frequency.json", include_str!("../../graph-presets/speed-to-frequency.json")),
+    (
+        "classic-functions.json",
+        include_str!("../../graph-presets/classic-functions.json"),
+    ),
+    (
+        "speed-to-frequency.json",
+        include_str!("../../graph-presets/speed-to-frequency.json"),
+    ),
     ("touch-envelope.json", include_str!("../../graph-presets/touch-envelope.json")),
     ("recoil-spike.json", include_str!("../../graph-presets/recoil-spike.json")),
-    ("avatar-slider-max.json", include_str!("../../graph-presets/avatar-slider-max.json")),
+    (
+        "avatar-slider-max.json",
+        include_str!("../../graph-presets/avatar-slider-max.json"),
+    ),
     ("hotkey-modes.json", include_str!("../../graph-presets/hotkey-modes.json")),
-    ("long-four-voice-drift.json", include_str!("../../graph-presets/long-four-voice-drift.json")),
-    ("long-slow-escalation.json", include_str!("../../graph-presets/long-slow-escalation.json")),
-    ("long-breathing-cathedral.json", include_str!("../../graph-presets/long-breathing-cathedral.json")),
-    ("long-drifting-polyrhythm.json", include_str!("../../graph-presets/long-drifting-polyrhythm.json")),
-    ("long-depth-ceiling.json", include_str!("../../graph-presets/long-depth-ceiling.json")),
-    ("long-glitch-rain.json", include_str!("../../graph-presets/long-glitch-rain.json")),
-    ("high-rolling-buzz.json", include_str!("../../graph-presets/high-rolling-buzz.json")),
-    ("high-hummingbird.json", include_str!("../../graph-presets/high-hummingbird.json")),
-    ("nightmare-no-rhythm.json", include_str!("../../graph-presets/nightmare-no-rhythm.json")),
-    ("nightmare-ratchet.json", include_str!("../../graph-presets/nightmare-ratchet.json")),
+    (
+        "long-four-voice-drift.json",
+        include_str!("../../graph-presets/long-four-voice-drift.json"),
+    ),
+    (
+        "long-slow-escalation.json",
+        include_str!("../../graph-presets/long-slow-escalation.json"),
+    ),
+    (
+        "long-breathing-cathedral.json",
+        include_str!("../../graph-presets/long-breathing-cathedral.json"),
+    ),
+    (
+        "long-drifting-polyrhythm.json",
+        include_str!("../../graph-presets/long-drifting-polyrhythm.json"),
+    ),
+    (
+        "long-depth-ceiling.json",
+        include_str!("../../graph-presets/long-depth-ceiling.json"),
+    ),
+    (
+        "long-glitch-rain.json",
+        include_str!("../../graph-presets/long-glitch-rain.json"),
+    ),
+    (
+        "high-rolling-buzz.json",
+        include_str!("../../graph-presets/high-rolling-buzz.json"),
+    ),
+    (
+        "high-hummingbird.json",
+        include_str!("../../graph-presets/high-hummingbird.json"),
+    ),
+    (
+        "nightmare-no-rhythm.json",
+        include_str!("../../graph-presets/nightmare-no-rhythm.json"),
+    ),
+    (
+        "nightmare-ratchet.json",
+        include_str!("../../graph-presets/nightmare-ratchet.json"),
+    ),
     ("low-thump.json", include_str!("../../graph-presets/low-thump.json")),
     ("low-deep-rumble.json", include_str!("../../graph-presets/low-deep-rumble.json")),
     ("mid-roll.json", include_str!("../../graph-presets/mid-roll.json")),
@@ -47,9 +104,18 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
     ("drop-freefall.json", include_str!("../../graph-presets/drop-freefall.json")),
     ("drop-undertow.json", include_str!("../../graph-presets/drop-undertow.json")),
     ("drop-fault-line.json", include_str!("../../graph-presets/drop-fault-line.json")),
-    ("fragment-ukf-speed.json", include_str!("../../graph-presets/fragment-ukf-speed.json")),
-    ("fragment-stale-safe-osc.json", include_str!("../../graph-presets/fragment-stale-safe-osc.json")),
-    ("fragment-soft-start.json", include_str!("../../graph-presets/fragment-soft-start.json")),
+    (
+        "fragment-ukf-speed.json",
+        include_str!("../../graph-presets/fragment-ukf-speed.json"),
+    ),
+    (
+        "fragment-stale-safe-osc.json",
+        include_str!("../../graph-presets/fragment-stale-safe-osc.json"),
+    ),
+    (
+        "fragment-soft-start.json",
+        include_str!("../../graph-presets/fragment-soft-start.json"),
+    ),
 ];
 
 pub fn user_graph_preset_dir() -> PathBuf {
@@ -164,11 +230,7 @@ fn load_user_from(dir: &Path) -> Vec<GraphPresetEntry> {
             continue;
         };
         match parse_graph_preset(&text) {
-            Ok(preset) => entries.push(GraphPresetEntry {
-                id,
-                preset,
-                user: true,
-            }),
+            Ok(preset) => entries.push(GraphPresetEntry { id, preset, user: true }),
             Err(e) => log::warn!("[graph-presets] Skipping {}: {e}", path.display()),
         }
     }
@@ -257,13 +319,19 @@ mod tests {
     #[test]
     fn every_built_in_graph_drives_a_device_when_touched() {
         use shocking_vrc_core::graph::ExternalSample;
-        for e in builtin_presets().iter().filter(|e| e.preset.kind == GraphPresetKind::Graph) {
+        for e in builtin_presets()
+            .iter()
+            .filter(|e| e.preset.kind == GraphPresetKind::Graph)
+        {
             let g = e.preset.instantiate(&["AA:AA".into(), "BB:BB".into()]);
             let mut ev = shocking_vrc_core::graph::GraphEvaluator::new(&g);
             let mut peak = 0.0f32;
             for k in 0..80 {
                 let level = 0.3 + 0.4 * ((k as f32) * 0.3).sin().abs();
-                ev.fill_external(|_| ExternalSample { value: level, fresh: true });
+                ev.fill_external(|_| ExternalSample {
+                    value: level,
+                    fresh: true,
+                });
                 for f in ev.step(0.025) {
                     for ch in &f.channels {
                         peak = peak.max(ch.power);
@@ -277,7 +345,10 @@ mod tests {
     #[test]
     fn long_form_presets_use_every_segment_and_unusual_limits() {
         use shocking_vrc_core::graph::{ExternalSample, NodeKind};
-        let long: Vec<_> = builtin_presets().into_iter().filter(|e| e.id.starts_with("long-")).collect();
+        let long: Vec<_> = builtin_presets()
+            .into_iter()
+            .filter(|e| e.id.starts_with("long-"))
+            .collect();
         assert_eq!(long.len(), 6);
         for e in &long {
             let g = e.preset.instantiate(&["AA:AA".into()]);
@@ -292,10 +363,15 @@ mod tests {
             let (mut lo_max, mut hi_max, mut hi_min) = (f32::MAX, 0.0f32, 0.0f32);
             for k in 0..2400 {
                 let level = 0.35 + 0.3 * ((k as f32) * 0.01).sin();
-                ev.fill_external(|_| ExternalSample { value: level, fresh: true });
+                ev.fill_external(|_| ExternalSample {
+                    value: level,
+                    fresh: true,
+                });
                 let f = &ev.step(0.025)[0];
                 for (c, ch) in f.channels.iter().enumerate() {
-                    let range = |v: [f32; 4]| v.iter().fold(f32::MIN, |a, b| a.max(*b)) - v.iter().fold(f32::MAX, |a, b| a.min(*b));
+                    let range = |v: [f32; 4]| {
+                        v.iter().fold(f32::MIN, |a, b| a.max(*b)) - v.iter().fold(f32::MAX, |a, b| a.min(*b))
+                    };
                     spread_f[c] = spread_f[c].max(range(ch.freq));
                     spread_i[c] = spread_i[c].max(range(ch.intensity));
                     lo_max = lo_max.min(ch.limit_max);
@@ -315,11 +391,17 @@ mod tests {
     #[test]
     fn slow_escalation_climbs_for_ten_minutes() {
         use shocking_vrc_core::graph::ExternalSample;
-        let e = builtin_presets().into_iter().find(|e| e.id == "long-slow-escalation").unwrap();
+        let e = builtin_presets()
+            .into_iter()
+            .find(|e| e.id == "long-slow-escalation")
+            .unwrap();
         let mut ev = shocking_vrc_core::graph::GraphEvaluator::new(&e.preset.instantiate(&["AA:AA".into()]));
         let at = |secs: f32, ev: &mut shocking_vrc_core::graph::GraphEvaluator| {
             for _ in 0..(secs / 0.025) as usize {
-                ev.fill_external(|_| ExternalSample { value: 0.6, fresh: true });
+                ev.fill_external(|_| ExternalSample {
+                    value: 0.6,
+                    fresh: true,
+                });
                 ev.step(0.025);
             }
             ev.frames()[0].channels[0]
@@ -385,7 +467,15 @@ mod tests {
 
     impl Strokes {
         fn new(seed: u64, mid: f32) -> Self {
-            Self { phase: 0.0, rate: 1.0, rng: seed.max(1), t: 0.0, next_pull: 8.0, mid, steady: false }
+            Self {
+                phase: 0.0,
+                rate: 1.0,
+                rng: seed.max(1),
+                t: 0.0,
+                next_pull: 8.0,
+                mid,
+                steady: false,
+            }
         }
 
         fn rand(&mut self) -> f32 {
@@ -416,7 +506,10 @@ mod tests {
     }
 
     fn preset(id: &str) -> GraphPresetEntry {
-        builtin_presets().into_iter().find(|e| e.id == id).unwrap_or_else(|| panic!("no preset {id}"))
+        builtin_presets()
+            .into_iter()
+            .find(|e| e.id == id)
+            .unwrap_or_else(|| panic!("no preset {id}"))
     }
 
     fn play(g: &Graph, secs: f32, strokes: &mut Strokes) -> Vec<[shocking_vrc_core::graph::device::ChannelFrame; 2]> {
@@ -425,7 +518,10 @@ mod tests {
         (0..(secs / 0.025) as usize)
             .map(|_| {
                 let level = strokes.next(0.025);
-                ev.fill_external(|_| ExternalSample { value: level, fresh: true });
+                ev.fill_external(|_| ExternalSample {
+                    value: level,
+                    fresh: true,
+                });
                 let f = &ev.step(0.025)[0];
                 [f.channels[0], f.channels[1]]
             })
@@ -446,13 +542,23 @@ mod tests {
     const DROPS: [&str; 3] = ["drop-freefall", "drop-undertow", "drop-fault-line"];
 
     fn set_slider(g: &mut Graph, title: &str, value: f32) {
-        let n = g.nodes.iter_mut().find(|n| n.title == title).unwrap_or_else(|| panic!("no slider {title}"));
-        let NodeKind::Slider(p) = &mut n.kind else { panic!("{title} is not a slider") };
+        let n = g
+            .nodes
+            .iter_mut()
+            .find(|n| n.title == title)
+            .unwrap_or_else(|| panic!("no slider {title}"));
+        let NodeKind::Slider(p) = &mut n.kind else {
+            panic!("{title} is not a slider")
+        };
         p.value = value;
     }
 
     fn hz_int(frames: &[[shocking_vrc_core::graph::device::ChannelFrame; 2]]) -> Vec<(f32, f32)> {
-        frames.iter().skip(200).map(|f| (hz(f[0].freq[3]), f[0].intensity[3])).collect()
+        frames
+            .iter()
+            .skip(200)
+            .map(|f| (hz(f[0].freq[3]), f[0].intensity[3]))
+            .collect()
     }
 
     fn fall_starts(a: &[(f32, f32)]) -> Vec<usize> {
@@ -508,14 +614,20 @@ mod tests {
                 let n = starts.len() as f32;
                 assert!(abrupt as f32 >= 0.9 * n, "{id}: {abrupt} of {n} falls are abrupt");
                 assert!(softer as f32 >= 0.75 * n, "{id}: intensity sank in only {softer} of {n} falls");
-                assert!(deepest_fall <= max_drop + 6.0, "{id}: fell {deepest_fall} Hz with a {max_drop} Hz cap");
+                assert!(
+                    deepest_fall <= max_drop + 6.0,
+                    "{id}: fell {deepest_fall} Hz with a {max_drop} Hz cap"
+                );
                 if max_drop == 60.0 {
                     let high = a.iter().filter(|x| x.0 >= 65.0).count() as f32 / a.len() as f32;
                     assert!(high >= 0.6, "{id}: high only {:.0} % of the time", high * 100.0);
                 }
                 deepest.push(deepest_fall);
             }
-            assert!(deepest[0] > deepest[1] + 10.0, "{id}: the slider does not change the drop ({deepest:?})");
+            assert!(
+                deepest[0] > deepest[1] + 10.0,
+                "{id}: the slider does not change the drop ({deepest:?})"
+            );
         }
     }
 
@@ -589,11 +701,17 @@ mod tests {
     fn drop_presets_use_all_four_motion_values_everywhere() {
         for id in DROPS {
             let g = preset(id).preset.instantiate(&["AA:AA".into()]);
-            let ukf = g.nodes.iter().find(|n| matches!(n.kind, NodeKind::Ukf(_))).expect("a UKF");
+            let ukf = g
+                .nodes
+                .iter()
+                .find(|n| matches!(n.kind, NodeKind::Ukf(_)))
+                .expect("a UKF");
             for pin in ["level", "speed_n", "acc_n", "recoil_n"] {
                 let reached = downstream(&g, ukf.id, pin);
                 let device = |prefix: &str| {
-                    reached.iter().any(|(k, p)| matches!(k, NodeKind::Device(_)) && p.starts_with(prefix))
+                    reached
+                        .iter()
+                        .any(|(k, p)| matches!(k, NodeKind::Device(_)) && p.starts_with(prefix))
                 };
                 assert!(device("a.freq"), "{id}: {pin} never reaches the frequency");
                 assert!(device("a.int"), "{id}: {pin} never reaches the intensity");
@@ -635,7 +753,10 @@ mod tests {
             if id.starts_with("soft-") {
                 assert!(frames.iter().all(|f| f[0].limit_max <= 14.0), "{id}: not gentle");
                 assert!(ints.iter().all(|i| *i <= 65.0), "{id}: intensity above 65 %");
-                let jump = frames.windows(2).map(|w| (w[1][0].power - w[0][0].power).abs()).fold(0.0f32, f32::max);
+                let jump = frames
+                    .windows(2)
+                    .map(|w| (w[1][0].power - w[0][0].power).abs())
+                    .fold(0.0f32, f32::max);
                 assert!(jump <= 0.02, "{id}: power jumps by {jump:.3} in one tick");
             }
         }

@@ -54,11 +54,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
                 format!("Intensity  {:?}", cfg.intensity),
                 format!("Modulation {mods} slot(s)"),
             ] {
-                ui.label(
-                    egui::RichText::new(line)
-                        .font(font::small())
-                        .color(pal.dim),
-                );
+                ui.label(egui::RichText::new(line).font(font::small()).color(pal.dim));
             }
             ui.add_space(2.0);
             w::dim(ui, pal, "Power limits and zones are not part of a preset.");

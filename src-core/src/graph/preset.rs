@@ -159,12 +159,7 @@ impl GraphPreset {
             None => at,
         };
         let new_ids = target.insert(&body, offset);
-        let remap: HashMap<NodeId, NodeId> = body
-            .nodes
-            .iter()
-            .map(|n| n.id)
-            .zip(new_ids.iter().copied())
-            .collect();
+        let remap: HashMap<NodeId, NodeId> = body.nodes.iter().map(|n| n.id).zip(new_ids.iter().copied()).collect();
 
         for e in &self.graph.edges {
             let end = |id: NodeId| remap.get(&id).or_else(|| redirect.get(&id)).copied();
@@ -206,8 +201,7 @@ impl GraphPreset {
 }
 
 pub fn parse_graph_preset(json: &str) -> Result<GraphPreset, String> {
-    let mut p: GraphPreset =
-        serde_json::from_str(json).map_err(|e| format!("invalid graph preset: {e}"))?;
+    let mut p: GraphPreset = serde_json::from_str(json).map_err(|e| format!("invalid graph preset: {e}"))?;
     p.graph.sanitize();
     Ok(p)
 }

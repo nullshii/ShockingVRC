@@ -7,8 +7,8 @@ use ratatui::widgets::Paragraph;
 use shocking_vrc_core::cli::{AlarmChannels, AlarmPhase};
 
 use crate::tui::app::{
-    alarm_control_row, alarm_controls, format_secs, Action, AlarmControl, AlarmField, App,
-    ALARM_PATTERN_FIELDS, ALARM_SCHEDULE_FIELDS,
+    ALARM_PATTERN_FIELDS, ALARM_SCHEDULE_FIELDS, Action, AlarmControl, AlarmField, App, alarm_control_row,
+    alarm_controls, format_secs,
 };
 use crate::tui::theme;
 use crate::tui::ui;
@@ -31,20 +31,13 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     }
 
     let focus = alarm_controls().get(app.alarm_focus).copied();
-    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[0]);
+    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[0]);
     render_schedule(app, frame, cols[0], focus);
     render_pattern(app, frame, cols[1], focus);
     render_state(app, frame, rows[1], focus);
 }
 
-fn field_row(
-    app: &mut App,
-    frame: &mut Frame,
-    rect: Rect,
-    field: AlarmField,
-    focus: Option<AlarmControl>,
-) {
+fn field_row(app: &mut App, frame: &mut Frame, rect: Rect, field: AlarmField, focus: Option<AlarmControl>) {
     let value = field.value_label(app.alarm_config());
     ui::stepper_row(
         frame,
@@ -75,8 +68,7 @@ fn render_schedule(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<A
         ])
         .split(rect);
         frame.render_widget(
-            Paragraph::new("Alarm")
-                .style(theme::label_style(focus == Some(AlarmControl::Enabled))),
+            Paragraph::new("Alarm").style(theme::label_style(focus == Some(AlarmControl::Enabled))),
             cols[0],
         );
         ui::choice_button(
@@ -128,8 +120,7 @@ fn render_schedule(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<A
         ])
         .split(rect);
         frame.render_widget(
-            Paragraph::new("Channel")
-                .style(theme::label_style(focus == Some(AlarmControl::Channels))),
+            Paragraph::new("Channel").style(theme::label_style(focus == Some(AlarmControl::Channels))),
             cols[0],
         );
         let current = app.alarm_config().channels;
@@ -170,12 +161,7 @@ fn render_state(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Alar
     frame.render_widget(block, area);
     ui::clear_panel_inner(frame, inner);
 
-    let rows = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Min(0),
-    ])
-    .split(inner);
+    let rows = Layout::vertical([Constraint::Length(1), Constraint::Length(1), Constraint::Min(0)]).split(inner);
 
     frame.render_widget(Paragraph::new(state_line(app)), rows[0]);
     frame.render_widget(
@@ -215,8 +201,7 @@ fn render_state(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Alar
         Action::AlarmSnooze,
     );
     frame.render_widget(
-        Paragraph::new("  T test  ·  X stop  ·  S snooze")
-            .style(theme::hint_style()),
+        Paragraph::new("  T test  ·  X stop  ·  S snooze").style(theme::hint_style()),
         cols[3],
     );
 }
@@ -253,10 +238,7 @@ fn state_line(app: &App) -> Line<'static> {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(
-                    "  rings again in {}  ·  {attempts}",
-                    format_secs(st.snooze_left_secs as i32)
-                ),
+                format!("  rings again in {}  ·  {attempts}", format_secs(st.snooze_left_secs as i32)),
                 Style::default().fg(theme::TEXT),
             ),
         ]),
@@ -268,9 +250,7 @@ fn state_line(app: &App) -> Line<'static> {
             Span::styled("Next ring ", Style::default().fg(theme::TEXT_DIM)),
             Span::styled(
                 cfg.time_label(),
-                Style::default()
-                    .fg(theme::HIGHLIGHT)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("  —  in {}", format_mins(st.next_fire_in_mins)),
@@ -337,16 +317,12 @@ mod tests {
 
     fn draw_at(app: &mut App, w: u16, h: u16) {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal
-            .draw(|frame| crate::tui::ui::draw(frame, app))
-            .unwrap();
+        terminal.draw(|frame| crate::tui::ui::draw(frame, app)).unwrap();
     }
 
     fn draw_to_text(app: &mut App, w: u16, h: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal
-            .draw(|frame| crate::tui::ui::draw(frame, app))
-            .unwrap();
+        terminal.draw(|frame| crate::tui::ui::draw(frame, app)).unwrap();
         let buf = terminal.backend().buffer().clone();
         (0..buf.area.height)
             .map(|y| {
@@ -382,10 +358,9 @@ mod tests {
         let screen = draw_to_text(&mut app, 120, 30);
         assert!(!screen.contains("9 Alarm"), "no chip in the tab bar");
         assert!(
-            !app.clickables.iter().any(|c| matches!(
-                &c.kind,
-                ClickKind::Act(Action::SwitchTab(Tab::Alarm))
-            )),
+            !app.clickables
+                .iter()
+                .any(|c| matches!(&c.kind, ClickKind::Act(Action::SwitchTab(Tab::Alarm)))),
             "no clickable target for a hidden tab"
         );
     }

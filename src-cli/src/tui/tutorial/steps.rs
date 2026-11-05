@@ -51,10 +51,9 @@ impl TutorialStep {
             Self::Welcome | Self::Done => None,
             Self::StatusOverview => Some(Tab::Status),
             Self::ZonesIntro | Self::ZonesAddZone | Self::ZonesDgbTip => Some(Tab::Zones),
-            Self::ChannelsFreq
-            | Self::ChannelsIntensity
-            | Self::ChannelsLimits
-            | Self::ChannelsAggregation => Some(Tab::Channels),
+            Self::ChannelsFreq | Self::ChannelsIntensity | Self::ChannelsLimits | Self::ChannelsAggregation => {
+                Some(Tab::Channels)
+            }
             Self::ModulationIntro | Self::ModulationApply => Some(Tab::Modulation),
             Self::TuningIntro => Some(Tab::Tuning),
             Self::PresetsIntro | Self::PresetsApply => Some(Tab::Presets),

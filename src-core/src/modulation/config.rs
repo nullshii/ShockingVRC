@@ -244,7 +244,9 @@ pub struct ModulationConfig {
     pub clamp_max: f32,
 }
 
-fn default_base_speed() -> f32 { 1.0 }
+fn default_base_speed() -> f32 {
+    1.0
+}
 
 impl Default for ModulationConfig {
     fn default() -> Self {
@@ -266,11 +268,7 @@ impl Default for ModulationConfig {
 
 impl ModulationConfig {
     pub fn output_bounds(intensity: bool) -> (f32, f32) {
-        if intensity {
-            (0.0, 100.0)
-        } else {
-            (10.0, 255.0)
-        }
+        if intensity { (0.0, 100.0) } else { (10.0, 255.0) }
     }
 
     pub fn sanitise(&mut self, intensity: bool) {

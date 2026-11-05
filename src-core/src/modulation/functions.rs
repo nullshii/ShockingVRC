@@ -102,7 +102,11 @@ pub fn eval(func: &ModulationFunction, x: f32) -> f32 {
             1.0 - 2.0 * t
         }
         ModulationFunction::SquareWave => {
-            if x.sin() >= 0.0 { 1.0 } else { -1.0 }
+            if x.sin() >= 0.0 {
+                1.0
+            } else {
+                -1.0
+            }
         }
         ModulationFunction::Pulse => {
             let t = unit_phase(x);
@@ -193,10 +197,7 @@ mod tests {
             let v0 = eval(&func, 0.0);
             let v1 = eval(&func, 2.0 * PI);
             let v_mid = eval(&func, PI);
-            assert!(
-                (v0 - v1).abs() < 1e-4,
-                "{func:?} should repeat every 2π: v(0)={v0}, v(2π)={v1}"
-            );
+            assert!((v0 - v1).abs() < 1e-4, "{func:?} should repeat every 2π: v(0)={v0}, v(2π)={v1}");
             assert!(
                 (v0 - v_mid).abs() > 1e-4,
                 "{func:?} should vary within a cycle: v(0)={v0}, v(π)={v_mid}"

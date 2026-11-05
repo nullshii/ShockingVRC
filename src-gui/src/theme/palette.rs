@@ -112,11 +112,7 @@ fn encode(x: f32) -> u8 {
 
 pub fn mix_oklab(a: Oklch, b: Oklch, a_share: f32) -> Oklch {
     let t = 1.0 - a_share.clamp(0.0, 1.0);
-    [
-        lerp(a[0], b[0], t),
-        lerp(a[1], b[1], t),
-        lerp_hue(a[2], b[2], t),
-    ]
+    [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp_hue(a[2], b[2], t)]
 }
 
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -129,11 +125,7 @@ pub fn lerp_hue(a: f32, b: f32, t: f32) -> f32 {
 }
 
 pub fn lerp_oklch(a: Oklch, b: Oklch, t: f32) -> Oklch {
-    [
-        lerp(a[0], b[0], t),
-        lerp(a[1], b[1], t),
-        lerp_hue(a[2], b[2], t),
-    ]
+    [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp_hue(a[2], b[2], t)]
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -275,20 +267,14 @@ mod tests {
     fn dim_sits_between_base_and_contrast() {
         for t in THEMES {
             let p = Palette::from_theme(&t);
-            let lum = |c: egui::Color32| {
-                0.2126 * c.r() as f32 + 0.7152 * c.g() as f32 + 0.0722 * c.b() as f32
-            };
+            let lum = |c: egui::Color32| 0.2126 * c.r() as f32 + 0.7152 * c.g() as f32 + 0.0722 * c.b() as f32;
             let (lo, hi) = if p.light {
                 (lum(p.contrast), lum(p.base))
             } else {
                 (lum(p.base), lum(p.contrast))
             };
             let d = lum(p.dim);
-            assert!(
-                d > lo - 1.0 && d < hi + 1.0,
-                "{}: dim {d} outside [{lo}, {hi}]",
-                t.id
-            );
+            assert!(d > lo - 1.0 && d < hi + 1.0, "{}: dim {d} outside [{lo}, {hi}]", t.id);
         }
     }
 

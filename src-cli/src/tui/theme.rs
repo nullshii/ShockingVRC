@@ -18,11 +18,7 @@ pub fn panel_block(title: impl Into<String>) -> Block<'static> {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(ACCENT_DIM))
         .title(title.into())
-        .title_style(
-            Style::default()
-                .fg(ACCENT)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(ACCENT).add_modifier(Modifier::BOLD))
         .style(Style::default().bg(SURFACE))
 }
 
@@ -32,11 +28,7 @@ pub fn tab_block() -> Block<'static> {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(ACCENT_DIM))
         .title(" ShockingVRC ")
-        .title_style(
-            Style::default()
-                .fg(HIGHLIGHT)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(HIGHLIGHT).add_modifier(Modifier::BOLD))
         .style(Style::default().bg(SURFACE))
 }
 
@@ -48,9 +40,7 @@ pub fn focused_style() -> Style {
 }
 
 pub fn selected_style() -> Style {
-    Style::default()
-        .fg(ACCENT)
-        .add_modifier(Modifier::BOLD)
+    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
 }
 
 pub fn inactive_tab_style() -> Style {
@@ -66,9 +56,7 @@ pub fn active_tab_style() -> Style {
 
 pub fn label_style(focused: bool) -> Style {
     if focused {
-        Style::default()
-            .fg(HIGHLIGHT)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(HIGHLIGHT).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(TEXT)
     }
@@ -101,15 +89,11 @@ pub fn choice_button_style(selected: bool, focused: bool) -> Style {
 }
 
 pub fn section_header_style() -> Style {
-    Style::default()
-        .fg(ACCENT)
-        .add_modifier(Modifier::BOLD)
+    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
 }
 
 pub fn hint_style() -> Style {
-    Style::default()
-        .fg(TEXT_DIM)
-        .add_modifier(Modifier::ITALIC)
+    Style::default().fg(TEXT_DIM).add_modifier(Modifier::ITALIC)
 }
 
 fn rgb(c: Color) -> (u8, u8, u8) {
@@ -151,10 +135,7 @@ pub fn status_badge(ok: bool) -> (Style, Style) {
     } else {
         (
             Style::default().fg(TEXT_DIM),
-            Style::default()
-                .fg(Color::Black)
-                .bg(ERROR)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Black).bg(ERROR).add_modifier(Modifier::BOLD),
         )
     }
 }

@@ -2,32 +2,27 @@ use std::sync::Arc;
 
 use shocking_vrc_app::app_state::DeviceSlotInfo;
 use shocking_vrc_app::graph_runtime::{DeviceOutput, GraphStatus};
+use shocking_vrc_core::cli::{
+    AggregationMode, AlarmChannels, AlarmConfig, AlarmPhase, AlarmStatus, ChannelConfig, ChannelStatus, CliConfig,
+    CliStatus, ContactMode, PowerLimits, ZoneEntry, ZoneId,
+};
 use shocking_vrc_core::cli::{EngineMode, GraphChannelOutput};
 use shocking_vrc_core::graph::kind::{
     ContactParams, CurveParams, DeviceParams, FrameParams, LfoParams, NoParams, UkfNodeParams,
 };
 use shocking_vrc_core::graph::safety::{AlarmOverlay, safe_channel};
 use shocking_vrc_core::graph::{
-    Curve, CurvePreset, ExternalSample, Graph, GraphEvaluator, GraphPreset, GraphPresetEntry, Node,
-    NodeId, NodeKind, PinRef,
+    Curve, CurvePreset, ExternalSample, Graph, GraphEvaluator, GraphPreset, GraphPresetEntry, Node, NodeId, NodeKind,
+    PinRef,
 };
-use shocking_vrc_core::cli::{
-    AggregationMode, AlarmChannels, AlarmConfig, AlarmPhase, AlarmStatus, ChannelConfig,
-    ChannelStatus, CliConfig, CliStatus, ContactMode, PowerLimits, ZoneEntry, ZoneId,
-};
-use shocking_vrc_core::modulation::config::{
-    ModulationConfig, ModulationFunction, ModulationSource,
-};
+use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationFunction, ModulationSource};
 use shocking_vrc_core::modulation::evaluator::KinematicsInput;
 use shocking_vrc_core::presets::{ChannelPreset, PresetEntry, ZonePreset, ZonePresetEntry};
 use shocking_vrc_core::{OldZoneType, ZoneEvent};
 
-use crate::bridge::{
-    Bridge, GraphDocShared, GraphPresetState, PresetState, Shared, Snapshot, ZonePresetState,
-};
+use crate::bridge::{Bridge, GraphDocShared, GraphPresetState, PresetState, Shared, Snapshot, ZonePresetState};
 
-pub fn detached_bridge() -> (Bridge, tokio::sync::mpsc::UnboundedReceiver<crate::bridge::Command>)
-{
+pub fn detached_bridge() -> (Bridge, tokio::sync::mpsc::UnboundedReceiver<crate::bridge::Command>) {
     Bridge::detached()
 }
 
@@ -49,26 +44,20 @@ fn modulation(function: ModulationFunction, source: ModulationSource) -> Modulat
 
 pub fn demo_config() -> CliConfig {
     let mut a = ChannelConfig {
-        zones: vec![
-            zone(OldZoneType::Orf, "Pussy", ContactMode::Depth),
-            {
-                let mut z = zone(OldZoneType::DGB, "TouchAreaA", ContactMode::Speed);
-                z.scale = 70;
-                z.min_threshold = 12;
-                z.max_threshold = 88;
-                z
-            },
-        ],
+        zones: vec![zone(OldZoneType::Orf, "Pussy", ContactMode::Depth), {
+            let mut z = zone(OldZoneType::DGB, "TouchAreaA", ContactMode::Speed);
+            z.scale = 70;
+            z.min_threshold = 12;
+            z.max_threshold = 88;
+            z
+        }],
         frequency: [30, 200, 30, 200],
         intensity: [100, 90, 100, 85],
         limits: PowerLimits::new(0, 30),
         aggregation: AggregationMode::Max,
         ..ChannelConfig::default()
     };
-    a.freq_modulation[0] = Some(modulation(
-        ModulationFunction::Sin,
-        ModulationSource::Depth,
-    ));
+    a.freq_modulation[0] = Some(modulation(ModulationFunction::Sin, ModulationSource::Depth));
     a.intensity_modulation[2] = Some({
         let mut c = modulation(ModulationFunction::Triangle, ModulationSource::Speed);
         c.max_deviation = 12.0;
@@ -160,11 +149,7 @@ pub fn demo_snapshot() -> Snapshot {
                 avatar_zone(OldZoneType::Touch, "HeadPat", 0.0),
             ];
             for i in 0..18 {
-                zones.push(avatar_zone(
-                    OldZoneType::DGB,
-                    &format!("Contact_{i:02}"),
-                    0.0,
-                ));
+                zones.push(avatar_zone(OldZoneType::DGB, &format!("Contact_{i:02}"), 0.0));
             }
             zones
         },

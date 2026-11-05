@@ -7,15 +7,14 @@ mod prefs;
 mod types;
 
 pub use controls::{
-    agg_name, aggregation_modes, alarm_control_row, alarm_controls, channel_control_row,
-    channel_controls, cycle_aggregation, cycle_mode, mod_controls_len, mod_function_list,
-    mod_function_list_for, mod_kind_name, mod_slot_index, mod_source_list, setup_controls,
-    tuning_control_row, tuning_controls, AlarmControl, ChannelControl, SetupControl, TuningControl,
-    ALARM_PATTERN_FIELDS, ALARM_SCHEDULE_FIELDS,
+    ALARM_PATTERN_FIELDS, ALARM_SCHEDULE_FIELDS, AlarmControl, ChannelControl, SetupControl, TuningControl, agg_name,
+    aggregation_modes, alarm_control_row, alarm_controls, channel_control_row, channel_controls, cycle_aggregation,
+    cycle_mode, mod_controls_len, mod_function_list, mod_function_list_for, mod_kind_name, mod_slot_index,
+    mod_source_list, setup_controls, tuning_control_row, tuning_controls,
 };
 pub use types::{
-    format_secs, Action, AlarmField, Channel, Clickable, ClickKind, ModKind, ModParam, NormField,
-    PresetSaveField, SliderKind, Tab, UkfField, ZonesPane,
+    Action, AlarmField, Channel, ClickKind, Clickable, ModKind, ModParam, NormField, PresetSaveField, SliderKind, Tab,
+    UkfField, ZonesPane, format_secs,
 };
 
 use std::collections::HashMap;
@@ -24,10 +23,10 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::{broadcast, mpsc};
 
+use shocking_vrc_core::ZoneEvent;
 use shocking_vrc_core::cli::{AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::{PresetEntry, ZonePresetEntry};
-use shocking_vrc_core::ZoneEvent;
 
 use crate::app_state::{AppState, DeviceSlotInfo};
 use crate::tui_logger::LogBuffer;
@@ -138,14 +137,9 @@ pub struct App {
     pub update_progress: Option<shocking_vrc_core::DownloadProgress>,
     pub update_error: Option<String>,
     pub pending_self_update: Option<(std::path::PathBuf, Vec<String>)>,
-    update_check_rx: Option<
-        tokio::sync::mpsc::UnboundedReceiver<
-            Result<Option<shocking_vrc_core::ReleaseInfo>, String>,
-        >,
-    >,
-    update_download_rx: Option<
-        tokio::sync::mpsc::UnboundedReceiver<UpdateDownloadEvent>,
-    >,
+    update_check_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<Result<Option<shocking_vrc_core::ReleaseInfo>, String>>>,
+    update_download_rx: Option<tokio::sync::mpsc::UnboundedReceiver<UpdateDownloadEvent>>,
     update_download_task: Option<tokio::task::JoinHandle<()>>,
     update_last_progress_at: Instant,
 
@@ -553,10 +547,7 @@ impl App {
         if self.update_last_progress_at.elapsed() < Duration::from_secs(20) {
             return;
         }
-        let at_start = self
-            .update_progress
-            .as_ref()
-            .is_none_or(|p| p.downloaded == 0);
+        let at_start = self.update_progress.as_ref().is_none_or(|p| p.downloaded == 0);
         let reason = if at_start {
             "Download did not start — check your internet connection".to_string()
         } else {
@@ -617,11 +608,10 @@ impl App {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         self.update_download_rx = Some(rx);
         let handle = tokio::spawn(async move {
-            let result =
-                shocking_vrc_core::update::download_release(&release, |progress| {
-                    let _ = tx.send(UpdateDownloadEvent::Progress(progress));
-                })
-                .await;
+            let result = shocking_vrc_core::update::download_release(&release, |progress| {
+                let _ = tx.send(UpdateDownloadEvent::Progress(progress));
+            })
+            .await;
             let _ = tx.send(UpdateDownloadEvent::Done(result));
         });
         self.update_download_task = Some(handle);
@@ -745,46 +735,43 @@ impl App {
 
 impl App {
     pub(super) fn sync_channels_scroll(&mut self) {
-        let Some(ctrl) = channel_controls().get(self.channel_focus).copied() else { return };
+        let Some(ctrl) = channel_controls().get(self.channel_focus).copied() else {
+            return;
+        };
         let Some(row) = channel_control_row(ctrl) else { return };
-        self.channels_scroll =
-            crate::tui::ui::scroll_to_row(self.channels_scroll, self.channels_viewport_h, row);
+        self.channels_scroll = crate::tui::ui::scroll_to_row(self.channels_scroll, self.channels_viewport_h, row);
     }
 
     pub(super) fn sync_tuning_scroll(&mut self) {
-        let Some(ctrl) = tuning_controls().get(self.tuning_focus).copied() else { return };
+        let Some(ctrl) = tuning_controls().get(self.tuning_focus).copied() else {
+            return;
+        };
         let row = tuning_control_row(ctrl);
-        self.tuning_scroll =
-            crate::tui::ui::scroll_to_row(self.tuning_scroll, self.tuning_viewport_h, row);
+        self.tuning_scroll = crate::tui::ui::scroll_to_row(self.tuning_scroll, self.tuning_viewport_h, row);
     }
 
     pub(super) fn sync_mod_editor_scroll(&mut self) {
         let row = self.mod_focus as u16;
-        self.mod_editor_scroll =
-            crate::tui::ui::scroll_to_row(self.mod_editor_scroll, self.mod_editor_viewport_h, row);
+        self.mod_editor_scroll = crate::tui::ui::scroll_to_row(self.mod_editor_scroll, self.mod_editor_viewport_h, row);
     }
 
     pub(super) fn sync_mod_slots_scroll(&mut self) {
         let idx = mod_slot_index(self.mod_channel, self.mod_kind, self.mod_seg);
-        self.mod_slots_scroll =
-            crate::tui::ui::scroll_to_row(self.mod_slots_scroll, self.mod_slots_viewport_h, idx);
+        self.mod_slots_scroll = crate::tui::ui::scroll_to_row(self.mod_slots_scroll, self.mod_slots_viewport_h, idx);
     }
 
     pub(super) fn sync_alarm_scroll(&mut self) {
-        let Some(ctrl) = alarm_controls().get(self.alarm_focus).copied() else { return };
+        let Some(ctrl) = alarm_controls().get(self.alarm_focus).copied() else {
+            return;
+        };
         let Some(row) = alarm_control_row(ctrl) else { return };
-        self.alarm_scroll =
-            crate::tui::ui::scroll_to_row(self.alarm_scroll, self.alarm_viewport_h, row);
+        self.alarm_scroll = crate::tui::ui::scroll_to_row(self.alarm_scroll, self.alarm_viewport_h, row);
     }
 
     pub(super) fn sync_presets_scroll(&mut self) {
         let content_h = self.preset_entries.len() as u16;
         self.preset_scroll = crate::tui::ui::clamp_scroll(
-            crate::tui::ui::scroll_to_row(
-                self.preset_scroll,
-                self.presets_viewport_h,
-                self.sel_preset as u16,
-            ),
+            crate::tui::ui::scroll_to_row(self.preset_scroll, self.presets_viewport_h, self.sel_preset as u16),
             content_h,
             self.presets_viewport_h,
         );
@@ -844,8 +831,12 @@ impl App {
                 };
             }
             KeyCode::Backspace => match self.preset_save_field {
-                PresetSaveField::Name => { self.preset_save_input.pop(); }
-                PresetSaveField::Nickname => { self.preset_save_nickname.pop(); }
+                PresetSaveField::Name => {
+                    self.preset_save_input.pop();
+                }
+                PresetSaveField::Nickname => {
+                    self.preset_save_nickname.pop();
+                }
             },
             KeyCode::Char(c) if !c.is_control() => match self.preset_save_field {
                 PresetSaveField::Name if self.preset_save_input.len() < 48 => {
@@ -865,9 +856,15 @@ impl App {
     }
 
     async fn confirm_preset_delete(&mut self) {
-        let Some(i) = self.preset_delete_confirm.take() else { return };
-        let Some(entry) = self.preset_entries.get(i) else { return };
-        if !entry.user { return; }
+        let Some(i) = self.preset_delete_confirm.take() else {
+            return;
+        };
+        let Some(entry) = self.preset_entries.get(i) else {
+            return;
+        };
+        if !entry.user {
+            return;
+        }
         let id = entry.id.clone();
         let name = entry.name.clone();
         match crate::presets::delete_user_preset(&id) {
@@ -965,7 +962,9 @@ impl App {
     }
 
     async fn apply_selected_preset(&mut self, ch: Channel) {
-        if self.presets_loading { return; }
+        if self.presets_loading {
+            return;
+        }
         let Some(entry) = self.preset_entries.get(self.sel_preset).cloned() else {
             log::warn!("[presets] No preset selected");
             return;
@@ -1060,10 +1059,7 @@ impl App {
         match crate::zone_presets::save_zone_preset(&name, &self.config) {
             Ok(entry) => {
                 let (a, b) = entry.preset.counts();
-                log::info!(
-                    "[zone-sets] Saved \"{}\" (A:{a}, B:{b}) → presets/zones/",
-                    entry.name()
-                );
+                log::info!("[zone-sets] Saved \"{}\" (A:{a}, B:{b}) → presets/zones/", entry.name());
                 self.cancel_zone_preset_save();
                 self.insert_zone_preset_entry(entry);
             }
@@ -1098,7 +1094,9 @@ impl App {
     }
 
     pub(super) fn confirm_zone_preset_delete(&mut self) {
-        let Some(i) = self.zone_preset_delete_confirm.take() else { return };
+        let Some(i) = self.zone_preset_delete_confirm.take() else {
+            return;
+        };
         let Some(entry) = self.zone_presets.get(i) else { return };
         let id = entry.id.clone();
         let name = entry.name().to_string();
@@ -1127,10 +1125,7 @@ impl App {
         self.refresh_config().await;
         self.clamp_selections();
         let (a, b) = entry.preset.counts();
-        log::info!(
-            "[zone-sets] Loaded \"{}\" — A: {a} zone(s), B: {b} zone(s)",
-            entry.name()
-        );
+        log::info!("[zone-sets] Loaded \"{}\" — A: {a} zone(s), B: {b} zone(s)", entry.name());
     }
 }
 
@@ -1196,7 +1191,6 @@ impl App {
     }
 }
 
-
 impl App {
     pub(super) fn close_mod_function_picker(&mut self) {
         self.mod_function_picker = false;
@@ -1204,10 +1198,7 @@ impl App {
 
     fn open_mod_function_picker(&mut self) {
         let list = mod_function_list_for(&self.mod_editor.function);
-        self.mod_func_pick_ix = list
-            .iter()
-            .position(|f| f == &self.mod_editor.function)
-            .unwrap_or(0);
+        self.mod_func_pick_ix = list.iter().position(|f| f == &self.mod_editor.function).unwrap_or(0);
         self.mod_func_pick_scroll = 0;
         self.mod_function_picker = true;
         self.sync_mod_func_pick_scroll();
@@ -1215,7 +1206,9 @@ impl App {
 
     pub(super) fn move_mod_func_pick(&mut self, delta: i32) {
         let len = mod_function_list_for(&self.mod_editor.function).len();
-        if len == 0 { return; }
+        if len == 0 {
+            return;
+        }
         self.mod_func_pick_ix = helpers::step_index(self.mod_func_pick_ix, delta, len);
         self.sync_mod_func_pick_scroll();
     }

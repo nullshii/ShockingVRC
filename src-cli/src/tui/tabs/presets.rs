@@ -34,10 +34,7 @@ fn render_list(app: &mut App, frame: &mut Frame, area: Rect) {
 
     if app.presets_loading {
         frame.render_widget(
-            Paragraph::new(Span::styled(
-                "  Loading catalog…",
-                Style::default().fg(theme::TEXT_DIM),
-            )),
+            Paragraph::new(Span::styled("  Loading catalog…", Style::default().fg(theme::TEXT_DIM))),
             inner,
         );
         return;
@@ -46,10 +43,7 @@ fn render_list(app: &mut App, frame: &mut Frame, area: Rect) {
     if let Some(err) = &app.presets_error {
         frame.render_widget(
             Paragraph::new(vec![
-                Line::from(Span::styled(
-                    format!("  {err}"),
-                    Style::default().fg(theme::ERROR),
-                )),
+                Line::from(Span::styled(format!("  {err}"), Style::default().fg(theme::ERROR))),
                 Line::from(Span::styled(
                     "  Press R or Refresh to retry",
                     Style::default().fg(theme::TEXT_DIM),
@@ -113,12 +107,7 @@ fn render_preset_row(
     };
 
     let cols = if delete_w > 0 {
-        Layout::horizontal([
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(delete_w),
-        ])
-        .split(rect)
+        Layout::horizontal([Constraint::Length(2), Constraint::Min(0), Constraint::Length(delete_w)]).split(rect)
     } else {
         Layout::horizontal([Constraint::Length(2), Constraint::Min(0)]).split(rect)
     };
@@ -131,7 +120,9 @@ fn render_preset_row(
     let content = cols[1];
     let mut spans = vec![Span::styled(name.to_string(), name_style)];
     if user {
-        let author = &app.preset_entries.get(index)
+        let author = &app
+            .preset_entries
+            .get(index)
             .map(|e| e.preset.author.clone())
             .unwrap_or_default();
         let badge = if author.is_empty() {
@@ -141,29 +132,17 @@ fn render_preset_row(
         };
         spans.push(Span::styled(
             badge,
-            Style::default()
-                .fg(theme::SUCCESS)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(theme::SUCCESS).add_modifier(Modifier::BOLD),
         ));
     }
     if !description.is_empty() {
-        spans.push(Span::styled(
-            format!("  {description}"),
-            Style::default().fg(theme::TEXT_DIM),
-        ));
+        spans.push(Span::styled(format!("  {description}"), Style::default().fg(theme::TEXT_DIM)));
     }
     frame.render_widget(Paragraph::new(Line::from(spans)), content);
     app.push_click(content, Action::SelectPreset(index));
 
     if delete_w > 0 {
-        ui::icon_button(
-            frame,
-            app,
-            cols[2],
-            "×",
-            false,
-            Action::RequestDeletePreset(index),
-        );
+        ui::icon_button(frame, app, cols[2], "×", false, Action::RequestDeletePreset(index));
     }
 }
 
@@ -206,17 +185,14 @@ fn render_delete_confirm(app: &mut App, frame: &mut Frame, area: Rect) {
             Span::styled("Delete ", Style::default().fg(theme::TEXT)),
             Span::styled(
                 format!("\"{}\"", entry.name),
-                Style::default()
-                    .fg(theme::HIGHLIGHT)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" ?", Style::default().fg(theme::TEXT)),
         ])),
         rows[0],
     );
     frame.render_widget(
-        Paragraph::new("This will remove the file from presets/user/")
-            .style(Style::default().fg(theme::TEXT_DIM)),
+        Paragraph::new("This will remove the file from presets/user/").style(Style::default().fg(theme::TEXT_DIM)),
         rows[1],
     );
 
@@ -227,22 +203,8 @@ fn render_delete_confirm(app: &mut App, frame: &mut Frame, area: Rect) {
         Constraint::Min(0),
     ])
     .split(rows[2]);
-    ui::button(
-        frame,
-        app,
-        btns[0],
-        "Delete",
-        false,
-        Action::ConfirmDeletePreset,
-    );
-    ui::button(
-        frame,
-        app,
-        btns[2],
-        "Cancel",
-        false,
-        Action::CancelDeletePreset,
-    );
+    ui::button(frame, app, btns[0], "Delete", false, Action::ConfirmDeletePreset);
+    ui::button(frame, app, btns[2], "Cancel", false, Action::CancelDeletePreset);
 
     frame.render_widget(
         Paragraph::new(Span::styled(
@@ -324,10 +286,7 @@ fn render_save_popup(app: &mut App, frame: &mut Frame, area: Rect) {
     } else {
         Style::default().fg(theme::TEXT)
     };
-    frame.render_widget(
-        Paragraph::new(format!(" Name     {name_val}")).style(name_style),
-        rows[0],
-    );
+    frame.render_widget(Paragraph::new(format!(" Name     {name_val}")).style(name_style), rows[0]);
 
     let nick_val = if nick_focused {
         format!("{}{cursor}", app.preset_save_nickname)
@@ -343,10 +302,7 @@ fn render_save_popup(app: &mut App, frame: &mut Frame, area: Rect) {
     } else {
         Style::default().fg(theme::TEXT)
     };
-    frame.render_widget(
-        Paragraph::new(format!(" Author   {nick_val}")).style(nick_style),
-        rows[1],
-    );
+    frame.render_widget(Paragraph::new(format!(" Author   {nick_val}")).style(nick_style), rows[1]);
 
     frame.render_widget(Paragraph::new(""), rows[2]);
 

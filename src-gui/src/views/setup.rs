@@ -79,11 +79,7 @@ fn status_line(ui: &mut Ui, cx: &Ctx, ok: bool, text: String) {
         let (r, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
         ui.painter()
             .rect_filled(r, w::SQUARE, if ok { pal.success } else { pal.warning });
-        ui.label(
-            egui::RichText::new(text)
-                .font(font::body())
-                .color(pal.contrast),
-        );
+        ui.label(egui::RichText::new(text).font(font::body()).color(pal.contrast));
     });
 }
 
@@ -105,12 +101,13 @@ fn osc(ui: &mut Ui, cx: &mut Ctx) {
             w::body(ui, pal, port_line);
         });
         if let Some(http) = cx.snap.oscquery_port
-            && Some(cx.snap.osc_port) != Some(http) {
-                ui.horizontal(|ui| {
-                    w::field_label(ui, pal, "OSCQuery", 96.0, false);
-                    w::body(ui, pal, http.to_string());
-                });
-            }
+            && Some(cx.snap.osc_port) != Some(http)
+        {
+            ui.horizontal(|ui| {
+                w::field_label(ui, pal, "OSCQuery", 96.0, false);
+                w::body(ui, pal, http.to_string());
+            });
+        }
 
         ui.add_space(space::ITEM_GAP);
         w::dim(
@@ -130,11 +127,7 @@ fn osc(ui: &mut Ui, cx: &mut Ctx) {
             "3.  Set Parameter to DGB/YourContactName",
             "4.  Upload the avatar",
         ] {
-            ui.label(
-                egui::RichText::new(line)
-                    .font(font::small())
-                    .color(pal.dim),
-            );
+            ui.label(egui::RichText::new(line).font(font::small()).color(pal.dim));
         }
     });
 }
@@ -184,13 +177,7 @@ fn preferences(ui: &mut Ui, cx: &mut Ctx) {
         ui.add_space(space::ROW_GAP);
         ui.horizontal(|ui| {
             w::field_label(ui, pal, "Nickname", 120.0, true);
-            let resp = w::text_field(
-                ui,
-                pal,
-                &mut cx.ui_state.nickname,
-                "(no author)",
-                220.0,
-            );
+            let resp = w::text_field(ui, pal, &mut cx.ui_state.nickname, "(no author)", 220.0);
             if resp.lost_focus() {
                 let nick = cx.ui_state.nickname.clone();
                 if let Err(e) = shocking_vrc_app::prefs::update_ui_prefs(|p| p.nickname = nick) {
@@ -254,10 +241,11 @@ fn toggle_row(
         w::field_label(ui, pal, label, 120.0, true);
         let on = get(cx.ui_state);
         if let Some(next) = w::toggle(ui, pal, on)
-            && next != on {
-                set(cx.ui_state, next);
-                cx.send(cmd(next));
-            }
+            && next != on
+        {
+            set(cx.ui_state, next);
+            cx.send(cmd(next));
+        }
         ui.add_space(6.0);
         w::dim(ui, pal, hint);
     });
@@ -274,10 +262,9 @@ fn help(ui: &mut Ui, cx: &mut Ctx) -> bool {
             }
             if w::button(ui, pal, "Check for updates").clicked() {
                 cx.send(Command::CheckUpdate);
-                cx.bridge.shared.notify(
-                    crate::bridge::ToastKind::Info,
-                    "Checking for updates…",
-                );
+                cx.bridge
+                    .shared
+                    .notify(crate::bridge::ToastKind::Info, "Checking for updates…");
             }
             if w::button(ui, pal, "About").clicked() {
                 cx.ui_state.show_about = true;

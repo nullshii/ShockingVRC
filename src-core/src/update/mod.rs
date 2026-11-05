@@ -8,8 +8,7 @@ use tokio::io::AsyncWriteExt;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const REPO_OWNER: &str = "nullshii";
 const REPO_NAME: &str = "ShockingVRC";
-const API_LATEST: &str =
-    "https://api.github.com/repos/nullshii/ShockingVRC/releases/latest";
+const API_LATEST: &str = "https://api.github.com/repos/nullshii/ShockingVRC/releases/latest";
 
 #[derive(Debug, Clone, Copy)]
 pub struct DownloadProgress {
@@ -147,10 +146,7 @@ pub async fn check_for_update() -> Result<Option<ReleaseInfo>, String> {
         return Err(format!("release check HTTP {}", resp.status()));
     }
 
-    let release: GhRelease = resp
-        .json()
-        .await
-        .map_err(|e| format!("invalid release JSON: {e}"))?;
+    let release: GhRelease = resp.json().await.map_err(|e| format!("invalid release JSON: {e}"))?;
 
     let remote = parse_tag_version(&release.tag_name)?;
     let local = current_version();
@@ -193,11 +189,8 @@ pub async fn download_release(
         .filter(|n| *n > 0)
         .or((release.asset_size > 0).then_some(release.asset_size));
 
-    let tmp = std::env::temp_dir().join(format!(
-        "shockingvrc_{}_{}",
-        release.tag.replace('/', "_"),
-        release.asset_name
-    ));
+    let tmp =
+        std::env::temp_dir().join(format!("shockingvrc_{}_{}", release.tag.replace('/', "_"), release.asset_name));
 
     let mut file = tokio::fs::File::create(&tmp)
         .await
@@ -290,13 +283,7 @@ del /f /q "%~f0" >nul 2>&1
     std::fs::write(&batch_path, script).map_err(|e| format!("write updater script: {e}"))?;
 
     std::process::Command::new("cmd")
-        .args([
-            "/C",
-            "start",
-            "/MIN",
-            "",
-            &batch_path.to_string_lossy(),
-        ])
+        .args(["/C", "start", "/MIN", "", &batch_path.to_string_lossy()])
         .spawn()
         .map_err(|e| format!("launch updater: {e}"))?;
 

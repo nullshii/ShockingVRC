@@ -20,12 +20,7 @@ fn source_value(config: &ModulationConfig, input: &KinematicsInput) -> f32 {
     }
 }
 
-pub fn advance_accumulator(
-    config: &ModulationConfig,
-    accum: &mut f32,
-    input: &KinematicsInput,
-    dt: f32,
-) {
+pub fn advance_accumulator(config: &ModulationConfig, accum: &mut f32, input: &KinematicsInput, dt: f32) {
     let src = source_value(config, input);
     let speed_hz = config.base_speed + src * config.sensitivity;
     *accum += speed_hz * dt;
@@ -46,10 +41,8 @@ pub fn evaluate_with_accumulator(config: &ModulationConfig, base_value: f32, acc
         modulation = modulation.abs().powf(config.power) * modulation.signum();
     }
 
-    (base_value + modulation * config.max_deviation + config.offset)
-        .clamp(config.clamp_min, config.clamp_max)
+    (base_value + modulation * config.max_deviation + config.offset).clamp(config.clamp_min, config.clamp_max)
 }
-
 
 pub fn advance_and_evaluate_segments(
     configs: &[Option<ModulationConfig>; 4],
@@ -138,6 +131,9 @@ mod tests {
         let a = 12.3456_f32;
         let unwrapped = evaluate_with_accumulator(&cfg, 0.0, a + 1000.0);
         let wrapped = evaluate_with_accumulator(&cfg, 0.0, a);
-        assert!((unwrapped - wrapped).abs() < 1e-3, "wrap changed phase: {unwrapped} vs {wrapped}");
+        assert!(
+            (unwrapped - wrapped).abs() < 1e-3,
+            "wrap changed phase: {unwrapped} vs {wrapped}"
+        );
     }
 }

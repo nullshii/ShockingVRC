@@ -7,9 +7,7 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use shocking_vrc_app::app_state::DeviceSlotInfo;
-use shocking_vrc_core::graph::{
-    DeviceBinding, Graph, GraphPreset, GraphPresetKind, Node, NodeId, NodeKind, flat_id,
-};
+use shocking_vrc_core::graph::{DeviceBinding, Graph, GraphPreset, GraphPresetKind, Node, NodeId, NodeKind, flat_id};
 
 use crate::bridge::{Bridge, Command, GraphDocShared, Snapshot, ToastKind};
 use crate::theme::Palette;
@@ -345,7 +343,10 @@ impl GraphEditor {
                 let mut p = self.path.clone();
                 p.push(n.id);
                 let f = flat_id(&p);
-                node_ui::traced_outputs(&n.kind).iter().map(move |o| (f, *o)).collect::<Vec<_>>()
+                node_ui::traced_outputs(&n.kind)
+                    .iter()
+                    .map(move |o| (f, *o))
+                    .collect::<Vec<_>>()
             })
             .collect();
         for key in wanted {
@@ -505,8 +506,7 @@ impl GraphEditor {
     pub fn apply_preset(&mut self, preset: &GraphPreset, devices: &[DeviceSlotInfo]) {
         let macs = connected_macs(devices);
         let mut g = preset.instantiate(&macs);
-        let named: Vec<(String, String)> =
-            devices.iter().map(|d| (d.mac.clone(), d.name.clone())).collect();
+        let named: Vec<(String, String)> = devices.iter().map(|d| (d.mac.clone(), d.name.clone())).collect();
         g.ensure_device_nodes(&named);
         for n in &mut g.nodes {
             if let Some(DeviceBinding::Mac(m)) = n.device_binding().cloned()
@@ -631,10 +631,7 @@ mod tests {
         ed.sync(&shared(Graph::default(), 1, 0));
         for v in [0.1, 0.2, 0.3] {
             ed.gesture_open = false;
-            ed.add_node(
-                NodeKind::Constant(ConstantParams { value: v }),
-                egui::pos2(0.0, 0.0),
-            );
+            ed.add_node(NodeKind::Constant(ConstantParams { value: v }), egui::pos2(0.0, 0.0));
         }
         assert_eq!(ed.doc.nodes.len(), 3);
         ed.undo();
@@ -690,10 +687,7 @@ mod tests {
         let mut ed = GraphEditor::default();
         ed.sync(&shared(Graph::default(), 1, 0));
         let a = ed.add_node(NodeKind::Time(NoParams {}), egui::pos2(0.0, 0.0));
-        let b = ed.add_node(
-            NodeKind::Math(Default::default()),
-            egui::pos2(100.0, 0.0),
-        );
+        let b = ed.add_node(NodeKind::Math(Default::default()), egui::pos2(100.0, 0.0));
         ed.edit(|g| g.connect(PinRef::new(a, "t"), PinRef::new(b, "a")).unwrap());
         ed.selection = [a, b].into_iter().collect();
         ed.duplicate();

@@ -35,10 +35,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             cx.ui_state.zone_preset_save = Some(name.clone());
 
-            let (a, b) = (
-                cx.snap.config.channel_a.zones.len(),
-                cx.snap.config.channel_b.zones.len(),
-            );
+            let (a, b) = (cx.snap.config.channel_a.zones.len(), cx.snap.config.channel_b.zones.len());
             if (w::cta(ui, pal, "Save current").clicked() || enter) && cx.snap.has_device() {
                 let final_name = if name.trim().is_empty() {
                     shocking_vrc_app::zone_presets::default_zone_set_name()
@@ -80,10 +77,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
                         );
                         w::text_in(
                             ui,
-                            Rect::from_min_size(
-                                inner.min + vec2(0.0, 15.0),
-                                vec2(inner.width() - 150.0, 13.0),
-                            ),
+                            Rect::from_min_size(inner.min + vec2(0.0, 15.0), vec2(inner.width() - 150.0, 13.0)),
                             &format!("A: {a} zone(s) · B: {b} zone(s)"),
                             font::tiny(),
                             pal.dim,

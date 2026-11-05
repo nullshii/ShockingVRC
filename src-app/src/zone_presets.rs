@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use shocking_vrc_core::cli::CliConfig;
-use shocking_vrc_core::presets::{parse_zone_preset, ZonePreset, ZonePresetEntry};
+use shocking_vrc_core::presets::{ZonePreset, ZonePresetEntry, parse_zone_preset};
 
 use crate::presets::slugify;
 
@@ -60,11 +60,7 @@ fn load_zone_presets_from(dir: &Path) -> Vec<ZonePresetEntry> {
     entries
 }
 
-fn save_zone_preset_in(
-    dir: &Path,
-    name: &str,
-    config: &CliConfig,
-) -> Result<ZonePresetEntry, String> {
+fn save_zone_preset_in(dir: &Path, name: &str, config: &CliConfig) -> Result<ZonePresetEntry, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Zone set name cannot be empty".into());
@@ -92,8 +88,8 @@ fn delete_zone_preset_in(dir: &Path, id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shocking_vrc_core::cli::{ContactMode, ZoneEntry, ZoneId};
     use shocking_vrc_core::OldZoneType;
+    use shocking_vrc_core::cli::{ContactMode, ZoneEntry, ZoneId};
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("shockingvrc-zone-sets-{tag}"));
@@ -108,10 +104,7 @@ mod tests {
         front.mode = ContactMode::Speed;
         front.scale = 70;
         cfg.channel_a.zones = vec![front];
-        cfg.channel_b.zones = vec![ZoneEntry::with_default_mode(ZoneId::new(
-            OldZoneType::Touch,
-            "Chest",
-        ))];
+        cfg.channel_b.zones = vec![ZoneEntry::with_default_mode(ZoneId::new(OldZoneType::Touch, "Chest"))];
         cfg
     }
 

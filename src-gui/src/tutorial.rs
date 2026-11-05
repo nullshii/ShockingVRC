@@ -70,10 +70,9 @@ impl Step {
             Step::StatusOverview => Some(Section::Status),
             Step::GraphIntro => Some(Section::Graph),
             Step::ZonesIntro | Step::ZonesAddZone | Step::ZonesDgbTip => Some(Section::Zones),
-            Step::ChannelsFreq
-            | Step::ChannelsIntensity
-            | Step::ChannelsLimits
-            | Step::ChannelsAggregation => Some(Section::Channels),
+            Step::ChannelsFreq | Step::ChannelsIntensity | Step::ChannelsLimits | Step::ChannelsAggregation => {
+                Some(Section::Channels)
+            }
             Step::ModulationIntro | Step::ModulationApply => Some(Section::Modulation),
             Step::TuningIntro => Some(Section::Tuning),
             Step::PresetsIntro | Step::PresetsApply => Some(Section::Presets),
@@ -320,9 +319,10 @@ impl Tutorial {
             Some(s) => {
                 self.step = *s;
                 if let Some(section) = s.section()
-                    && state.section_visible(section) {
-                        state.section = section;
-                    }
+                    && state.section_visible(section)
+                {
+                    state.section = section;
+                }
             }
             None => self.finish(),
         }
@@ -349,11 +349,7 @@ impl Tutorial {
             .title_bar(false)
             .resizable(false)
             .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-24.0, -44.0))
-            .frame(
-                egui::Frame::NONE
-                    .fill(pal.base)
-                    .inner_margin(egui::Margin::same(16)),
-            )
+            .frame(egui::Frame::NONE.fill(pal.base).inner_margin(egui::Margin::same(16)))
             .default_width(430.0)
             .show(ctx, |ui| {
                 let outer = ui.max_rect().expand(16.0);
@@ -366,20 +362,13 @@ impl Tutorial {
                     if line.is_empty() {
                         ui.add_space(6.0);
                     } else {
-                        ui.label(
-                            egui::RichText::new(*line)
-                                .font(font::small())
-                                .color(pal.contrast),
-                        );
+                        ui.label(egui::RichText::new(*line).font(font::small()).color(pal.contrast));
                     }
                 }
 
                 ui.add_space(space::ITEM_GAP);
 
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width(), 3.0),
-                    egui::Sense::hover(),
-                );
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 3.0), egui::Sense::hover());
                 ui.painter().rect_filled(rect, w::SQUARE, pal.well);
                 ui.painter().rect_filled(
                     egui::Rect::from_min_size(
@@ -392,13 +381,7 @@ impl Tutorial {
 
                 ui.add_space(space::ITEM_GAP);
                 ui.horizontal(|ui| {
-                    if w::cta(
-                        ui,
-                        pal,
-                        if step == Step::Done { "Finish" } else { "Next" },
-                    )
-                    .clicked()
-                    {
+                    if w::cta(ui, pal, if step == Step::Done { "Finish" } else { "Next" }).clicked() {
                         next = true;
                     }
                     if w::button_enabled(ui, pal, "Back", i > 0).clicked() {
@@ -414,12 +397,7 @@ impl Tutorial {
 
         ctx.input(|inp| {
             for ev in &inp.events {
-                if let egui::Event::Key {
-                    key,
-                    pressed: true,
-                    ..
-                } = ev
-                {
+                if let egui::Event::Key { key, pressed: true, .. } = ev {
                     match key {
                         egui::Key::Enter | egui::Key::ArrowRight | egui::Key::Space => next = true,
                         egui::Key::Backspace | egui::Key::ArrowLeft => prev = true,
@@ -472,11 +450,7 @@ mod tests {
             Section::Presets,
             Section::Setup,
         ] {
-            assert!(
-                visited.contains(&section),
-                "{:?} is never covered by the tour",
-                section
-            );
+            assert!(visited.contains(&section), "{:?} is never covered by the tour", section);
         }
     }
 

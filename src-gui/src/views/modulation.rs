@@ -1,9 +1,7 @@
 use egui::{Align2, Rect, Sense, Stroke, Ui, vec2};
 
 use shocking_vrc_core::modulation::config::ModulationSource;
-use shocking_vrc_core::modulation::evaluator::{
-    KinematicsInput, advance_accumulator, evaluate_with_accumulator,
-};
+use shocking_vrc_core::modulation::evaluator::{KinematicsInput, advance_accumulator, evaluate_with_accumulator};
 use shocking_vrc_core::raw_to_hz;
 
 use crate::app::Ctx;
@@ -29,11 +27,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
 
 fn slots(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
-    let active = (
-        cx.ui_state.mod_channel,
-        cx.ui_state.mod_kind,
-        cx.ui_state.mod_seg,
-    );
+    let active = (cx.ui_state.mod_channel, cx.ui_state.mod_kind, cx.ui_state.mod_seg);
     let used = count_used(cx);
 
     w::sheet(ui, pal, |ui| {
@@ -66,10 +60,7 @@ fn slots(ui: &mut Ui, cx: &mut Ctx) {
                     };
                     w::text_in(
                         ui,
-                        Rect::from_min_max(
-                            egui::pos2(inner.left() + 34.0, inner.top()),
-                            inner.max,
-                        ),
+                        Rect::from_min_max(egui::pos2(inner.left() + 34.0, inner.top()), inner.max),
                         &label,
                         font::small(),
                         color,
@@ -114,11 +105,7 @@ fn count_used(cx: &Ctx) -> usize {
 
 fn editor(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
-    let (ch, kind, seg) = (
-        cx.ui_state.mod_channel,
-        cx.ui_state.mod_kind,
-        cx.ui_state.mod_seg,
-    );
+    let (ch, kind, seg) = (cx.ui_state.mod_channel, cx.ui_state.mod_kind, cx.ui_state.mod_seg);
     let stored = cx.snap.mod_slot(ch, kind, seg).clone();
     let dirty = cx.ui_state.mod_editor_dirty;
 
@@ -175,16 +162,8 @@ fn editor(ui: &mut Ui, cx: &mut Ctx) {
             let (min, max) = p.range(kind);
             let value = p.get(&cx.ui_state.mod_editor);
             let display = p.format(&cx.ui_state.mod_editor);
-            let changed = w::slider_row(
-                ui,
-                pal,
-                p.label(),
-                96.0,
-                w::Slider::new(value, min, max),
-                &display,
-                84.0,
-                None,
-            );
+            let changed =
+                w::slider_row(ui, pal, p.label(), 96.0, w::Slider::new(value, min, max), &display, 84.0, None);
             if let Some(v) = changed {
                 let v = p.clamp_value((v * 1000.0).round() / 1000.0, kind);
                 p.set(&mut cx.ui_state.mod_editor, v);
@@ -210,7 +189,10 @@ fn editor(ui: &mut Ui, cx: &mut Ctx) {
             {
                 cx.ui_state.reload_mod_editor(cx.snap);
             }
-            if w::button(ui, pal, "Reset").on_hover_text("Back to a fresh slot").clicked() {
+            if w::button(ui, pal, "Reset")
+                .on_hover_text("Back to a fresh slot")
+                .clicked()
+            {
                 cx.ui_state.mod_editor = default_mod_config(kind);
                 cx.ui_state.mod_editor_dirty = true;
             }
@@ -263,13 +245,7 @@ fn steady_kinematics(source: ModulationSource) -> KinematicsInput {
     k
 }
 
-fn preview(
-    ui: &mut Ui,
-    pal: &crate::theme::Palette,
-    samples: &[f32],
-    base: f32,
-    kind: ModKind,
-) {
+fn preview(ui: &mut Ui, pal: &crate::theme::Palette, samples: &[f32], base: f32, kind: ModKind) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 132.0), Sense::hover());
     w::dashed_rect(ui, rect, pal.hair);
     if samples.len() < 2 {

@@ -35,8 +35,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
         rows[1]
     };
 
-    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(channel_area);
+    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(channel_area);
     let a = app.status.channel_a.clone();
     let b = app.status.channel_b.clone();
     let lim_a = app.config.channel_a.limits.max;
@@ -84,9 +83,7 @@ fn render_indicators(app: &mut App, frame: &mut Frame, area: Rect) {
         Span::styled("Zones ", Style::default().fg(theme::TEXT_DIM)),
         Span::styled(
             app.avatar_zones.len().to_string(),
-            Style::default()
-                .fg(theme::HIGHLIGHT)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD),
         ),
     ]);
     frame.render_widget(Paragraph::new(zones), cols[3]);
@@ -94,9 +91,7 @@ fn render_indicators(app: &mut App, frame: &mut Frame, area: Rect) {
 
 fn coyote_status(connected: bool, name: Option<&str>) -> Line<'static> {
     if connected {
-        let text = name
-            .map(|n| format!(" {n} "))
-            .unwrap_or_else(|| " online ".to_string());
+        let text = name.map(|n| format!(" {n} ")).unwrap_or_else(|| " online ".to_string());
         Line::from(vec![
             Span::styled("Coyote ", Style::default().fg(theme::TEXT_DIM)),
             Span::styled(
@@ -131,10 +126,7 @@ fn render_device_list(app: &mut App, frame: &mut Frame, area: Rect) {
     }
 
     let devices: Vec<DeviceSlotInfo> = app.device_infos.clone();
-    let row_constraints: Vec<Constraint> = devices
-        .iter()
-        .map(|_| Constraint::Length(3))
-        .collect();
+    let row_constraints: Vec<Constraint> = devices.iter().map(|_| Constraint::Length(3)).collect();
     let rows = Layout::vertical(row_constraints).split(inner);
 
     for (i, (row_area, dev)) in rows.iter().zip(devices.iter()).enumerate() {
@@ -142,19 +134,9 @@ fn render_device_list(app: &mut App, frame: &mut Frame, area: Rect) {
     }
 }
 
-fn render_device_row(
-    app: &mut App,
-    frame: &mut Frame,
-    area: Rect,
-    index: usize,
-    dev: &DeviceSlotInfo,
-) {
+fn render_device_row(app: &mut App, frame: &mut Frame, area: Rect, index: usize, dev: &DeviceSlotInfo) {
     let active = index == app.active_device;
-    let border_color = if active {
-        theme::ACCENT
-    } else {
-        theme::ACCENT_DIM
-    };
+    let border_color = if active { theme::ACCENT } else { theme::ACCENT_DIM };
 
     let row_block = Block::default()
         .borders(ratatui::widgets::Borders::ALL)
@@ -186,28 +168,17 @@ fn render_device_row(
     } else {
         Style::default().fg(theme::TEXT_DIM)
     };
-    frame.render_widget(
-        Paragraph::new(format!("D{}", index + 1)).style(badge_style),
-        cols[0],
-    );
+    frame.render_widget(Paragraph::new(format!("D{}", index + 1)).style(badge_style), cols[0]);
 
     let name_style = if active {
-        Style::default()
-            .fg(theme::HIGHLIGHT)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(theme::TEXT).add_modifier(Modifier::BOLD)
     };
-    frame.render_widget(
-        Paragraph::new(dev.name.clone()).style(name_style),
-        cols[1],
-    );
+    frame.render_widget(Paragraph::new(dev.name.clone()).style(name_style), cols[1]);
 
     let short_mac = &dev.mac[dev.mac.len().saturating_sub(8)..];
-    frame.render_widget(
-        Paragraph::new(short_mac).style(Style::default().fg(theme::TEXT_DIM)),
-        cols[2],
-    );
+    frame.render_widget(Paragraph::new(short_mac).style(Style::default().fg(theme::TEXT_DIM)), cols[2]);
 
     ui::battery_bar(frame, cols[3], dev.battery);
 
@@ -240,13 +211,7 @@ fn indicator_line(name: &str, on: bool) -> Line<'static> {
     };
     Line::from(vec![
         Span::styled(format!("{name} "), Style::default().fg(theme::TEXT_DIM)),
-        Span::styled(
-            text,
-            Style::default()
-                .fg(Color::Black)
-                .bg(bg)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(text, Style::default().fg(Color::Black).bg(bg).add_modifier(Modifier::BOLD)),
     ])
 }
 
@@ -306,17 +271,15 @@ fn render_channel(frame: &mut Frame, area: Rect, title: &str, st: &ChannelStatus
         Span::styled(
             format!("{}", st.strength),
             Style::default()
-                .fg(if st.strength > 0 { theme::HIGHLIGHT } else { theme::TEXT_DIM })
+                .fg(if st.strength > 0 {
+                    theme::HIGHLIGHT
+                } else {
+                    theme::TEXT_DIM
+                })
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            format!(" / {limit_max}"),
-            Style::default().fg(theme::TEXT_DIM),
-        ),
-        Span::styled(
-            format!("  ({str_pct})"),
-            Style::default().fg(theme::TEXT_DIM),
-        ),
+        Span::styled(format!(" / {limit_max}"), Style::default().fg(theme::TEXT_DIM)),
+        Span::styled(format!("  ({str_pct})"), Style::default().fg(theme::TEXT_DIM)),
     ]);
     frame.render_widget(Paragraph::new(output_label), rows[2]);
 
@@ -331,26 +294,15 @@ fn render_channel(frame: &mut Frame, area: Rect, title: &str, st: &ChannelStatus
 
     frame.render_widget(Paragraph::new(""), rows[4]);
 
-    frame.render_widget(
-        Paragraph::new("Frequency").style(theme::section_header_style()),
-        rows[5],
-    );
+    frame.render_widget(Paragraph::new("Frequency").style(theme::section_header_style()), rows[5]);
     let freq_style = if st.strength > 0 {
-        Style::default()
-            .fg(theme::ACCENT)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(theme::ACCENT).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(theme::TEXT_DIM)
     };
-    frame.render_widget(
-        Paragraph::new(format_frequencies(st.frequency)).style(freq_style),
-        rows[6],
-    );
+    frame.render_widget(Paragraph::new(format_frequencies(st.frequency)).style(freq_style), rows[6]);
 
-    frame.render_widget(
-        Paragraph::new("Active zones").style(theme::section_header_style()),
-        rows[7],
-    );
+    frame.render_widget(Paragraph::new("Active zones").style(theme::section_header_style()), rows[7]);
 
     let items: Vec<ListItem> = if st.active_zones.is_empty() {
         vec![ListItem::new(Span::styled(
@@ -363,16 +315,11 @@ fn render_channel(frame: &mut Frame, area: Rect, title: &str, st: &ChannelStatus
             .map(|(id, lvl)| {
                 ListItem::new(Line::from(vec![
                     Span::styled("  ", Style::default()),
-                    Span::styled(
-                        format!("{id}"),
-                        Style::default().fg(theme::TEXT),
-                    ),
+                    Span::styled(format!("{id}"), Style::default().fg(theme::TEXT)),
                     Span::styled(" ", Style::default()),
                     Span::styled(
                         format!("{:.0}%", lvl * 100.0),
-                        Style::default()
-                            .fg(theme::HIGHLIGHT)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD),
                     ),
                 ]))
             })

@@ -48,48 +48,40 @@ impl Scene {
         self.render_section_with(section, theme_id, |_| {})
     }
 
-    fn render_section_with(
-        &self,
-        section: Section,
-        theme_id: &str,
-        prep: impl Fn(&mut UiState),
-    ) -> image::RgbaImage {
+    fn render_section_with(&self, section: Section, theme_id: &str, prep: impl Fn(&mut UiState)) -> image::RgbaImage {
         let theme = ThemeState::new(theme_id);
         let pal: Palette = *theme.palette();
         let mut state = UiState::default_for(section);
         prep(&mut state);
 
-        let mut harness = Harness::builder()
-            .with_size(egui::vec2(W, H))
-            .wgpu()
-            .build_ui(|ui| {
-                theme::install_style(ui.ctx(), &pal);
-                ui.painter()
-                    .rect_filled(ui.max_rect(), theme::widgets::SQUARE, pal.base);
-                let mut cx = Ctx {
-                    pal: &pal,
-                    snap: &self.snap,
-                    bridge: &self.bridge,
-                    ui_state: &mut state,
-                    log: &self.log,
-                };
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| match section {
-                        Section::Status => views::status::show(ui, &mut cx),
-                        Section::Zones => views::zones::show(ui, &mut cx),
-                        Section::Channels => views::channels::show(ui, &mut cx),
-                        Section::Tuning => views::tuning::show(ui, &mut cx),
-                        Section::Modulation => views::modulation::show(ui, &mut cx),
-                        Section::Log => views::log::show(ui, &mut cx),
-                        Section::Presets => views::presets::show(ui, &mut cx),
-                        Section::Setup => {
-                            views::setup::show(ui, &mut cx);
-                        }
-                        Section::Alarm => views::alarm::show(ui, &mut cx),
-                        Section::Graph => views::graph::show(ui, &mut cx),
-                    });
-            });
+        let mut harness = Harness::builder().with_size(egui::vec2(W, H)).wgpu().build_ui(|ui| {
+            theme::install_style(ui.ctx(), &pal);
+            ui.painter()
+                .rect_filled(ui.max_rect(), theme::widgets::SQUARE, pal.base);
+            let mut cx = Ctx {
+                pal: &pal,
+                snap: &self.snap,
+                bridge: &self.bridge,
+                ui_state: &mut state,
+                log: &self.log,
+            };
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| match section {
+                    Section::Status => views::status::show(ui, &mut cx),
+                    Section::Zones => views::zones::show(ui, &mut cx),
+                    Section::Channels => views::channels::show(ui, &mut cx),
+                    Section::Tuning => views::tuning::show(ui, &mut cx),
+                    Section::Modulation => views::modulation::show(ui, &mut cx),
+                    Section::Log => views::log::show(ui, &mut cx),
+                    Section::Presets => views::presets::show(ui, &mut cx),
+                    Section::Setup => {
+                        views::setup::show(ui, &mut cx);
+                    }
+                    Section::Alarm => views::alarm::show(ui, &mut cx),
+                    Section::Graph => views::graph::show(ui, &mut cx),
+                });
+        });
 
         harness.run();
         harness.render().expect("render")
@@ -103,39 +95,36 @@ impl Scene {
         let mut state = UiState::default_for(Section::Status);
         open(&mut state);
 
-        let mut harness = Harness::builder()
-            .with_size(egui::vec2(W, H))
-            .wgpu()
-            .build_ui(|ui| {
-                theme::install_style(ui.ctx(), &pal);
-                ui.painter()
-                    .rect_filled(ui.max_rect(), theme::widgets::SQUARE, pal.base);
-                let ctx = ui.ctx().clone();
-                let mut cx = Ctx {
-                    pal: &pal,
-                    snap: &self.snap,
-                    bridge: &self.bridge,
-                    ui_state: &mut state,
-                    log: &self.log,
-                };
-                views::status::show(ui, &mut cx);
+        let mut harness = Harness::builder().with_size(egui::vec2(W, H)).wgpu().build_ui(|ui| {
+            theme::install_style(ui.ctx(), &pal);
+            ui.painter()
+                .rect_filled(ui.max_rect(), theme::widgets::SQUARE, pal.base);
+            let ctx = ui.ctx().clone();
+            let mut cx = Ctx {
+                pal: &pal,
+                snap: &self.snap,
+                bridge: &self.bridge,
+                ui_state: &mut state,
+                log: &self.log,
+            };
+            views::status::show(ui, &mut cx);
 
-                if cx.ui_state.show_zone_presets {
-                    shocking_vrc_gui::overlays::zone_presets::show(&ctx, &mut cx);
-                }
-                if cx.ui_state.show_function_picker {
-                    shocking_vrc_gui::overlays::function_picker::show(&ctx, &mut cx);
-                }
-                if cx.ui_state.preset_save.is_some() {
-                    shocking_vrc_gui::overlays::preset_save::show(&ctx, &mut cx);
-                }
-                shocking_vrc_gui::overlays::confirm::show(&ctx, &mut cx);
-                shocking_vrc_gui::overlays::graph_dialogs::show(&ctx, &mut cx);
-                shocking_vrc_gui::overlays::update::show(&ctx, &mut cx);
-                if cx.snap.alarm_status.phase.is_ringing() {
-                    shocking_vrc_gui::overlays::alarm_ring::show(&ctx, &mut cx);
-                }
-            });
+            if cx.ui_state.show_zone_presets {
+                shocking_vrc_gui::overlays::zone_presets::show(&ctx, &mut cx);
+            }
+            if cx.ui_state.show_function_picker {
+                shocking_vrc_gui::overlays::function_picker::show(&ctx, &mut cx);
+            }
+            if cx.ui_state.preset_save.is_some() {
+                shocking_vrc_gui::overlays::preset_save::show(&ctx, &mut cx);
+            }
+            shocking_vrc_gui::overlays::confirm::show(&ctx, &mut cx);
+            shocking_vrc_gui::overlays::graph_dialogs::show(&ctx, &mut cx);
+            shocking_vrc_gui::overlays::update::show(&ctx, &mut cx);
+            if cx.snap.alarm_status.phase.is_ringing() {
+                shocking_vrc_gui::overlays::alarm_ring::show(&ctx, &mut cx);
+            }
+        });
 
         harness.run();
         harness.render().expect("render")
@@ -183,10 +172,7 @@ fn every_section_renders_with_nothing_connected() {
         let img = scene.render_section(section, "terminal");
         assert_not_blank(&img, section.title());
     }
-    save(
-        &scene.render_section(Section::Status, "terminal"),
-        "empty-status",
-    );
+    save(&scene.render_section(Section::Status, "terminal"), "empty-status");
 }
 
 #[test]
@@ -295,9 +281,7 @@ fn every_overlay_renders() {
             })
         }),
         ("confirm-preset-delete", |s| s.preset_delete_confirm = Some(0)),
-        ("confirm-zoneset-delete", |s| {
-            s.zone_preset_delete_confirm = Some(0)
-        }),
+        ("confirm-zoneset-delete", |s| s.zone_preset_delete_confirm = Some(0)),
     ];
 
     for (name, open) in cases {

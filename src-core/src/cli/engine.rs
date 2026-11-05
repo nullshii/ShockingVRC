@@ -77,9 +77,7 @@ fn graph_bf_due(sent: Option<(u8, u8)>, sent_at: Option<Instant>, target: (u8, u
     match (sent, sent_at) {
         (Some(prev), _) if prev == target => false,
         (Some(prev), Some(at)) => {
-            target.0 < prev.0
-                || target.1 < prev.1
-                || now.saturating_duration_since(at) >= GRAPH_BF_RAISE_INTERVAL
+            target.0 < prev.0 || target.1 < prev.1 || now.saturating_duration_since(at) >= GRAPH_BF_RAISE_INTERVAL
         }
         _ => true,
     }
@@ -123,8 +121,8 @@ impl ZoneKinematics {
 struct ModAccumulators {
     freq_a: [f32; 4],
     freq_b: [f32; 4],
-    int_a:  [f32; 4],
-    int_b:  [f32; 4],
+    int_a: [f32; 4],
+    int_b: [f32; 4],
 }
 
 struct EngineState {
@@ -203,7 +201,11 @@ impl CliEngine {
             self.try_sync_hardware_limits().await;
         }
         if previous != mode {
-            info!("[cli] Mode: {} → {} (output zeroed, ramping in)", previous.label(), mode.label());
+            info!(
+                "[cli] Mode: {} → {} (output zeroed, ramping in)",
+                previous.label(),
+                mode.label()
+            );
         }
     }
 
@@ -214,11 +216,7 @@ impl CliEngine {
     }
 
     pub fn graph_caps(&self) -> [u8; MAX_CHANNELS] {
-        self.state
-            .graph
-            .lock()
-            .map(|g| g.caps)
-            .unwrap_or([0; MAX_CHANNELS])
+        self.state.graph.lock().map(|g| g.caps).unwrap_or([0; MAX_CHANNELS])
     }
 
     pub async fn restart_graph_ramp(&self) {
@@ -314,11 +312,7 @@ impl CliEngine {
     }
 
     pub fn graph_output(&self) -> [GraphChannelOutput; MAX_CHANNELS] {
-        self.state
-            .graph
-            .lock()
-            .map(|g| g.channels)
-            .unwrap_or_default()
+        self.state.graph.lock().map(|g| g.channels).unwrap_or_default()
     }
 
     fn graph_status(&self, connected: bool) -> CliStatus {
@@ -477,11 +471,7 @@ impl CliEngine {
         let kinematics = self.state.zone_kinematics.read().await;
         let connected = self.state.device.lock().await.is_some();
         let mut status = compute_status(&cfg, &kinematics, Instant::now(), connected);
-        apply_alarm_to_channels(
-            &self.state.alarm.config(),
-            self.state.alarm.strength(),
-            &mut status,
-        );
+        apply_alarm_to_channels(&self.state.alarm.config(), self.state.alarm.strength(), &mut status);
         status
     }
 
@@ -1157,7 +1147,12 @@ mod threshold_is_a_depth_calibration_tests {
     fn a_shallow_contact_is_silent_in_every_mode() {
         let now = Instant::now();
         let k = zone(0.20, 0.9);
-        for mode in [ContactMode::Depth, ContactMode::Speed, ContactMode::Acc, ContactMode::Recoil] {
+        for mode in [
+            ContactMode::Depth,
+            ContactMode::Speed,
+            ContactMode::Acc,
+            ContactMode::Recoil,
+        ] {
             assert_eq!(
                 project_zone(&k, &entry(mode, 30, 80), &unit_norms(), now),
                 0.0,
@@ -1219,7 +1214,7 @@ mod threshold_is_a_depth_calibration_tests {
 
 #[cfg(test)]
 mod staleness_tests {
-    use super::{ZoneKinematics, ZONE_IDLE_TIMEOUT};
+    use super::{ZONE_IDLE_TIMEOUT, ZoneKinematics};
     use std::time::{Duration, Instant};
 
     fn zone_at(base: Instant) -> ZoneKinematics {
@@ -1277,10 +1272,7 @@ mod spoof_guard_tests {
 
     async fn run(levels: &[f32]) -> f32 {
         let mut cfg = CliConfig::default();
-        cfg.channel_a.zones = vec![ZoneEntry::new(
-            ZoneId::from_event(&event(0.0)),
-            ContactMode::Depth,
-        )];
+        cfg.channel_a.zones = vec![ZoneEntry::new(ZoneId::from_event(&event(0.0)), ContactMode::Depth)];
         let engine = CliEngine::new(cfg, AlarmController::new(AlarmConfig::default()));
         for l in levels {
             engine.process_events(&[event(*l)]).await;
@@ -1358,7 +1350,11 @@ mod graph_mode_tests {
         let e = engine();
         e.set_mode(EngineMode::Graph).await;
         let f = frame(1.0, 40.0, -1.0);
-        assert_eq!(e.submit_graph_frame(Some(&f), false).await[0].safe.strength, 0, "starts at zero");
+        assert_eq!(
+            e.submit_graph_frame(Some(&f), false).await[0].safe.strength,
+            0,
+            "starts at zero"
+        );
         e.age_graph_ramp(safety::RAMP_SECS / 2.0);
         let half = e.submit_graph_frame(Some(&f), false).await[0].safe.strength;
         assert!((15..=25).contains(&half), "half-way through the ramp: {half}");
@@ -1425,12 +1421,7 @@ mod graph_mode_tests {
         assert!(graph_bf_due(None, None, (30, 30), t0), "first push goes out");
         assert!(!graph_bf_due(Some((30, 30)), Some(t0), (30, 30), t0), "no change, no push");
         assert!(!graph_bf_due(Some((30, 30)), Some(t0), (40, 30), t0), "raise waits");
-        assert!(graph_bf_due(
-            Some((30, 30)),
-            Some(t0),
-            (40, 30),
-            t0 + GRAPH_BF_RAISE_INTERVAL
-        ));
+        assert!(graph_bf_due(Some((30, 30)), Some(t0), (40, 30), t0 + GRAPH_BF_RAISE_INTERVAL));
         assert!(graph_bf_due(Some((30, 30)), Some(t0), (10, 30), t0), "drop is immediate");
     }
 }

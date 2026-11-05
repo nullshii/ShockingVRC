@@ -5,11 +5,10 @@ use crate::dsp::UnscentedKalman;
 use crate::modulation::evaluator::evaluate_with_accumulator;
 use crate::modulation::noise;
 
-use super::compile::{self, Extra, ExternalRequest, GraphIssue, Plan, Src};
+use super::compile::{self, ExternalRequest, Extra, GraphIssue, Plan, Src};
 use super::device::{ChannelFrame, DEFAULT_CHANNEL, DeviceFrame, MAX_CHANNELS, PinRole, SEGMENTS};
 use super::kind::{
-    CombineMode, CompareOp, EnvMode, LfoShape, LogicOp, NodeKind, NoiseKind, as_bool, from_bool,
-    sanitised_ukf,
+    CombineMode, CompareOp, EnvMode, LfoShape, LogicOp, NodeKind, NoiseKind, as_bool, from_bool, sanitised_ukf,
 };
 use super::model::{Graph, NodeId};
 
@@ -28,29 +27,87 @@ pub struct AlarmSample {
 #[derive(Debug)]
 enum NodeState {
     None,
-    Ukf { filter: Box<UnscentedKalman>, t: f32 },
-    Prev { prev: f32, init: bool },
-    Value { y: f32, init: bool },
-    Peak { value: f32, held: f32 },
-    Window { buf: Vec<f32>, idx: usize, filled: usize, sum: f64 },
-    Delay { buf: Vec<f32>, idx: usize },
-    Lfo { phase: f32, cycles: f64, done: bool, last_reset: bool, held: f32, rng: u32 },
-    Noise { pos: f64 },
-    Env { level: f32, stage: u8, gate: bool, rel_rate: f32 },
-    Hold { value: f32, last_trig: bool },
+    Ukf {
+        filter: Box<UnscentedKalman>,
+        t: f32,
+    },
+    Prev {
+        prev: f32,
+        init: bool,
+    },
+    Value {
+        y: f32,
+        init: bool,
+    },
+    Peak {
+        value: f32,
+        held: f32,
+    },
+    Window {
+        buf: Vec<f32>,
+        idx: usize,
+        filled: usize,
+        sum: f64,
+    },
+    Delay {
+        buf: Vec<f32>,
+        idx: usize,
+    },
+    Lfo {
+        phase: f32,
+        cycles: f64,
+        done: bool,
+        last_reset: bool,
+        held: f32,
+        rng: u32,
+    },
+    Noise {
+        pos: f64,
+    },
+    Env {
+        level: f32,
+        stage: u8,
+        gate: bool,
+        rel_rate: f32,
+    },
+    Hold {
+        value: f32,
+        last_trig: bool,
+    },
     Flag(bool),
-    Metro { phase: f32 },
-    Timer { elapsed: f32 },
-    Seq { phase: f32, index: usize, last_reset: bool },
-    Guard { blocked: bool, last: f32, init: bool },
-    Deadman { last: f32, unchanged: f32, stale: f32, init: bool },
+    Metro {
+        phase: f32,
+    },
+    Timer {
+        elapsed: f32,
+    },
+    Seq {
+        phase: f32,
+        index: usize,
+        last_reset: bool,
+    },
+    Guard {
+        blocked: bool,
+        last: f32,
+        init: bool,
+    },
+    Deadman {
+        last: f32,
+        unchanged: f32,
+        stale: f32,
+        init: bool,
+    },
     Device {
         power: [[f32; SEGMENTS]; MAX_CHANNELS],
         freq: [[f32; SEGMENTS]; MAX_CHANNELS],
         int: [[f32; SEGMENTS]; MAX_CHANNELS],
         init: bool,
     },
-    Scope { buf: Vec<[f32; 4]>, idx: usize, filled: usize },
+    Scope {
+        buf: Vec<[f32; 4]>,
+        idx: usize,
+        filled: usize,
+    },
 }
 
 impl NodeState {
@@ -61,10 +118,9 @@ impl NodeState {
                 t: 0.0,
             },
             NodeKind::Derivative(_) => NodeState::Prev { prev: 0.0, init: false },
-            NodeKind::Integrate(_)
-            | NodeKind::Smooth(_)
-            | NodeKind::Slew(_)
-            | NodeKind::RampLimiter(_) => NodeState::Value { y: 0.0, init: false },
+            NodeKind::Integrate(_) | NodeKind::Smooth(_) | NodeKind::Slew(_) | NodeKind::RampLimiter(_) => {
+                NodeState::Value { y: 0.0, init: false }
+            }
             NodeKind::PeakHold(_) => NodeState::Peak { value: 0.0, held: 0.0 },
             NodeKind::MovingAverage(p) => NodeState::Window {
                 buf: vec![0.0; p.samples()],
@@ -91,7 +147,10 @@ impl NodeState {
                 gate: false,
                 rel_rate: 0.0,
             },
-            NodeKind::SampleHold(_) => NodeState::Hold { value: 0.0, last_trig: false },
+            NodeKind::SampleHold(_) => NodeState::Hold {
+                value: 0.0,
+                last_trig: false,
+            },
             NodeKind::Schmitt(_) | NodeKind::Compare(_) => NodeState::Flag(false),
             NodeKind::Metronome(_) => NodeState::Metro { phase: 0.0 },
             NodeKind::Timer(_) => NodeState::Timer { elapsed: 0.0 },
@@ -135,8 +194,7 @@ impl NodeState {
     }
 
     fn compatible(&self, fresh: &NodeState) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(fresh)
-            && self.buffer_len() == fresh.buffer_len()
+        std::mem::discriminant(self) == std::mem::discriminant(fresh) && self.buffer_len() == fresh.buffer_len()
     }
 
     fn retune(&mut self, kind: &NodeKind) {
@@ -410,9 +468,7 @@ impl GraphEvaluator {
                     outputs: self.values[os..os + n.out_len as usize].to_vec(),
                 },
             );
-            if let (NodeState::Scope { buf, idx, filled }, NodeKind::Scope(p)) =
-                (&self.states[ni], &n.kind)
-            {
+            if let (NodeState::Scope { buf, idx, filled }, NodeKind::Scope(p)) = (&self.states[ni], &n.kind) {
                 let len = buf.len();
                 let start = (*idx + len - *filled) % len.max(1);
                 let samples = (0..*filled).map(|k| buf[(start + k) % len]).collect();
@@ -671,7 +727,15 @@ fn eval_node(
             };
         }
         NodeKind::Lfo(p) => {
-            if let NodeState::Lfo { phase, cycles, done, last_reset, held, rng } = state {
+            if let NodeState::Lfo {
+                phase,
+                cycles,
+                done,
+                last_reset,
+                held,
+                rng,
+            } = state
+            {
                 let reset = as_bool(i(4));
                 if reset && !*last_reset {
                     *phase = 0.0;
@@ -716,7 +780,13 @@ fn eval_node(
             }
         }
         NodeKind::Envelope(p) => {
-            if let NodeState::Env { level, stage, gate, rel_rate } = state {
+            if let NodeState::Env {
+                level,
+                stage,
+                gate,
+                rel_rate,
+            } = state
+            {
                 let g = as_bool(i(0));
                 let (a, d, s, r) = (i(1).max(0.0), i(2).max(0.0), i(3).clamp(0.0, 1.0), i(4).max(0.0));
                 if g && !*gate {
@@ -811,7 +881,12 @@ fn eval_node(
             }
         }
         NodeKind::Sequencer(p) => {
-            if let NodeState::Seq { phase, index, last_reset } = state {
+            if let NodeState::Seq {
+                phase,
+                index,
+                last_reset,
+            } = state
+            {
                 let n = p.steps.len().max(1);
                 let reset = as_bool(i(1));
                 if reset && !*last_reset {
@@ -838,10 +913,34 @@ fn eval_node(
             if let NodeState::Flag(on) = state {
                 let (a, b, h) = (i(0), i(1), p.hysteresis * 0.5);
                 *on = match p.op {
-                    CompareOp::Greater => if *on { a > b - h } else { a > b + h },
-                    CompareOp::GreaterEq => if *on { a >= b - h } else { a >= b + h },
-                    CompareOp::Less => if *on { a < b + h } else { a < b - h },
-                    CompareOp::LessEq => if *on { a <= b + h } else { a <= b - h },
+                    CompareOp::Greater => {
+                        if *on {
+                            a > b - h
+                        } else {
+                            a > b + h
+                        }
+                    }
+                    CompareOp::GreaterEq => {
+                        if *on {
+                            a >= b - h
+                        } else {
+                            a >= b + h
+                        }
+                    }
+                    CompareOp::Less => {
+                        if *on {
+                            a < b + h
+                        } else {
+                            a < b - h
+                        }
+                    }
+                    CompareOp::LessEq => {
+                        if *on {
+                            a <= b + h
+                        } else {
+                            a <= b - h
+                        }
+                    }
                     CompareOp::Equal => (a - b).abs() <= h.max(1e-6),
                 };
                 outs[0] = from_bool(*on);
@@ -890,7 +989,13 @@ fn eval_node(
             }
         }
         NodeKind::Deadman(_) => {
-            if let NodeState::Deadman { last, unchanged, stale, init } = state {
+            if let NodeState::Deadman {
+                last,
+                unchanged,
+                stale,
+                init,
+            } = state
+            {
                 let x = i(0);
                 if !*init || (x - *last).abs() > 1e-6 {
                     *unchanged = 0.0;
@@ -905,7 +1010,11 @@ fn eval_node(
                     *stale = (*stale + dt).min(86_400.0);
                 }
                 let timeout = i(2).max(0.0);
-                outs[0] = if *unchanged >= timeout || *stale >= timeout { 0.0 } else { x };
+                outs[0] = if *unchanged >= timeout || *stale >= timeout {
+                    0.0
+                } else {
+                    x
+                };
             }
         }
         NodeKind::Panic(p) => {
@@ -928,8 +1037,7 @@ fn eval_node(
             }
         }
         NodeKind::Device(p) => {
-            let (Extra::Device(fi), NodeState::Device { power, freq, int, init }) = (&node.extra, state)
-            else {
+            let (Extra::Device(fi), NodeState::Device { power, freq, int, init }) = (&node.extra, state) else {
                 return;
             };
             let Some(frame) = frames.get_mut(*fi) else {
@@ -963,7 +1071,11 @@ fn eval_node(
                         PinRole::Frequency | PinRole::Intensity => {
                             let is_freq = g.role == PinRole::Frequency;
                             let map = |v: f32| {
-                                if is_freq { cp.map_frequency(v) } else { cp.map_intensity(v) }
+                                if is_freq {
+                                    cp.map_frequency(v)
+                                } else {
+                                    cp.map_intensity(v)
+                                }
                             };
                             let hist = if is_freq { &mut freq[ci] } else { &mut int[ci] };
                             if expanded {

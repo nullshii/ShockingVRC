@@ -12,11 +12,7 @@ pub fn show(ctx: &Context, pal: &Palette, open: &mut bool) {
                 .color(pal.accent),
         );
         ui.add_space(4.0);
-        w::body(
-            ui,
-            pal,
-            "Bridges DG-Lab Coyote hardware and VRChat over OSC.",
-        );
+        w::body(ui, pal, "Bridges DG-Lab Coyote hardware and VRChat over OSC.");
 
         ui.add_space(space::ITEM_GAP);
         w::caption(ui, pal, "Files");

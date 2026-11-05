@@ -5,11 +5,7 @@ use crate::theme::widgets::{self as w, font, space};
 
 pub fn show(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
-    let lines: Vec<String> = cx
-        .log
-        .lock()
-        .map(|b| b.iter().cloned().collect())
-        .unwrap_or_default();
+    let lines: Vec<String> = cx.log.lock().map(|b| b.iter().cloned().collect()).unwrap_or_default();
 
     let filter = cx.ui_state.log_filter.to_lowercase();
     let visible: Vec<&String> = lines
@@ -48,8 +44,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
                     .layout_no_wrap(label.to_string(), font.clone(), color)
                     .size()
                     .x;
-                let (rect, resp) =
-                    ui.allocate_exact_size(vec2(gw + 16.0, 22.0), Sense::click());
+                let (rect, resp) = ui.allocate_exact_size(vec2(gw + 16.0, 22.0), Sense::click());
                 let on = *flag;
                 if on {
                     ui.painter().rect_filled(rect, w::SQUARE, pal.faded(color, 0.75));
@@ -60,14 +55,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
                     egui::Stroke::new(1.0, if on { color } else { pal.hair }),
                     egui::StrokeKind::Inside,
                 );
-                w::text_in(
-                    ui,
-                    rect,
-                    label,
-                    font,
-                    if on { color } else { pal.dim },
-                    Align2::CENTER_CENTER,
-                );
+                w::text_in(ui, rect, label, font, if on { color } else { pal.dim }, Align2::CENTER_CENTER);
                 if resp.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 }
@@ -81,25 +69,14 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
                     .on_hover_text("Copy the visible lines to the clipboard")
                     .clicked()
                 {
-                    let text = visible
-                        .iter()
-                        .map(|s| s.as_str())
-                        .collect::<Vec<_>>()
-                        .join("\n");
+                    let text = visible.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n");
                     ui.ctx().copy_text(text);
-                    cx.bridge.shared.notify(
-                        crate::bridge::ToastKind::Info,
-                        format!("Copied {} line(s)", visible.len()),
-                    );
+                    cx.bridge
+                        .shared
+                        .notify(crate::bridge::ToastKind::Info, format!("Copied {} line(s)", visible.len()));
                 }
                 let mut follow = cx.ui_state.log_follow;
-                if w::segmented(
-                    ui,
-                    pal,
-                    &["Follow", "Hold"],
-                    if follow { 0 } else { 1 },
-                )
-                .is_some_and(|i| {
+                if w::segmented(ui, pal, &["Follow", "Hold"], if follow { 0 } else { 1 }).is_some_and(|i| {
                     follow = i == 0;
                     true
                 }) {
@@ -131,8 +108,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
                 return;
             }
             for line in &visible[range.start.min(visible.len())..range.end.min(visible.len())] {
-                let (rect, _) =
-                    ui.allocate_exact_size(vec2(ui.available_width(), 17.0), Sense::hover());
+                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 17.0), Sense::hover());
                 let (tag, rest) = split_tag(line);
                 let color = level_color(pal, tag);
                 w::text_in(
@@ -145,10 +121,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
                 );
                 w::text_in(
                     ui,
-                    Rect::from_min_max(
-                        egui::pos2(rect.left() + 56.0, rect.top()),
-                        rect.max,
-                    ),
+                    Rect::from_min_max(egui::pos2(rect.left() + 56.0, rect.top()), rect.max),
                     rest,
                     font::small(),
                     if tag == "ERROR" || tag == "WARN" {

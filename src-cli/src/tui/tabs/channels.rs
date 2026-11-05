@@ -6,8 +6,7 @@ use ratatui::widgets::Paragraph;
 use shocking_vrc_core::raw_to_hz;
 
 use crate::tui::app::{
-    agg_name, aggregation_modes, channel_controls, Action, App, Channel, ChannelControl,
-    SliderKind,
+    Action, App, Channel, ChannelControl, SliderKind, agg_name, aggregation_modes, channel_controls,
 };
 use crate::tui::theme;
 use crate::tui::ui;
@@ -16,16 +15,14 @@ const CHANNEL_ROWS: u16 = 14;
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     let rows = Layout::vertical([Constraint::Min(0), Constraint::Length(3)]).split(area);
-    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[0]);
+    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[0]);
 
     let viewport_h = rows[0].height.saturating_sub(2);
     app.channels_viewport_h = viewport_h;
     app.channels_scroll = ui::clamp_scroll(app.channels_scroll, CHANNEL_ROWS, viewport_h);
     if let Some(ctrl) = channel_controls().get(app.channel_focus).copied() {
         if let Some(row) = crate::tui::app::channel_control_row(ctrl) {
-            app.channels_scroll =
-                ui::scroll_to_row(app.channels_scroll, viewport_h, row);
+            app.channels_scroll = ui::scroll_to_row(app.channels_scroll, viewport_h, row);
         }
     }
 
@@ -35,13 +32,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     render_actions(app, frame, rows[1], focused_ctrl);
 }
 
-fn render_channel(
-    app: &mut App,
-    frame: &mut Frame,
-    area: Rect,
-    ch: Channel,
-    focus: Option<ChannelControl>,
-) {
+fn render_channel(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel, focus: Option<ChannelControl>) {
     let block = theme::panel_block(format!("Channel {} — waveform & limits", ch.label()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -148,12 +139,7 @@ fn render_actions(app: &mut App, frame: &mut Frame, area: Rect, focus: Option<Ch
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let cols = Layout::horizontal([
-        Constraint::Length(18),
-        Constraint::Length(2),
-        Constraint::Length(18),
-    ])
-    .split(inner);
+    let cols = Layout::horizontal([Constraint::Length(18), Constraint::Length(2), Constraint::Length(18)]).split(inner);
     ui::button(
         frame,
         app,

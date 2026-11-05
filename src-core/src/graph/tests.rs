@@ -70,7 +70,9 @@ fn an_lfo_moves_the_frequency_and_four_pins_set_each_segment() {
     for _ in 0..40 {
         seen.push(ev.step(DT)[0].channels[0].freq[3]);
     }
-    let (lo, hi) = seen.iter().fold((f32::MAX, f32::MIN), |(a, b), v| (a.min(*v), b.max(*v)));
+    let (lo, hi) = seen
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), v| (a.min(*v), b.max(*v)));
     assert!(hi - lo > 50.0, "frequency should sweep: {lo}..{hi}");
 
     let mut g = Graph::default();

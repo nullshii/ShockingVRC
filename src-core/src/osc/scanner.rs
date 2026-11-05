@@ -68,8 +68,7 @@ impl RawInputs {
             .find(|c| c.zone_type == zone_type && c.id == id)
         {
             Some(c) => {
-                let was_idle = now.saturating_duration_since(c.updated) > ZONE_IDLE_TIMEOUT
-                    || c.level <= RELEASE_LEVEL;
+                let was_idle = now.saturating_duration_since(c.updated) > ZONE_IDLE_TIMEOUT || c.level <= RELEASE_LEVEL;
                 c.blocked = if level <= RELEASE_LEVEL {
                     false
                 } else if was_idle {
@@ -254,7 +253,6 @@ impl AvatarScanner {
         self.state.bulk_attempt.fetch_add(1, Ordering::Relaxed);
     }
 
-
     pub async fn send_param(&self, param: &str, value: f32) -> Result<()> {
         self.send_osc(param, OscType::Float(value)).await
     }
@@ -297,12 +295,8 @@ impl AvatarScanner {
     }
 
     pub fn seen_params(&self) -> Vec<(String, f32)> {
-        let mut v: Vec<(String, f32)> = self.with_raw_inputs(|raw| {
-            raw.params
-                .iter()
-                .map(|(k, p)| (k.clone(), p.value))
-                .collect()
-        });
+        let mut v: Vec<(String, f32)> =
+            self.with_raw_inputs(|raw| raw.params.iter().map(|(k, p)| (k.clone(), p.value)).collect());
         v.sort_by(|a, b| a.0.cmp(&b.0));
         v
     }
@@ -600,7 +594,10 @@ mod tests {
         let t0 = Instant::now();
         raw.record_param("/avatar/parameters/Foo", 0.5, false, t0);
         raw.record_param("/avatar/parameters/Foo", 0.9, true, t0);
-        assert_eq!(raw.params["/avatar/parameters/Foo"].value, 0.5, "bulk sync never overwrites live data");
+        assert_eq!(
+            raw.params["/avatar/parameters/Foo"].value, 0.5,
+            "bulk sync never overwrites live data"
+        );
         raw.record_param("/avatar/parameters/Foo", 0.7, false, t0);
         assert_eq!(raw.params["/avatar/parameters/Foo"].value, 0.7);
     }

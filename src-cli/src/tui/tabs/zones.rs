@@ -26,18 +26,14 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
 
 fn render_footer(app: &mut App, frame: &mut Frame, area: Rect) {
     let saved = app.zone_presets.len();
-    let cols = Layout::horizontal([Constraint::Length(13), Constraint::Min(0)])
-        .split(area);
+    let cols = Layout::horizontal([Constraint::Length(13), Constraint::Min(0)]).split(area);
     ui::button(frame, app, cols[0], "Zone sets", false, Action::OpenZonePresets);
     let hint = match saved {
         0 => "  z — save the current zones as a reusable set".to_string(),
         1 => "  z — 1 saved set".to_string(),
         n => format!("  z — {n} saved sets"),
     };
-    frame.render_widget(
-        Paragraph::new(hint).style(Style::default().fg(theme::TEXT_DIM)),
-        cols[1],
-    );
+    frame.render_widget(Paragraph::new(hint).style(Style::default().fg(theme::TEXT_DIM)), cols[1]);
 }
 
 fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) {
@@ -46,12 +42,11 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         Channel::B => ZonesPane::ConfiguredB,
     };
     let focused = app.zones_pane == pane;
-    let block = theme::panel_block(format!("Channel {} — mapped zones", ch.label()))
-        .border_style(if focused {
-            Style::default().fg(theme::ACCENT)
-        } else {
-            Style::default().fg(theme::ACCENT_DIM)
-        });
+    let block = theme::panel_block(format!("Channel {} — mapped zones", ch.label())).border_style(if focused {
+        Style::default().fg(theme::ACCENT)
+    } else {
+        Style::default().fg(theme::ACCENT_DIM)
+    });
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -97,10 +92,7 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
             } else {
                 String::new()
             };
-            (
-                format!("{} · {}{}{}", e.id, mode_str, scale_badge, thr_badge),
-                e.scale,
-            )
+            (format!("{} · {}{}{}", e.id, mode_str, scale_badge, thr_badge), e.scale)
         })
         .collect();
 
@@ -114,20 +106,14 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         &|i| Action::SelectConfigured(ch, i),
     );
 
-    let btns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(btn_row);
+    let btns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(btn_row);
     ui::button(frame, app, btns[0], "Cycle mode", false, Action::CycleMode(ch, selected));
     ui::button(frame, app, btns[1], "Remove", false, Action::RemoveZone(ch, selected));
 
-
     let current_scale = entries.get(selected).map(|(_, s)| *s).unwrap_or(100);
 
-    let label_cols = Layout::horizontal([
-        Constraint::Length(7),
-        Constraint::Min(8),
-        Constraint::Length(5),
-    ])
-    .split(slider_row_area);
+    let label_cols =
+        Layout::horizontal([Constraint::Length(7), Constraint::Min(8), Constraint::Length(5)]).split(slider_row_area);
 
     let label_style = if focused {
         Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
@@ -135,10 +121,7 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
         Style::default().fg(theme::TEXT_DIM)
     };
 
-    frame.render_widget(
-        Paragraph::new("Scale ").style(label_style),
-        label_cols[0],
-    );
+    frame.render_widget(Paragraph::new("Scale ").style(label_style), label_cols[0]);
 
     let ratio = current_scale as f64 / 100.0;
     let bar_color = scale_bar_color(current_scale);
@@ -150,17 +133,12 @@ fn render_configured(app: &mut App, frame: &mut Frame, area: Rect, ch: Channel) 
     app.push_slider(label_cols[1], SliderKind::ZoneScale(ch, selected));
 
     let val_style = if current_scale != 100 {
-        Style::default()
-            .fg(bar_color)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(bar_color).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(theme::TEXT_DIM)
     };
     frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            format!("{:>3}%", current_scale),
-            val_style,
-        ))),
+        Paragraph::new(Line::from(Span::styled(format!("{:>3}%", current_scale), val_style))),
         label_cols[2],
     );
 
@@ -205,12 +183,7 @@ fn threshold_row(
     kind: SliderKind,
     focused: bool,
 ) {
-    let cols = Layout::horizontal([
-        Constraint::Length(10),
-        Constraint::Min(6),
-        Constraint::Length(5),
-    ])
-    .split(area);
+    let cols = Layout::horizontal([Constraint::Length(10), Constraint::Min(6), Constraint::Length(5)]).split(area);
 
     let label_style = if focused {
         Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD)
@@ -229,10 +202,7 @@ fn threshold_row(
 
     let val_style = Style::default().fg(bar_color).add_modifier(Modifier::BOLD);
     frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            format!("{:>4.2}", value as f32 / 100.0),
-            val_style,
-        ))),
+        Paragraph::new(Line::from(Span::styled(format!("{:>4.2}", value as f32 / 100.0), val_style))),
         cols[2],
     );
 }
@@ -252,20 +222,14 @@ fn scale_bar_color(scale: u8) -> ratatui::style::Color {
 
 fn render_avatar(app: &mut App, frame: &mut Frame, area: Rect) {
     let focused = app.zones_pane == ZonesPane::Avatar;
-    let block = theme::panel_block("Avatar — discovered touch zones")
-        .border_style(if focused {
-            Style::default().fg(theme::ACCENT)
-        } else {
-            Style::default().fg(theme::ACCENT_DIM)
-        });
+    let block = theme::panel_block("Avatar — discovered touch zones").border_style(if focused {
+        Style::default().fg(theme::ACCENT)
+    } else {
+        Style::default().fg(theme::ACCENT_DIM)
+    });
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let layout = Layout::vertical([
-        Constraint::Min(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .split(inner);
+    let layout = Layout::vertical([Constraint::Min(1), Constraint::Length(1), Constraint::Length(1)]).split(inner);
 
     let rows: Vec<String> = app
         .avatar_zones
@@ -281,24 +245,14 @@ fn render_avatar(app: &mut App, frame: &mut Frame, area: Rect) {
         })
         .collect();
 
-    render_rows(
-        frame,
-        app,
-        layout[0],
-        &rows,
-        app.sel_avatar,
-        focused,
-        &Action::SelectAvatar,
-    );
+    render_rows(frame, app, layout[0], &rows, app.sel_avatar, focused, &Action::SelectAvatar);
 
     let sel = app.sel_avatar;
-    let add = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(layout[1]);
+    let add = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(layout[1]);
     ui::button(frame, app, add[0], "Add → A", false, Action::AddAvatarZone(Channel::A, sel));
     ui::button(frame, app, add[1], "Add → B", false, Action::AddAvatarZone(Channel::B, sel));
 
-    let all = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(layout[2]);
+    let all = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(layout[2]);
     ui::button(frame, app, all[0], "Add all → A", false, Action::AddAllZones(Channel::A));
     ui::button(frame, app, all[1], "Add all → B", false, Action::AddAllZones(Channel::B));
 }
@@ -318,8 +272,7 @@ fn render_rows(
     let height = area.height as usize;
     if rows.is_empty() {
         frame.render_widget(
-            Paragraph::new("  No zones yet — pick from avatar list →")
-                .style(Style::default().fg(theme::TEXT_DIM)),
+            Paragraph::new("  No zones yet — pick from avatar list →").style(Style::default().fg(theme::TEXT_DIM)),
             area,
         );
         return;
@@ -355,9 +308,7 @@ mod tests {
 
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use ratatui::crossterm::event::{
-        KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-    };
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
     use shocking_vrc_core::AvatarScanner;
     use shocking_vrc_core::cli::{AlarmConfig, AlarmController, CliConfig, ZoneEntry, ZoneId};
     use shocking_vrc_core::presets::{ZonePreset, ZonePresetEntry};
@@ -386,9 +337,7 @@ mod tests {
     }
 
     fn set(name: &str, zones_a: usize, zones_b: usize) -> ZonePresetEntry {
-        let zone = |i: usize| {
-            ZoneEntry::with_default_mode(ZoneId::new(OldZoneType::DGB, format!("Zone{i}")))
-        };
+        let zone = |i: usize| ZoneEntry::with_default_mode(ZoneId::new(OldZoneType::DGB, format!("Zone{i}")));
         let mut cfg = CliConfig::default();
         cfg.channel_a.zones = (0..zones_a).map(zone).collect();
         cfg.channel_b.zones = (0..zones_b).map(zone).collect();
@@ -400,16 +349,12 @@ mod tests {
 
     fn draw_at(app: &mut App, w: u16, h: u16) {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal
-            .draw(|frame| crate::tui::ui::draw(frame, app))
-            .unwrap();
+        terminal.draw(|frame| crate::tui::ui::draw(frame, app)).unwrap();
     }
 
     fn draw_to_text(app: &mut App, w: u16, h: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal
-            .draw(|frame| crate::tui::ui::draw(frame, app))
-            .unwrap();
+        terminal.draw(|frame| crate::tui::ui::draw(frame, app)).unwrap();
         let buf = terminal.backend().buffer().clone();
         (0..buf.area.height)
             .map(|y| {

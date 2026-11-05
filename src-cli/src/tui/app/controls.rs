@@ -6,15 +6,50 @@ use super::{Action, AlarmField, Channel, ModKind, NormField, UkfField};
 pub fn mod_function_list() -> Vec<ModulationFunction> {
     use ModulationFunction::*;
     vec![
-        None, Sin, Cos, Tan, SinCos, Sin2, Cos2, SinPlusCos,
-        Sinh, Cosh, Tanh,
-        Square, Cube, Pow4, Sqrt, Cbrt, Abs, Sign,
-        Exp, ExpNeg, Pow2x, Pow10x,
-        Ln, Log2, Log10,
-        Triangle, Saw, ReverseSaw, SquareWave, Pulse, Bounce,
-        Sigmoid, SmoothStep, SmootherStep, Logistic, SoftSign,
-        Perlin, Simplex, Fractal, ValueNoise,
-        SinPlusNoise, SinTimesNoise, TrianglePlusSin, SquareTimesSigmoid,
+        None,
+        Sin,
+        Cos,
+        Tan,
+        SinCos,
+        Sin2,
+        Cos2,
+        SinPlusCos,
+        Sinh,
+        Cosh,
+        Tanh,
+        Square,
+        Cube,
+        Pow4,
+        Sqrt,
+        Cbrt,
+        Abs,
+        Sign,
+        Exp,
+        ExpNeg,
+        Pow2x,
+        Pow10x,
+        Ln,
+        Log2,
+        Log10,
+        Triangle,
+        Saw,
+        ReverseSaw,
+        SquareWave,
+        Pulse,
+        Bounce,
+        Sigmoid,
+        SmoothStep,
+        SmootherStep,
+        Logistic,
+        SoftSign,
+        Perlin,
+        Simplex,
+        Fractal,
+        ValueNoise,
+        SinPlusNoise,
+        SinTimesNoise,
+        TrianglePlusSin,
+        SquareTimesSigmoid,
     ]
 }
 
@@ -63,11 +98,7 @@ pub fn agg_name(m: &AggregationMode) -> &'static str {
 }
 
 pub fn aggregation_modes() -> &'static [AggregationMode; 3] {
-    &[
-        AggregationMode::Max,
-        AggregationMode::Sum,
-        AggregationMode::Average,
-    ]
+    &[AggregationMode::Max, AggregationMode::Sum, AggregationMode::Average]
 }
 
 pub fn mod_kind_name(k: ModKind) -> &'static str {

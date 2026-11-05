@@ -85,9 +85,7 @@ impl AlarmConfig {
         self.hour = self.hour.min(23);
         self.minute = self.minute.min(59);
         self.start_strength = self.start_strength.min(Self::MAX_STRENGTH);
-        self.peak_strength = self
-            .peak_strength
-            .clamp(self.start_strength, Self::MAX_STRENGTH);
+        self.peak_strength = self.peak_strength.clamp(self.start_strength, Self::MAX_STRENGTH);
         self.ramp_secs = self.ramp_secs.min(Self::RAMP_MAX_SECS);
         self.max_duration_secs = self
             .max_duration_secs
@@ -200,15 +198,8 @@ pub enum AlarmEvent {
 #[derive(Debug, Clone, Copy)]
 enum RingState {
     Idle,
-    Ringing {
-        started: Instant,
-        test: bool,
-    },
-    Snoozed {
-        until: Instant,
-        test: bool,
-        retrying: bool,
-    },
+    Ringing { started: Instant, test: bool },
+    Snoozed { until: Instant, test: bool, retrying: bool },
 }
 
 #[derive(Debug)]
@@ -281,12 +272,7 @@ impl AlarmRuntime {
         Some(AlarmEvent::TestStarted)
     }
 
-    pub fn tick(
-        &mut self,
-        cfg: &AlarmConfig,
-        clock: LocalClock,
-        now: Instant,
-    ) -> (AlarmStatus, Option<AlarmEvent>) {
+    pub fn tick(&mut self, cfg: &AlarmConfig, clock: LocalClock, now: Instant) -> (AlarmStatus, Option<AlarmEvent>) {
         if !self.primed {
             self.prime(cfg, clock);
         }
@@ -307,10 +293,7 @@ impl AlarmRuntime {
 
         if let RingState::Snoozed { until, test, .. } = self.state {
             if now >= until {
-                self.state = RingState::Ringing {
-                    started: now,
-                    test,
-                };
+                self.state = RingState::Ringing { started: now, test };
                 event = Some(AlarmEvent::SnoozeEnded);
             }
         }
@@ -370,11 +353,7 @@ impl AlarmRuntime {
                     0
                 };
             }
-            RingState::Snoozed {
-                until,
-                test,
-                retrying,
-            } => {
+            RingState::Snoozed { until, test, retrying } => {
                 status.test = test;
                 status.retrying = retrying;
                 status.snooze_left_secs = until.saturating_duration_since(now).as_secs() as u32;
@@ -419,11 +398,7 @@ impl AlarmController {
     }
 
     pub fn config(&self) -> AlarmConfig {
-        self.inner
-            .config
-            .read()
-            .map(|c| c.clone())
-            .unwrap_or_default()
+        self.inner.config.read().map(|c| c.clone()).unwrap_or_default()
     }
 
     pub fn set_config(&self, mut config: AlarmConfig) {
@@ -449,12 +424,7 @@ impl AlarmController {
     }
 
     pub fn stop(&self) {
-        let event = self
-            .inner
-            .runtime
-            .lock()
-            .ok()
-            .and_then(|mut runtime| runtime.stop());
+        let event = self.inner.runtime.lock().ok().and_then(|mut runtime| runtime.stop());
         self.tick();
         if event.is_some() {
             info!("[alarm] Dismissed");
@@ -538,18 +508,14 @@ fn log_alarm_event(event: AlarmEvent, cfg: &AlarmConfig, attempt: u8) {
         ),
         AlarmEvent::TestStarted => info!("[alarm] Test ring started"),
         AlarmEvent::Snoozed => info!("[alarm] Snoozed for {} min", cfg.snooze_mins),
-        AlarmEvent::SnoozeEnded => info!(
-            "[alarm] Ringing again (attempt {attempt}/{})",
-            cfg.repeats
-        ),
+        AlarmEvent::SnoozeEnded => info!("[alarm] Ringing again (attempt {attempt}/{})", cfg.repeats),
         AlarmEvent::Retrying => info!(
             "[alarm] Nobody woke up — retrying in {} min (attempt {attempt}/{})",
             cfg.snooze_mins, cfg.repeats
         ),
-        AlarmEvent::AutoStopped => info!(
-            "[alarm] Gave up after {} attempt(s) of {}s",
-            cfg.repeats, cfg.max_duration_secs
-        ),
+        AlarmEvent::AutoStopped => {
+            info!("[alarm] Gave up after {} attempt(s) of {}s", cfg.repeats, cfg.max_duration_secs)
+        }
         AlarmEvent::Stopped => info!("[alarm] Dismissed"),
     }
 }
@@ -639,10 +605,7 @@ mod tests {
         assert!(!cfg.pulse_open(Duration::from_millis(1199)));
         assert!(cfg.pulse_open(Duration::from_millis(1200)));
 
-        let steady = AlarmConfig {
-            pulse_off_ms: 0,
-            ..cfg
-        };
+        let steady = AlarmConfig { pulse_off_ms: 0, ..cfg };
         assert!(steady.pulse_open(Duration::from_millis(5000)));
     }
 

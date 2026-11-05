@@ -55,22 +55,16 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     .split(inner);
 
     frame.render_widget(
-        Paragraph::new(format!(
-            "Version {} → {}",
-            shocking_vrc_core::VERSION,
-            release.tag
-        ))
-        .style(Style::default().fg(theme::TEXT)),
+        Paragraph::new(format!("Version {} → {}", shocking_vrc_core::VERSION, release.tag))
+            .style(Style::default().fg(theme::TEXT)),
         rows[0],
     );
 
     if app.update_downloading {
-        let progress = app
-            .update_progress
-            .unwrap_or(shocking_vrc_core::DownloadProgress {
-                downloaded: 0,
-                total: (release.asset_size > 0).then_some(release.asset_size),
-            });
+        let progress = app.update_progress.unwrap_or(shocking_vrc_core::DownloadProgress {
+            downloaded: 0,
+            total: (release.asset_size > 0).then_some(release.asset_size),
+        });
         let gauge = Gauge::default()
             .gauge_style(Style::default().fg(theme::ACCENT).bg(theme::SURFACE_ELEVATED))
             .ratio(progress.ratio())
@@ -93,28 +87,21 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
             rows[1],
         );
         frame.render_widget(
-            Paragraph::new("Details are in the Log tab.")
-                .style(Style::default().fg(theme::TEXT_DIM)),
+            Paragraph::new("Details are in the Log tab.").style(Style::default().fg(theme::TEXT_DIM)),
             rows[2],
         );
         let btn_row = rows[3];
-        let cols = Layout::horizontal([
-            Constraint::Length(12),
-            Constraint::Length(10),
-            Constraint::Min(0),
-        ])
-        .split(btn_row);
+        let cols =
+            Layout::horizontal([Constraint::Length(12), Constraint::Length(10), Constraint::Min(0)]).split(btn_row);
         ui::button(frame, app, cols[0], "Retry", false, Action::ConfirmUpdate);
         ui::button(frame, app, cols[1], "Later", false, Action::DismissUpdate);
         frame.render_widget(
-            Paragraph::new("Y/Enter retry · N/Esc later")
-                .style(Style::default().fg(theme::TEXT_DIM)),
+            Paragraph::new("Y/Enter retry · N/Esc later").style(Style::default().fg(theme::TEXT_DIM)),
             cols[2],
         );
     } else {
         frame.render_widget(
-            Paragraph::new("Install the latest release from GitHub?")
-                .style(Style::default().fg(theme::TEXT_DIM)),
+            Paragraph::new("Install the latest release from GitHub?").style(Style::default().fg(theme::TEXT_DIM)),
             rows[1],
         );
         frame.render_widget(
@@ -132,13 +119,6 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
         .split(btn_row);
         ui::button(frame, app, cols[0], "Yes", false, Action::ConfirmUpdate);
         ui::button(frame, app, cols[1], "No", false, Action::DismissUpdate);
-        ui::button(
-            frame,
-            app,
-            cols[2],
-            "Skip version",
-            false,
-            Action::SkipUpdateVersion,
-        );
+        ui::button(frame, app, cols[2], "Skip version", false, Action::SkipUpdateVersion);
     }
 }

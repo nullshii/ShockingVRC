@@ -8,11 +8,7 @@ use crate::bridge::Command;
 use crate::model::Channel;
 use crate::theme::widgets::{self as w, font, space};
 
-const AGGREGATIONS: [AggregationMode; 3] = [
-    AggregationMode::Max,
-    AggregationMode::Sum,
-    AggregationMode::Average,
-];
+const AGGREGATIONS: [AggregationMode; 3] = [AggregationMode::Max, AggregationMode::Sum, AggregationMode::Average];
 
 pub fn show(ui: &mut Ui, cx: &mut Ctx) {
     let gap = space::SHEET_GAP;
@@ -105,8 +101,7 @@ fn channel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
             pal,
             "Max",
             52.0,
-            w::Slider::new(cfg.limits.max as f32, 0.0, 200.0)
-                .fill(if danger { pal.error } else { pal.accent }),
+            w::Slider::new(cfg.limits.max as f32, 0.0, 200.0).fill(if danger { pal.error } else { pal.accent }),
             &cfg.limits.max.to_string(),
             66.0,
             Some(if danger { pal.error } else { pal.contrast }),
@@ -123,21 +118,14 @@ fn channel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
                 .color(pal.error),
             );
         } else {
-            w::dim(
-                ui,
-                pal,
-                "The ceiling is your safety net. Presets never change it.",
-            );
+            w::dim(ui, pal, "The ceiling is your safety net. Presets never change it.");
         }
         ui.add_space(space::ITEM_GAP);
 
         w::caption(ui, pal, "Zone mix");
         ui.add_space(2.0);
         ui.horizontal(|ui| {
-            let cur = AGGREGATIONS
-                .iter()
-                .position(|m| *m == cfg.aggregation)
-                .unwrap_or(0);
+            let cur = AGGREGATIONS.iter().position(|m| *m == cfg.aggregation).unwrap_or(0);
             if let Some(p) = w::segmented(ui, pal, &["Max", "Sum", "Average"], cur) {
                 cx.send(Command::SetAggregation(ch, AGGREGATIONS[p]));
             }
@@ -163,10 +151,7 @@ fn waveform_preview(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
     let inner = rect.shrink(5.0);
 
     let label_h = 12.0;
-    let plot = Rect::from_min_max(
-        egui::pos2(inner.left(), inner.top() + label_h),
-        inner.max,
-    );
+    let plot = Rect::from_min_max(egui::pos2(inner.left(), inner.top() + label_h), inner.max);
 
     let periods: [f32; 4] = std::array::from_fn(|i| {
         let hz = raw_to_hz(cfg.frequency[i]).max(1.0);
@@ -174,11 +159,7 @@ fn waveform_preview(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
     });
     let total: f32 = periods.iter().sum::<f32>().max(1e-6);
     let driven = live.strength > 0;
-    let fill = if driven {
-        pal.accent
-    } else {
-        pal.faded(pal.accent, 0.5)
-    };
+    let fill = if driven { pal.accent } else { pal.faded(pal.accent, 0.5) };
 
     let mut x = plot.left();
     for (seg, (period, intensity)) in periods.iter().zip(cfg.intensity.iter()).enumerate() {
@@ -186,16 +167,10 @@ fn waveform_preview(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
         let amp = (*intensity as f32 / 100.0).clamp(0.0, 1.0);
         let h = plot.height() * amp;
 
-        let slot = Rect::from_min_size(
-            egui::pos2(x + 1.0, plot.top()),
-            vec2((width - 2.0).max(1.0), plot.height()),
-        );
+        let slot = Rect::from_min_size(egui::pos2(x + 1.0, plot.top()), vec2((width - 2.0).max(1.0), plot.height()));
         ui.painter().rect_filled(slot, w::SQUARE, pal.well);
         ui.painter().rect_filled(
-            Rect::from_min_size(
-                egui::pos2(slot.left(), plot.bottom() - h),
-                vec2(slot.width(), h),
-            ),
+            Rect::from_min_size(egui::pos2(slot.left(), plot.bottom() - h), vec2(slot.width(), h)),
             w::SQUARE,
             fill,
         );

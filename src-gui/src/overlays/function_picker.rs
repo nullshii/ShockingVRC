@@ -1,14 +1,12 @@
 use egui::{Align2, Rect, Ui, vec2};
 
 use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationFunction};
-use shocking_vrc_core::modulation::evaluator::{
-    KinematicsInput, advance_accumulator, evaluate_with_accumulator,
-};
+use shocking_vrc_core::modulation::evaluator::{KinematicsInput, advance_accumulator, evaluate_with_accumulator};
 
 use crate::app::Ctx;
 use crate::model::{function_group, mod_function_list_for};
-use crate::theme::widgets::{self as w, font, space};
 use crate::theme::Palette;
+use crate::theme::widgets::{self as w, font, space};
 
 pub fn show(ctx: &egui::Context, cx: &mut Ctx) {
     let pal = cx.pal;
@@ -26,13 +24,7 @@ pub fn show(ctx: &egui::Context, cx: &mut Ctx) {
             "The shape the modulated value traces over time. Hover a row to preview it.",
         );
         ui.add_space(space::ROW_GAP);
-        w::text_field(
-            ui,
-            pal,
-            &mut cx.ui_state.function_filter,
-            "search…",
-            ui.available_width(),
-        );
+        w::text_field(ui, pal, &mut cx.ui_state.function_filter, "search…", ui.available_width());
         ui.add_space(space::ROW_GAP);
 
         let matches: Vec<&ModulationFunction> = all
@@ -74,10 +66,7 @@ pub fn show(ctx: &egui::Context, cx: &mut Ctx) {
                         Align2::LEFT_CENTER,
                     );
 
-                    let spark = Rect::from_min_max(
-                        egui::pos2(inner.left() + 190.0, inner.top()),
-                        inner.max,
-                    );
+                    let spark = Rect::from_min_max(egui::pos2(inner.left() + 190.0, inner.top()), inner.max);
                     if spark.width() > 40.0 {
                         sparkline(ui, pal, spark, f, selected || resp.hovered());
                     }

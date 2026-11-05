@@ -1,17 +1,14 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use egui::emath::TSTransform;
-use egui::{
-    Align2, Color32, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
-};
+use egui::{Align2, Color32, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 
 use shocking_vrc_core::OldZoneType;
 use shocking_vrc_core::cli::GraphChannelOutput;
 use shocking_vrc_core::graph::device::MAX_CHANNELS;
 use shocking_vrc_core::graph::kind::*;
 use shocking_vrc_core::graph::{
-    DeviceBinding, GraphIssue, Node, NodeId, NodeKind, NodeProbe, NodeTint, PinType, ScopeTrace,
-    Severity,
+    DeviceBinding, GraphIssue, Node, NodeId, NodeKind, NodeProbe, NodeTint, PinType, ScopeTrace, Severity,
 };
 
 use super::{PinEnd, Typing};
@@ -370,7 +367,16 @@ fn node_text_edit(ui: &mut Ui, z: Z, rect: Rect, buf: &mut String, hint: &str) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn node_slider(ui: &mut Ui, pal: &Palette, z: Z, rect: Rect, id: egui::Id, value: f32, min: f32, max: f32) -> Option<f32> {
+fn node_slider(
+    ui: &mut Ui,
+    pal: &Palette,
+    z: Z,
+    rect: Rect,
+    id: egui::Id,
+    value: f32,
+    min: f32,
+    max: f32,
+) -> Option<f32> {
     let resp = ui.interact(rect, id, Sense::click_and_drag());
     let track = Rect::from_center_size(rect.center(), vec2(rect.width(), z.px(10.0).max(3.0)));
     let p = ui.painter();
@@ -389,10 +395,7 @@ fn node_slider(ui: &mut Ui, pal: &Palette, z: Z, rect: Rect, id: egui::Id, value
         StrokeKind::Inside,
     );
     let tx = track.left() + frac * track.width();
-    let thumb = Rect::from_center_size(
-        pos2(tx, track.center().y),
-        vec2(z.px(11.0).max(4.0), z.px(16.0).max(6.0)),
-    );
+    let thumb = Rect::from_center_size(pos2(tx, track.center().y), vec2(z.px(11.0).max(4.0), z.px(16.0).max(6.0)));
     ui.painter().rect_filled(thumb, w::SQUARE, pal.contrast);
     ui.painter()
         .rect_stroke(thumb, w::SQUARE, Stroke::new(1.0, pal.base), StrokeKind::Inside);
@@ -458,7 +461,14 @@ fn value_cell(
         Stroke::new(1.0, if hovered { pal.accent } else { pal.hair }),
         StrokeKind::Inside,
     );
-    small(ui, z, rect.shrink2(z.v(4.0, 0.0)), &fmt_value(*value), pal.contrast, Align2::RIGHT_CENTER);
+    small(
+        ui,
+        z,
+        rect.shrink2(z.v(4.0, 0.0)),
+        &fmt_value(*value),
+        pal.contrast,
+        Align2::RIGHT_CENTER,
+    );
     if hovered {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
     }
@@ -491,7 +501,14 @@ fn cycle(ui: &mut Ui, pal: &Palette, z: Z, rect: Rect, id: egui::Id, label: &str
         Stroke::new(1.0, if hovered { pal.accent } else { pal.hair }),
         StrokeKind::Inside,
     );
-    small(ui, z, rect, &format!("‹ {label} ›"), if hovered { pal.accent } else { pal.contrast }, Align2::CENTER_CENTER);
+    small(
+        ui,
+        z,
+        rect,
+        &format!("‹ {label} ›"),
+        if hovered { pal.accent } else { pal.contrast },
+        Align2::CENTER_CENTER,
+    );
     if hovered {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -553,9 +570,7 @@ fn plot(ui: &Ui, pal: &Palette, rect: Rect, values: &VecDeque<f32>, color: Color
     if values.len() < 2 {
         return;
     }
-    let (lo, hi) = values
-        .iter()
-        .fold((0.0f32, 1.0f32), |(a, b), v| (a.min(*v), b.max(*v)));
+    let (lo, hi) = values.iter().fold((0.0f32, 1.0f32), |(a, b), v| (a.min(*v), b.max(*v)));
     let span = (hi - lo).max(1e-3);
     let n = super::TRACE_LEN.max(values.len());
     let pts: Vec<Pos2> = values
@@ -573,13 +588,7 @@ fn plot(ui: &Ui, pal: &Palette, rect: Rect, values: &VecDeque<f32>, color: Color
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn draw(
-    ui: &mut Ui,
-    node: &mut Node,
-    lay: &NodeLayout,
-    v: &NodeView,
-    typing: &mut Option<Typing>,
-) -> NodeResponse {
+pub fn draw(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView, typing: &mut Option<Typing>) -> NodeResponse {
     let pal = v.pal;
     let z = Z(v.zoom);
     let mut out = NodeResponse::default();
@@ -603,9 +612,20 @@ pub fn draw(
         let tint = node.tint.map(|t| tint_color(pal, t)).unwrap_or(pal.hair);
         w::dashed_rect(ui, lay.rect, if v.selected { pal.accent } else { tint });
         let resp = ui.interact(lay.header, base_id.with("hdr"), Sense::click_and_drag());
-        let title = if node.title.is_empty() { "Frame".to_string() } else { node.title.clone() };
+        let title = if node.title.is_empty() {
+            "Frame".to_string()
+        } else {
+            node.title.clone()
+        };
         if z.text() {
-            w::text_in(ui, lay.header.shrink2(z.v(PAD, 0.0)), &title.to_uppercase(), z.font(font::small()), tint, Align2::LEFT_CENTER);
+            w::text_in(
+                ui,
+                lay.header.shrink2(z.v(PAD, 0.0)),
+                &title.to_uppercase(),
+                z.font(font::small()),
+                tint,
+                Align2::LEFT_CENTER,
+            );
         }
         if !p.text.is_empty() && z.text() {
             let galley = ui.painter().layout(
@@ -614,13 +634,16 @@ pub fn draw(
                 pal.dim,
                 (lay.body.width() - z.px(PAD * 2.0)).max(10.0),
             );
-            ui.painter()
-                .with_clip_rect(lay.body.intersect(ui.clip_rect()))
-                .galley(lay.body.min + z.v(PAD, 2.0), galley, pal.dim);
+            ui.painter().with_clip_rect(lay.body.intersect(ui.clip_rect())).galley(
+                lay.body.min + z.v(PAD, 2.0),
+                galley,
+                pal.dim,
+            );
         }
         let grip = Rect::from_min_size(lay.rect.max - vec2(12.0, 12.0), vec2(12.0, 12.0));
         let g = ui.interact(grip, base_id.with("grip"), Sense::drag());
-        ui.painter().line_segment([grip.left_bottom(), grip.right_top()], Stroke::new(1.0, tint));
+        ui.painter()
+            .line_segment([grip.left_bottom(), grip.right_top()], Stroke::new(1.0, tint));
         if g.dragged() {
             out.resize = Some(g.drag_delta() / z.0);
         }
@@ -676,7 +699,14 @@ pub fn draw(
     let resp = ui.interact(lay.header, base_id.with("hdr"), Sense::click_and_drag());
     let title_rect = chip.shrink2(z.v(6.0, 0.0));
     if z.text() {
-        w::text_in(ui, title_rect, &node.display_title().to_uppercase(), z.font(font::small()), pal.on_solid(), Align2::LEFT_CENTER);
+        w::text_in(
+            ui,
+            title_rect,
+            &node.display_title().to_uppercase(),
+            z.font(font::small()),
+            pal.on_solid(),
+            Align2::LEFT_CENTER,
+        );
     }
     if let Some(d) = &v.device {
         let state = match (d.online, d.battery) {
@@ -740,10 +770,8 @@ fn inputs_rows(
             small(ui, z, r, &ch.label.to_uppercase(), fade(pal.contrast), Align2::LEFT_CENTER);
             if let Some(o) = v.device.as_ref().and_then(|dv| dv.outputs.map(|o| o[*ci])) {
                 let cap = v.device.as_ref().map(|dv| dv.caps[*ci]).unwrap_or(0);
-                let mid = Rect::from_min_max(
-                    pos2(r.left() + z.px(76.0), r.top()),
-                    pos2(r.right() - z.px(58.0), r.bottom()),
-                );
+                let mid =
+                    Rect::from_min_max(pos2(r.left() + z.px(76.0), r.top()), pos2(r.right() - z.px(58.0), r.bottom()));
                 small(
                     ui,
                     z,
@@ -773,7 +801,14 @@ fn inputs_rows(
         let connected = v.connected.contains(&p.key);
         let split = r.left() + r.width() * 0.5;
         let label_r = Rect::from_min_max(r.min, pos2(split, r.bottom()));
-        small(ui, z, label_r, &p.label, fade(if connected { pal.contrast } else { pal.dim }), Align2::LEFT_CENTER);
+        small(
+            ui,
+            z,
+            label_r,
+            &p.label,
+            fade(if connected { pal.contrast } else { pal.dim }),
+            Align2::LEFT_CENTER,
+        );
         let cell = Rect::from_min_max(
             pos2(split + z.px(4.0), r.top() + z.px(2.0)),
             pos2(r.right(), r.bottom() - z.px(2.0)),
@@ -796,7 +831,18 @@ fn inputs_rows(
             }
         } else {
             let mut val = node.defaults.get(&p.key).copied().unwrap_or(p.default);
-            if value_cell(ui, pal, z, cell, base_id.with(("def", &p.key)), &mut val, p.range, typing, node.id, &p.key) {
+            if value_cell(
+                ui,
+                pal,
+                z,
+                cell,
+                base_id.with(("def", &p.key)),
+                &mut val,
+                p.range,
+                typing,
+                node.id,
+                &p.key,
+            ) {
                 node.defaults.insert(p.key.clone(), val);
             }
         }
@@ -822,7 +868,13 @@ fn body(
     let bid = |s: &str| base_id.with(("body", s));
     match &mut node.kind {
         NodeKind::Contact(p) => {
-            let types = [OldZoneType::Any, OldZoneType::Pen, OldZoneType::Orf, OldZoneType::Touch, OldZoneType::DGB];
+            let types = [
+                OldZoneType::Any,
+                OldZoneType::Pen,
+                OldZoneType::Orf,
+                OldZoneType::Touch,
+                OldZoneType::DGB,
+            ];
             let c = cells(z, rows[0], 1)[0];
             let by = cycle(ui, pal, z, c, bid("zt"), &p.zone.zone_type.to_string());
             if by != 0 {
@@ -836,7 +888,14 @@ fn body(
             node_text_edit(ui, z, c, &mut p.address, "/avatar/parameters/…");
             let fresh = v.probe.and_then(|pr| pr.outputs.get(1)).is_some_and(|f| *f > 0.5);
             if !fresh {
-                small(ui, z, lay.header.shrink2(z.v(10.0, 0.0)), "stale", pal.on_solid(), Align2::RIGHT_CENTER);
+                small(
+                    ui,
+                    z,
+                    lay.header.shrink2(z.v(10.0, 0.0)),
+                    "stale",
+                    pal.on_solid(),
+                    Align2::RIGHT_CENTER,
+                );
             }
         }
         NodeKind::Constant(p) => {
@@ -864,12 +923,24 @@ fn body(
             }
         }
         NodeKind::Ukf(p) => {
-            small(ui, z, rows[0].shrink2(z.v(PAD, 0.0)), &format!("q {}  r {}", fmt_value(p.ukf.q), fmt_value(p.ukf.r)), pal.dim, Align2::LEFT_CENTER);
+            small(
+                ui,
+                z,
+                rows[0].shrink2(z.v(PAD, 0.0)),
+                &format!("q {}  r {}", fmt_value(p.ukf.q), fmt_value(p.ukf.r)),
+                pal.dim,
+                Align2::LEFT_CENTER,
+            );
             small(
                 ui,
                 z,
                 rows[1].shrink2(z.v(PAD, 0.0)),
-                &format!("norm ÷ {} / {} / {}", short(p.norms.speed), short(p.norms.acc), short(p.norms.recoil)),
+                &format!(
+                    "norm ÷ {} / {} / {}",
+                    short(p.norms.speed),
+                    short(p.norms.acc),
+                    short(p.norms.recoil)
+                ),
                 pal.dim,
                 Align2::LEFT_CENTER,
             );
@@ -877,10 +948,32 @@ fn body(
         NodeKind::Smooth(p) => {
             let c = cells(z, rows[0], 2);
             small(ui, z, c[0], "attack ms", pal.dim, Align2::LEFT_CENTER);
-            value_cell(ui, pal, z, c[1], bid("a"), &mut p.attack_ms, (0.0, 2000.0), typing, id, "attack_ms");
+            value_cell(
+                ui,
+                pal,
+                z,
+                c[1],
+                bid("a"),
+                &mut p.attack_ms,
+                (0.0, 2000.0),
+                typing,
+                id,
+                "attack_ms",
+            );
             let c = cells(z, rows[1], 2);
             small(ui, z, c[0], "release ms", pal.dim, Align2::LEFT_CENTER);
-            value_cell(ui, pal, z, c[1], bid("r"), &mut p.release_ms, (0.0, 2000.0), typing, id, "release_ms");
+            value_cell(
+                ui,
+                pal,
+                z,
+                c[1],
+                bid("r"),
+                &mut p.release_ms,
+                (0.0, 2000.0),
+                typing,
+                id,
+                "release_ms",
+            );
         }
         NodeKind::Integrate(p) => {
             let c = cells(z, rows[0], 2);
@@ -890,7 +983,18 @@ fn body(
         NodeKind::MovingAverage(p) => {
             let c = cells(z, rows[0], 2);
             small(ui, z, c[0], "window ms", pal.dim, Align2::LEFT_CENTER);
-            value_cell(ui, pal, z, c[1], bid("w"), &mut p.window_ms, (25.0, 5000.0), typing, id, "window_ms");
+            value_cell(
+                ui,
+                pal,
+                z,
+                c[1],
+                bid("w"),
+                &mut p.window_ms,
+                (25.0, 5000.0),
+                typing,
+                id,
+                "window_ms",
+            );
         }
         NodeKind::Normalize(p) => {
             let c = cells(z, rows[0], 2);
@@ -931,7 +1035,12 @@ fn body(
                 ui,
                 z,
                 rows[1].shrink2(z.v(PAD, 0.0)),
-                &format!("dev {}  off {}  ×{}", fmt_value(p.max_deviation), fmt_value(p.offset), fmt_value(p.frequency_multiplier)),
+                &format!(
+                    "dev {}  off {}  ×{}",
+                    fmt_value(p.max_deviation),
+                    fmt_value(p.offset),
+                    fmt_value(p.frequency_multiplier)
+                ),
                 pal.dim,
                 Align2::LEFT_CENTER,
             );
@@ -951,7 +1060,15 @@ fn body(
                 p.shape = step(&LfoShape::ALL, p.shape, by);
             }
             let c = cells(z, rows[1], 1)[0];
-            if tag_button(ui, pal, z, c, bid("os"), if p.one_shot { "one-shot" } else { "looping" }, p.one_shot) {
+            if tag_button(
+                ui,
+                pal,
+                z,
+                c,
+                bid("os"),
+                if p.one_shot { "one-shot" } else { "looping" },
+                p.one_shot,
+            ) {
                 p.one_shot = !p.one_shot;
             }
         }
@@ -980,7 +1097,14 @@ fn body(
                 .and_then(|pr| pr.inputs.first().copied())
                 .or_else(|| node.defaults.get("hz").copied())
                 .unwrap_or(2.0);
-            small(ui, z, c[0], &format!("{:.0} bpm", hz.max(0.0) * 60.0), pal.dim, Align2::LEFT_CENTER);
+            small(
+                ui,
+                z,
+                c[0],
+                &format!("{:.0} bpm", hz.max(0.0) * 60.0),
+                pal.dim,
+                Align2::LEFT_CENTER,
+            );
             let out = |k: usize| v.probe.and_then(|pr| pr.outputs.get(k)).is_some_and(|x| *x > 0.5);
             let lamp = Rect::from_center_size(
                 pos2(c[1].right() - c[1].height() * 0.5, c[1].center().y),
@@ -1046,7 +1170,11 @@ fn body(
                     pos2(area.left() + k as f32 * bw + 1.0, area.bottom() - h),
                     pos2(area.left() + (k + 1) as f32 * bw - 1.0, area.bottom()),
                 );
-                let col = if current == Some(k) { pal.accent } else { pal.faded(pal.accent, 0.5) };
+                let col = if current == Some(k) {
+                    pal.accent
+                } else {
+                    pal.faded(pal.accent, 0.5)
+                };
                 ui.painter().rect_filled(bar, w::SQUARE, col);
             }
             ui.painter()
@@ -1059,7 +1187,18 @@ fn body(
             }
             let c = cells(z, rows[1], 2);
             small(ui, z, c[0], "hysteresis", pal.dim, Align2::LEFT_CENTER);
-            value_cell(ui, pal, z, c[1], bid("h"), &mut p.hysteresis, (0.0, 0.5), typing, id, "hysteresis");
+            value_cell(
+                ui,
+                pal,
+                z,
+                c[1],
+                bid("h"),
+                &mut p.hysteresis,
+                (0.0, 0.5),
+                typing,
+                id,
+                "hysteresis",
+            );
         }
         NodeKind::Logic(p) => {
             let by = cycle(ui, pal, z, cells(z, rows[0], 1)[0], bid("op"), p.op.label());
@@ -1069,13 +1208,28 @@ fn body(
         }
         NodeKind::Crossfade(p) => {
             let c = cells(z, rows[0], 1)[0];
-            if tag_button(ui, pal, z, c, bid("ep"), if p.equal_power { "equal power" } else { "linear" }, p.equal_power) {
+            if tag_button(
+                ui,
+                pal,
+                z,
+                c,
+                bid("ep"),
+                if p.equal_power { "equal power" } else { "linear" },
+                p.equal_power,
+            ) {
                 p.equal_power = !p.equal_power;
             }
         }
         NodeKind::Group(p) => {
             let c = cells(z, rows[0], 2);
-            small(ui, z, c[0], &format!("{} node(s)", p.graph.nodes.len()), pal.dim, Align2::LEFT_CENTER);
+            small(
+                ui,
+                z,
+                c[0],
+                &format!("{} node(s)", p.graph.nodes.len()),
+                pal.dim,
+                Align2::LEFT_CENTER,
+            );
             if tag_button(ui, pal, z, c[1], bid("enter"), "enter ▸", false) {
                 out.enter_group = true;
             }
@@ -1103,7 +1257,14 @@ fn body(
             ui.painter()
                 .rect_stroke(c, w::SQUARE, Stroke::new(1.0, pal.error), StrokeKind::Inside);
             if z.text() {
-                w::text_in(ui, c, if p.latched { "RELEASE" } else { "PANIC" }, z.font(font::body()), fg, Align2::CENTER_CENTER);
+                w::text_in(
+                    ui,
+                    c,
+                    if p.latched { "RELEASE" } else { "PANIC" },
+                    z.font(font::body()),
+                    fg,
+                    Align2::CENTER_CENTER,
+                );
             }
             if resp.clicked() {
                 p.latched = !p.latched;
@@ -1123,7 +1284,14 @@ fn body(
             }
         }
         NodeKind::Missing(m) => {
-            small(ui, z, rows[0].shrink2(z.v(PAD, 0.0)), &format!("'{}' kept as-is", m.type_name), pal.error, Align2::LEFT_CENTER);
+            small(
+                ui,
+                z,
+                rows[0].shrink2(z.v(PAD, 0.0)),
+                &format!("'{}' kept as-is", m.type_name),
+                pal.error,
+                Align2::LEFT_CENTER,
+            );
         }
         _ => {}
     }
@@ -1221,8 +1389,11 @@ fn curve_editor(
         let px = rect.left() + x * rect.width();
         ui.painter()
             .vline(px, rect.y_range(), Stroke::new(1.0, pal.faded(pal.contrast, 0.4)));
-        ui.painter()
-            .rect_filled(Rect::from_center_size(to_screen([x, curve.eval(x)]), vec2(mark, mark)), w::SQUARE, pal.contrast);
+        ui.painter().rect_filled(
+            Rect::from_center_size(to_screen([x, curve.eval(x)]), vec2(mark, mark)),
+            w::SQUARE,
+            pal.contrast,
+        );
     }
 
     let base = ui.id().with(("curve", id.0));
@@ -1238,7 +1409,11 @@ fn curve_editor(
         let c = to_screen(curve.points[i]);
         let hit = Rect::from_center_size(c, Vec2::splat((10.0 * v.zoom).max(8.0)));
         let resp = ui.interact(hit, base.with(i), Sense::click_and_drag());
-        let col = if resp.hovered() || resp.dragged() { pal.accent } else { pal.contrast };
+        let col = if resp.hovered() || resp.dragged() {
+            pal.accent
+        } else {
+            pal.contrast
+        };
         ui.painter()
             .rect_filled(Rect::from_center_size(c, Vec2::splat((7.0 * v.zoom).max(4.0))), w::SQUARE, col);
         if resp.dragged()
@@ -1276,12 +1451,15 @@ fn pins(ui: &mut Ui, node: &Node, lay: &NodeLayout, v: &NodeView, base_id: egui:
                 ui.painter()
                     .rect_stroke(r, w::SQUARE, Stroke::new(1.5, col), StrokeKind::Inside);
             } else {
-                ui.painter().rect_filled(r, w::SQUARE, if connected { col } else { pal.faded(col, 0.45) });
+                ui.painter()
+                    .rect_filled(r, w::SQUARE, if connected { col } else { pal.faded(col, 0.45) });
             }
             if resp.hovered() {
                 ui.painter()
                     .rect_stroke(r.expand(2.0), w::SQUARE, Stroke::new(1.0, pal.contrast), StrokeKind::Outside);
-                let value = v.probe.and_then(|pr| if output { pr.outputs.get(i) } else { pr.inputs.get(i) });
+                let value = v
+                    .probe
+                    .and_then(|pr| if output { pr.outputs.get(i) } else { pr.inputs.get(i) });
                 let tip = match value {
                     Some(val) => format!("{} = {}", p.label, fmt_value(*val)),
                     None => p.label.clone(),

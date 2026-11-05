@@ -1,12 +1,10 @@
 use shocking_vrc_core::cli::{AlarmChannels, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId};
 
 use super::App;
-use super::{Action, Channel, ModKind};
 use super::controls::{agg_name, cycle_aggregation, cycle_mode, mod_function_list_for, mod_kind_name};
 use super::helpers::{apply_norm_step, apply_ukf_step, step_u8};
-use super::prefs::{
-    save_alarm_tab_pref, save_config, save_ui_prefs, should_persist_config, CONFIG_FILE,
-};
+use super::prefs::{CONFIG_FILE, save_alarm_tab_pref, save_config, save_ui_prefs, should_persist_config};
+use super::{Action, Channel, ModKind};
 
 impl App {
     pub async fn apply(&mut self, action: Action) {
@@ -53,8 +51,12 @@ impl App {
                 let id = self.channel_config(ch).zones.get(i).map(|e| e.id.clone());
                 if let Some(id) = id {
                     match ch {
-                        Channel::A => { engine.remove_zone_a(&id).await; }
-                        Channel::B => { engine.remove_zone_b(&id).await; }
+                        Channel::A => {
+                            engine.remove_zone_a(&id).await;
+                        }
+                        Channel::B => {
+                            engine.remove_zone_b(&id).await;
+                        }
                     }
                     log::info!("[ch-{}] Zone removed: {id}", ch.label());
                     self.refresh_config().await;
@@ -182,11 +184,7 @@ impl App {
                 let mut added = 0usize;
                 for z in &zones {
                     let id = ZoneId::new(z.zone_type, &z.id);
-                    let already = self
-                        .channel_config(ch)
-                        .zones
-                        .iter()
-                        .any(|e| e.id.matches(&id));
+                    let already = self.channel_config(ch).zones.iter().any(|e| e.id.matches(&id));
                     if !already {
                         let entry = ZoneEntry::with_default_mode(id.clone());
                         match ch {
@@ -466,10 +464,7 @@ impl App {
             }
             Action::CycleAlarmChannels(d) => {
                 let all = AlarmChannels::ALL;
-                let cur = all
-                    .iter()
-                    .position(|c| *c == self.alarm.channels)
-                    .unwrap_or(0) as i32;
+                let cur = all.iter().position(|c| *c == self.alarm.channels).unwrap_or(0) as i32;
                 let next = all[(cur + d).rem_euclid(all.len() as i32) as usize];
                 self.mutate_alarm(|a| a.channels = next);
                 log::info!("[alarm] Channel: {}", next.label());

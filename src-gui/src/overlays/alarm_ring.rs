@@ -57,11 +57,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
                         format_secs(st.auto_stop_in_secs as i32)
                     )
                 };
-                ui.label(
-                    egui::RichText::new(tail)
-                        .font(font::small())
-                        .color(pal.dim),
-                );
+                ui.label(egui::RichText::new(tail).font(font::small()).color(pal.dim));
 
                 if cx.snap.devices.is_empty() {
                     ui.add_space(4.0);

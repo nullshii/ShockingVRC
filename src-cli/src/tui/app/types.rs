@@ -147,10 +147,7 @@ impl AlarmField {
 
     fn step(self) -> i32 {
         match self {
-            AlarmField::Hour
-            | AlarmField::Minute
-            | AlarmField::Snooze
-            | AlarmField::Repeats => 1,
+            AlarmField::Hour | AlarmField::Minute | AlarmField::Snooze | AlarmField::Repeats => 1,
             AlarmField::StartStrength | AlarmField::PeakStrength => 1,
             AlarmField::Ramp => 10,
             AlarmField::MaxDuration => 30,
@@ -162,19 +159,11 @@ impl AlarmField {
         match self {
             AlarmField::Hour => (0, 23),
             AlarmField::Minute => (0, 59),
-            AlarmField::StartStrength | AlarmField::PeakStrength => {
-                (0, AlarmConfig::MAX_STRENGTH as i32)
-            }
+            AlarmField::StartStrength | AlarmField::PeakStrength => (0, AlarmConfig::MAX_STRENGTH as i32),
             AlarmField::Ramp => (0, AlarmConfig::RAMP_MAX_SECS as i32),
-            AlarmField::MaxDuration => (
-                AlarmConfig::DURATION_MIN_SECS as i32,
-                AlarmConfig::DURATION_MAX_SECS as i32,
-            ),
+            AlarmField::MaxDuration => (AlarmConfig::DURATION_MIN_SECS as i32, AlarmConfig::DURATION_MAX_SECS as i32),
             AlarmField::Repeats => (1, AlarmConfig::MAX_REPEATS as i32),
-            AlarmField::PulseOn => (
-                AlarmConfig::PULSE_MIN_MS as i32,
-                AlarmConfig::PULSE_MAX_MS as i32,
-            ),
+            AlarmField::PulseOn => (AlarmConfig::PULSE_MIN_MS as i32, AlarmConfig::PULSE_MAX_MS as i32),
             AlarmField::PulseOff => (0, AlarmConfig::PULSE_MAX_MS as i32),
             AlarmField::Snooze => (1, AlarmConfig::SNOOZE_MAX_MINS as i32),
         }
@@ -225,12 +214,8 @@ impl AlarmField {
         };
         self.set(cfg, next);
         match self {
-            AlarmField::StartStrength => {
-                cfg.peak_strength = cfg.peak_strength.max(cfg.start_strength)
-            }
-            AlarmField::PeakStrength => {
-                cfg.start_strength = cfg.start_strength.min(cfg.peak_strength)
-            }
+            AlarmField::StartStrength => cfg.peak_strength = cfg.peak_strength.max(cfg.start_strength),
+            AlarmField::PeakStrength => cfg.start_strength = cfg.start_strength.min(cfg.peak_strength),
             _ => {}
         }
     }
@@ -312,15 +297,8 @@ impl ModParam {
 
     pub fn step(self) -> f32 {
         match self {
-            ModParam::BaseSpeed
-            | ModParam::Sensitivity
-            | ModParam::Phase
-            | ModParam::FreqMul
-            | ModParam::Power => 0.1,
-            ModParam::MaxDeviation
-            | ModParam::Offset
-            | ModParam::ClampMin
-            | ModParam::ClampMax => 1.0,
+            ModParam::BaseSpeed | ModParam::Sensitivity | ModParam::Phase | ModParam::FreqMul | ModParam::Power => 0.1,
+            ModParam::MaxDeviation | ModParam::Offset | ModParam::ClampMin | ModParam::ClampMax => 1.0,
         }
     }
 
@@ -358,10 +336,7 @@ impl ModParam {
         match self {
             ModParam::Offset => v.clamp(-hi_limit, hi_limit),
             ModParam::ClampMin | ModParam::ClampMax => v.clamp(lo_limit, hi_limit),
-            ModParam::BaseSpeed
-            | ModParam::Sensitivity
-            | ModParam::MaxDeviation
-            | ModParam::Power => v.max(0.0),
+            ModParam::BaseSpeed | ModParam::Sensitivity | ModParam::MaxDeviation | ModParam::Power => v.max(0.0),
             ModParam::Phase => v,
             ModParam::FreqMul => v.max(0.001),
         }

@@ -5,13 +5,7 @@ use crate::bridge::Command;
 use crate::theme::widgets::{self as w, font, space};
 
 pub fn show(ctx: &Context, cx: &mut Ctx) {
-    let state = cx
-        .bridge
-        .shared
-        .update
-        .read()
-        .map(|u| (*u).clone())
-        .unwrap_or_default();
+    let state = cx.bridge.shared.update.read().map(|u| (*u).clone()).unwrap_or_default();
 
     let Some(release) = state.available.clone() else {
         return;
@@ -55,11 +49,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
         }
 
         if let Some(err) = &state.error {
-            ui.label(
-                egui::RichText::new(err)
-                    .font(font::small())
-                    .color(pal.error),
-            );
+            ui.label(egui::RichText::new(err).font(font::small()).color(pal.error));
             ui.add_space(4.0);
             w::dim(ui, pal, "Details are in the Log section.");
             ui.add_space(space::ITEM_GAP);

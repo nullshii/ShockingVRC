@@ -10,24 +10,21 @@ async fn main() {
     shocking_vrc_core::update::cleanup_staging_files();
 
     let log_buffer = tui_logger::init("info");
-    let opts = SessionOptions::from_args("Usage: shockingvrc-cli [--port <n>] [--scan-timeout <secs>] [--skip-update-check]");
+    let opts =
+        SessionOptions::from_args("Usage: shockingvrc-cli [--port <n>] [--scan-timeout <secs>] [--skip-update-check]");
 
-    log::info!(
-        "ShockingVRC CLI v{} — Hello DG-Lab Users",
-        shocking_vrc_core::VERSION
-    );
+    log::info!("ShockingVRC CLI v{} — Hello DG-Lab Users", shocking_vrc_core::VERSION);
 
     let state = runtime::start_session(&opts).await;
     log::info!("[cli] Ready.");
 
-    let pending_update =
-        match tui::run(Arc::clone(&state), log_buffer, opts.skip_update_check).await {
-            Ok(pending) => pending,
-            Err(e) => {
-                eprintln!("[cli] TUI error: {e}");
-                None
-            }
-        };
+    let pending_update = match tui::run(Arc::clone(&state), log_buffer, opts.skip_update_check).await {
+        Ok(pending) => pending,
+        Err(e) => {
+            eprintln!("[cli] TUI error: {e}");
+            None
+        }
+    };
 
     runtime::shutdown_session(&state).await;
 

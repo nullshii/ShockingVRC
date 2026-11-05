@@ -45,12 +45,7 @@ fn catalog(ui: &mut Ui, cx: &mut Ctx) {
         let Ok(s) = cx.bridge.shared.presets.read() else {
             return;
         };
-        (
-            s.entries.clone(),
-            s.loading,
-            s.error.clone(),
-            s.source.clone(),
-        )
+        (s.entries.clone(), s.loading, s.error.clone(), s.source.clone())
     };
     let visible = filtered(cx);
 
@@ -90,11 +85,7 @@ fn catalog(ui: &mut Ui, cx: &mut Ctx) {
             return;
         }
         if let Some(err) = &error {
-            ui.label(
-                egui::RichText::new(err)
-                    .font(font::small())
-                    .color(pal.error),
-            );
+            ui.label(egui::RichText::new(err).font(font::small()).color(pal.error));
             ui.add_space(4.0);
             w::dim(ui, pal, "Check your connection, or drop .json files into ./presets/.");
             return;
@@ -139,10 +130,7 @@ fn catalog(ui: &mut Ui, cx: &mut Ctx) {
                     };
                     w::text_in(
                         ui,
-                        Rect::from_min_size(
-                            inner.min + vec2(0.0, 17.0),
-                            vec2(inner.width() - 90.0, 13.0),
-                        ),
+                        Rect::from_min_size(inner.min + vec2(0.0, 17.0), vec2(inner.width() - 90.0, 13.0)),
                         &sub,
                         font::tiny(),
                         pal.dim,
@@ -150,10 +138,8 @@ fn catalog(ui: &mut Ui, cx: &mut Ctx) {
                     );
 
                     if e.user {
-                        let t = Rect::from_min_size(
-                            egui::pos2(inner.right() - 40.0, inner.top() + 1.0),
-                            vec2(40.0, 15.0),
-                        );
+                        let t =
+                            Rect::from_min_size(egui::pos2(inner.right() - 40.0, inner.top() + 1.0), vec2(40.0, 15.0));
                         ui.painter().rect_stroke(
                             t,
                             w::SQUARE,
@@ -210,11 +196,7 @@ fn detail(ui: &mut Ui, cx: &mut Ctx) {
             return;
         };
 
-        ui.label(
-            egui::RichText::new(&e.name)
-                .font(font::mono_big())
-                .color(pal.contrast),
-        );
+        ui.label(egui::RichText::new(&e.name).font(font::mono_big()).color(pal.contrast));
         w::dim(ui, pal, byline(&e));
         if !e.description.is_empty() {
             ui.add_space(4.0);

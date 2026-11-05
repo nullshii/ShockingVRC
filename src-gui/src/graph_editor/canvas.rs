@@ -316,9 +316,7 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
     let mut add_port: Option<NodeId> = None;
     let mut resize: Option<(NodeId, egui::Vec2)> = None;
     let wire_target = match (&ed.interaction, pointer_canvas) {
-        (Interaction::Wire { from }, Some(p)) => {
-            pin_under(&frame, p, !from.output, radius(PIN_SNAP)).map(|t| t.node)
-        }
+        (Interaction::Wire { from }, Some(p)) => pin_under(&frame, p, !from.output, radius(PIN_SNAP)).map(|t| t.node),
         _ => None,
     };
 
@@ -418,7 +416,11 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
     if let Some(id) = add_port {
         ed.edit(|g| {
             let Some(n) = g.node_mut(id) else { return };
-            let prefix = if matches!(n.kind, NodeKind::GroupInput(_)) { "in" } else { "out" };
+            let prefix = if matches!(n.kind, NodeKind::GroupInput(_)) {
+                "in"
+            } else {
+                "out"
+            };
             if let NodeKind::GroupInput(p) | NodeKind::GroupOutput(p) = &mut n.kind {
                 let k = (1..)
                     .map(|i| format!("{prefix}{i}"))
@@ -466,9 +468,7 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
             ed.begin_edit();
             ed.interaction = Interaction::MoveNodes { moved: false };
         }
-        if h.dragged_by(egui::PointerButton::Primary)
-            && matches!(ed.interaction, Interaction::MoveNodes { .. })
-        {
+        if h.dragged_by(egui::PointerButton::Primary) && matches!(ed.interaction, Interaction::MoveNodes { .. }) {
             let d = h.drag_delta() / zoom;
             if d != egui::Vec2::ZERO {
                 let mut moving: HashSet<NodeId> = ed.selection.iter().copied().collect();
@@ -535,7 +535,12 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
             let target = pin_under(&frame, p, !from.output, radius(PIN_SNAP));
             let end = target
                 .as_ref()
-                .and_then(|t| frame.layouts.get(&t.node).and_then(|l| if t.output { l.output(&t.key) } else { l.input(&t.key) }))
+                .and_then(|t| {
+                    frame
+                        .layouts
+                        .get(&t.node)
+                        .and_then(|l| if t.output { l.output(&t.key) } else { l.input(&t.key) })
+                })
                 .map(|s| s.pos)
                 .unwrap_or(p);
             let col = node_ui::pin_color(pal, a.ty);
@@ -621,12 +626,8 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
                 points.push(p);
             }
             let shown: Vec<Pos2> = points.iter().map(|p| to_screen(*p)).collect();
-            cui.painter().add(egui::Shape::dashed_line(
-                &shown,
-                Stroke::new(1.5, pal.error),
-                6.0,
-                4.0,
-            ));
+            cui.painter()
+                .add(egui::Shape::dashed_line(&shown, Stroke::new(1.5, pal.error), 6.0, 4.0));
             if released {
                 let mut cut = Vec::new();
                 for e in &scope.edges {
@@ -637,9 +638,9 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
                         continue;
                     };
                     let wire = sample(&bezier(a.pos, b.pos), 24);
-                    let hit = points.windows(2).any(|c| {
-                        wire.windows(2).any(|s| segments_cross(c[0], c[1], s[0], s[1]))
-                    });
+                    let hit = points
+                        .windows(2)
+                        .any(|c| wire.windows(2).any(|s| segments_cross(c[0], c[1], s[0], s[1])));
                     if hit {
                         cut.push(e.clone());
                     }
@@ -704,7 +705,9 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
 }
 
 fn splice_into(ed: &mut GraphEditor, env: &Env, scope: &Graph, node: NodeId, edge: usize) {
-    let Some(e) = scope.edges.get(edge).cloned() else { return };
+    let Some(e) = scope.edges.get(edge).cloned() else {
+        return;
+    };
     let Some(n) = scope.node(node) else { return };
     let (Some(input), Some(output)) = (n.inputs().into_iter().next(), n.outputs().into_iter().next()) else {
         return;
@@ -794,8 +797,7 @@ fn shortcuts(ed: &mut GraphEditor, env: &Env, ctx: &egui::Context, frame: &Frame
                     (Key::G, true, false) => ed.group_selection(env),
                     (Key::G, true, true) => ed.ungroup_selection(),
                     (Key::Tab, false, _) => {
-                        let single = (ed.selection.len() == 1)
-                            .then(|| *ed.selection.iter().next().expect("one"));
+                        let single = (ed.selection.len() == 1).then(|| *ed.selection.iter().next().expect("one"));
                         let is_group = single.is_some_and(|id| {
                             matches!(frame.scope.node(id).map(|n| &n.kind), Some(NodeKind::Group(_)))
                         });
@@ -904,7 +906,14 @@ pub fn thumbnail(ui: &mut Ui, pal: &Palette, rect: Rect, graph: &Graph) {
             layouts.get(&e.from.node).and_then(|l| l.output(&e.from.pin)),
             layouts.get(&e.to.node).and_then(|l| l.input(&e.to.pin)),
         ) {
-            let col = node_ui::pin_color(pal, if a.ty == PinType::Bool { PinType::Bool } else { PinType::Float });
+            let col = node_ui::pin_color(
+                pal,
+                if a.ty == PinType::Bool {
+                    PinType::Bool
+                } else {
+                    PinType::Float
+                },
+            );
             painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
                 bezier(map(a.pos), map(b.pos)),
                 false,
@@ -916,7 +925,15 @@ pub fn thumbnail(ui: &mut Ui, pal: &Palette, rect: Rect, graph: &Graph) {
     for (id, l) in &layouts {
         let r = Rect::from_min_max(map(l.rect.min), map(l.rect.max));
         let is_device = graph.node(*id).is_some_and(|n| n.kind.is_device());
-        painter.rect_filled(r, w::SQUARE, if is_device { pal.faded(pal.success, 0.4) } else { pal.sheet });
+        painter.rect_filled(
+            r,
+            w::SQUARE,
+            if is_device {
+                pal.faded(pal.success, 0.4)
+            } else {
+                pal.sheet
+            },
+        );
         painter.rect_stroke(r, w::SQUARE, Stroke::new(1.0, pal.hair), StrokeKind::Inside);
     }
 }

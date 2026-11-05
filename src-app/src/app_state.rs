@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
 
+use shocking_vrc_core::AvatarScanner;
 use shocking_vrc_core::cli::{AlarmController, CliConfig, CliEngine, CliStopHandle};
-use shocking_vrc_core::{AvatarScanner};
 
 use crate::graph_runtime::GraphRuntime;
 
@@ -80,8 +80,7 @@ impl AppState {
     }
 
     pub fn engine_for_mac(&self, mac: &str) -> Option<CliEngine> {
-        self.find_slot_index(mac)
-            .and_then(|i| self.engine_at(i))
+        self.find_slot_index(mac).and_then(|i| self.engine_at(i))
     }
 
     pub fn update_slot<F>(&self, mac: &str, f: F)

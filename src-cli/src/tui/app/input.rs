@@ -1,15 +1,9 @@
-use ratatui::crossterm::event::{
-    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use super::App;
+use super::controls::{alarm_controls, channel_controls, mod_controls_len, setup_controls, tuning_controls};
+use super::helpers::{HitResult, is_zone_preset_action, point_in, slider_value_action, step_multiplier};
 use super::{Action, Channel, ModParam, Tab, ZonesPane};
-use super::controls::{
-    alarm_controls, channel_controls, mod_controls_len, setup_controls, tuning_controls,
-};
-use super::helpers::{
-    is_zone_preset_action, point_in, slider_value_action, step_multiplier, HitResult,
-};
 
 impl App {
     pub async fn handle_key(&mut self, key: KeyEvent) {
@@ -22,11 +16,7 @@ impl App {
                     self.flash_button(Action::AlarmSnooze);
                     self.apply(Action::AlarmSnooze).await;
                 }
-                KeyCode::Enter
-                | KeyCode::Esc
-                | KeyCode::Char(' ')
-                | KeyCode::Char('q')
-                | KeyCode::Char('Q') => {
+                KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') | KeyCode::Char('q') | KeyCode::Char('Q') => {
                     self.flash_button(Action::AlarmStop);
                     self.apply(Action::AlarmStop).await;
                 }
@@ -83,8 +73,7 @@ impl App {
         }
 
         if self.zone_presets_open {
-            if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL)
-            {
+            if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL) {
                 self.should_quit = true;
                 return;
             }
@@ -189,16 +178,28 @@ impl App {
 
         if self.active_tab == Tab::Log {
             match key.code {
-                KeyCode::Up => { self.on_scroll_at(-1, None); return; }
-                KeyCode::Down => { self.on_scroll_at(1, None); return; }
+                KeyCode::Up => {
+                    self.on_scroll_at(-1, None);
+                    return;
+                }
+                KeyCode::Down => {
+                    self.on_scroll_at(1, None);
+                    return;
+                }
                 _ => {}
             }
         }
 
         if let Some(action) = self.map_key_to_action(key) {
             let concrete = match action {
-                Action::FocusNext => { self.move_focus(1); None }
-                Action::FocusPrev => { self.move_focus(-1); None }
+                Action::FocusNext => {
+                    self.move_focus(1);
+                    None
+                }
+                Action::FocusPrev => {
+                    self.move_focus(-1);
+                    None
+                }
                 Action::AdjustFocused(d) => self.focused_adjust_action(d),
                 Action::ActivateFocused => self.focused_activate_action(),
                 other => Some(other),
@@ -213,7 +214,10 @@ impl App {
     pub async fn handle_mouse(&mut self, m: MouseEvent) {
         if self.alarm_ringing() {
             if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
-                let hit = self.clickables.iter().rev()
+                let hit = self
+                    .clickables
+                    .iter()
+                    .rev()
                     .find(|c| point_in(c.rect, m.column, m.row))
                     .and_then(|c| match &c.kind {
                         super::ClickKind::Act(a @ Action::AlarmStop)
@@ -230,7 +234,10 @@ impl App {
 
         if self.tutorial_active {
             if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
-                let hit = self.clickables.iter().rev()
+                let hit = self
+                    .clickables
+                    .iter()
+                    .rev()
                     .find(|c| point_in(c.rect, m.column, m.row))
                     .and_then(|c| match &c.kind {
                         super::ClickKind::Act(a @ Action::TutorialNext)
@@ -272,7 +279,10 @@ impl App {
 
         if self.preset_save_editing {
             if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
-                let hit = self.clickables.iter().rev()
+                let hit = self
+                    .clickables
+                    .iter()
+                    .rev()
                     .find(|c| point_in(c.rect, m.column, m.row))
                     .and_then(|c| match &c.kind {
                         super::ClickKind::Act(a @ Action::CommitSavePreset)
@@ -289,15 +299,14 @@ impl App {
 
         if self.preset_delete_confirm.is_some() {
             if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
-                let hit = self.clickables.iter().rev()
+                let hit = self
+                    .clickables
+                    .iter()
+                    .rev()
                     .find(|c| point_in(c.rect, m.column, m.row))
                     .and_then(|c| match &c.kind {
-                        super::ClickKind::Act(Action::ConfirmDeletePreset) => {
-                            Some(Action::ConfirmDeletePreset)
-                        }
-                        super::ClickKind::Act(Action::CancelDeletePreset) => {
-                            Some(Action::CancelDeletePreset)
-                        }
+                        super::ClickKind::Act(Action::ConfirmDeletePreset) => Some(Action::ConfirmDeletePreset),
+                        super::ClickKind::Act(Action::CancelDeletePreset) => Some(Action::CancelDeletePreset),
                         _ => None,
                     });
                 if let Some(a) = hit {
@@ -310,7 +319,10 @@ impl App {
 
         match m.kind {
             MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) => {
-                let hit = self.clickables.iter().rev()
+                let hit = self
+                    .clickables
+                    .iter()
+                    .rev()
                     .find(|c| point_in(c.rect, m.column, m.row))
                     .map(|c| match &c.kind {
                         super::ClickKind::Act(a) => HitResult::Action(a.clone()),
@@ -365,23 +377,43 @@ impl App {
                 }),
                 KeyCode::Char('-') | KeyCode::Char('_') => match self.zones_pane {
                     ZonesPane::ConfiguredA => Some(Action::StepZoneScale(
-                        Channel::A, self.sel_conf_a,
-                        if key.modifiers.contains(KeyModifiers::SHIFT) { -1 } else { -5 },
+                        Channel::A,
+                        self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) {
+                            -1
+                        } else {
+                            -5
+                        },
                     )),
                     ZonesPane::ConfiguredB => Some(Action::StepZoneScale(
-                        Channel::B, self.sel_conf_b,
-                        if key.modifiers.contains(KeyModifiers::SHIFT) { -1 } else { -5 },
+                        Channel::B,
+                        self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) {
+                            -1
+                        } else {
+                            -5
+                        },
                     )),
                     ZonesPane::Avatar => None,
                 },
                 KeyCode::Char('+') | KeyCode::Char('=') => match self.zones_pane {
                     ZonesPane::ConfiguredA => Some(Action::StepZoneScale(
-                        Channel::A, self.sel_conf_a,
-                        if key.modifiers.contains(KeyModifiers::SHIFT) { 1 } else { 5 },
+                        Channel::A,
+                        self.sel_conf_a,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) {
+                            1
+                        } else {
+                            5
+                        },
                     )),
                     ZonesPane::ConfiguredB => Some(Action::StepZoneScale(
-                        Channel::B, self.sel_conf_b,
-                        if key.modifiers.contains(KeyModifiers::SHIFT) { 1 } else { 5 },
+                        Channel::B,
+                        self.sel_conf_b,
+                        if key.modifiers.contains(KeyModifiers::SHIFT) {
+                            1
+                        } else {
+                            5
+                        },
                     )),
                     ZonesPane::Avatar => None,
                 },
@@ -399,9 +431,7 @@ impl App {
                 KeyCode::Char('s') | KeyCode::Char('S') => Some(Action::AlarmSnooze),
                 KeyCode::Up => Some(Action::FocusPrev),
                 KeyCode::Down => Some(Action::FocusNext),
-                KeyCode::Left | KeyCode::Char('-') => {
-                    Some(Action::AdjustFocused(-step_multiplier(&key)))
-                }
+                KeyCode::Left | KeyCode::Char('-') => Some(Action::AdjustFocused(-step_multiplier(&key))),
                 KeyCode::Right | KeyCode::Char('+') | KeyCode::Char('=') => {
                     Some(Action::AdjustFocused(step_multiplier(&key)))
                 }
@@ -411,9 +441,7 @@ impl App {
             Tab::Channels | Tab::Tuning => match key.code {
                 KeyCode::Up => Some(Action::FocusPrev),
                 KeyCode::Down => Some(Action::FocusNext),
-                KeyCode::Left | KeyCode::Char('-') => {
-                    Some(Action::AdjustFocused(-step_multiplier(&key)))
-                }
+                KeyCode::Left | KeyCode::Char('-') => Some(Action::AdjustFocused(-step_multiplier(&key))),
                 KeyCode::Right | KeyCode::Char('+') | KeyCode::Char('=') => {
                     Some(Action::AdjustFocused(step_multiplier(&key)))
                 }
@@ -423,9 +451,7 @@ impl App {
             Tab::Modulation => match key.code {
                 KeyCode::Up => Some(Action::FocusPrev),
                 KeyCode::Down => Some(Action::FocusNext),
-                KeyCode::Left | KeyCode::Char('-') => {
-                    Some(Action::AdjustFocused(-step_multiplier(&key)))
-                }
+                KeyCode::Left | KeyCode::Char('-') => Some(Action::AdjustFocused(-step_multiplier(&key))),
                 KeyCode::Right | KeyCode::Char('+') | KeyCode::Char('=') => {
                     Some(Action::AdjustFocused(step_multiplier(&key)))
                 }
@@ -434,11 +460,9 @@ impl App {
                     self.mod_kind,
                     self.mod_seg.wrapping_sub(1).min(3),
                 )),
-                KeyCode::Char(']') => Some(Action::SelectModSlot(
-                    self.mod_channel,
-                    self.mod_kind,
-                    (self.mod_seg + 1) % 4,
-                )),
+                KeyCode::Char(']') => {
+                    Some(Action::SelectModSlot(self.mod_channel, self.mod_kind, (self.mod_seg + 1) % 4))
+                }
                 KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ActivateFocused),
                 _ => None,
             },
@@ -471,16 +495,13 @@ impl App {
                 }
             }
             Tab::Channels => {
-                self.channels_scroll =
-                    crate::tui::ui::apply_scroll_delta(self.channels_scroll, delta, 1);
+                self.channels_scroll = crate::tui::ui::apply_scroll_delta(self.channels_scroll, delta, 1);
             }
             Tab::Tuning => {
-                self.tuning_scroll =
-                    crate::tui::ui::apply_scroll_delta(self.tuning_scroll, delta, 1);
+                self.tuning_scroll = crate::tui::ui::apply_scroll_delta(self.tuning_scroll, delta, 1);
             }
             Tab::Alarm => {
-                self.alarm_scroll =
-                    crate::tui::ui::apply_scroll_delta(self.alarm_scroll, delta, 1);
+                self.alarm_scroll = crate::tui::ui::apply_scroll_delta(self.alarm_scroll, delta, 1);
             }
             Tab::Modulation => {
                 if self.mod_function_picker {
@@ -488,11 +509,9 @@ impl App {
                 } else {
                     let scroll_editor = mouse_col.map(|c| c >= self.mod_split_x).unwrap_or(true);
                     if scroll_editor {
-                        self.mod_editor_scroll =
-                            crate::tui::ui::apply_scroll_delta(self.mod_editor_scroll, delta, 1);
+                        self.mod_editor_scroll = crate::tui::ui::apply_scroll_delta(self.mod_editor_scroll, delta, 1);
                     } else {
-                        self.mod_slots_scroll =
-                            crate::tui::ui::apply_scroll_delta(self.mod_slots_scroll, delta, 1);
+                        self.mod_slots_scroll = crate::tui::ui::apply_scroll_delta(self.mod_slots_scroll, delta, 1);
                     }
                 }
             }
@@ -579,16 +598,13 @@ impl App {
         match self.active_tab {
             Tab::Zones => match self.zones_pane {
                 ZonesPane::ConfiguredA => {
-                    self.sel_conf_a =
-                        step_index(self.sel_conf_a, delta, self.config.channel_a.zones.len());
+                    self.sel_conf_a = step_index(self.sel_conf_a, delta, self.config.channel_a.zones.len());
                 }
                 ZonesPane::ConfiguredB => {
-                    self.sel_conf_b =
-                        step_index(self.sel_conf_b, delta, self.config.channel_b.zones.len());
+                    self.sel_conf_b = step_index(self.sel_conf_b, delta, self.config.channel_b.zones.len());
                 }
                 ZonesPane::Avatar => {
-                    self.sel_avatar =
-                        step_index(self.sel_avatar, delta, self.avatar_zones.len());
+                    self.sel_avatar = step_index(self.sel_avatar, delta, self.avatar_zones.len());
                 }
             },
             Tab::Channels => {
@@ -612,8 +628,7 @@ impl App {
             }
             Tab::Presets => {
                 if !self.preset_entries.is_empty() {
-                    self.sel_preset =
-                        step_index(self.sel_preset, delta, self.preset_entries.len());
+                    self.sel_preset = step_index(self.sel_preset, delta, self.preset_entries.len());
                     self.sync_presets_scroll();
                 }
             }
@@ -701,9 +716,7 @@ impl App {
         match focus {
             0 => None,
             1 => Some(Action::CycleModSource(d)),
-            f if (2..2 + ModParam::ALL.len()).contains(&f) => {
-                Some(Action::StepModParam(ModParam::ALL[f - 2], d))
-            }
+            f if (2..2 + ModParam::ALL.len()).contains(&f) => Some(Action::StepModParam(ModParam::ALL[f - 2], d)),
             _ => None,
         }
     }

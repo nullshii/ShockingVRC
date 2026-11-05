@@ -20,12 +20,7 @@ pub fn modal<R>(
     width: f32,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> bool {
-    let backdrop = egui::Color32::from_rgba_unmultiplied(
-        pal.base.r(),
-        pal.base.g(),
-        pal.base.b(),
-        205,
-    );
+    let backdrop = egui::Color32::from_rgba_unmultiplied(pal.base.r(), pal.base.g(), pal.base.b(), 205);
 
     let resp = egui::Modal::new(egui::Id::new(id))
         .backdrop_color(backdrop)

@@ -1,7 +1,5 @@
 use shocking_vrc_core::cli::{AlarmConfig, EngineMode, MotionNorms, UkfConfig};
-use shocking_vrc_core::modulation::config::{
-    ModulationConfig, ModulationFunction, ModulationSource,
-};
+use shocking_vrc_core::modulation::config::{ModulationConfig, ModulationFunction, ModulationSource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
@@ -94,11 +92,7 @@ impl Section {
     pub fn classic_only(self) -> bool {
         matches!(
             self,
-            Section::Zones
-                | Section::Channels
-                | Section::Tuning
-                | Section::Modulation
-                | Section::Presets
+            Section::Zones | Section::Channels | Section::Tuning | Section::Modulation | Section::Presets
         )
     }
 
@@ -376,19 +370,11 @@ impl AlarmField {
         match self {
             AlarmField::Hour => (0, 23),
             AlarmField::Minute => (0, 59),
-            AlarmField::StartStrength | AlarmField::PeakStrength => {
-                (0, AlarmConfig::MAX_STRENGTH as i32)
-            }
+            AlarmField::StartStrength | AlarmField::PeakStrength => (0, AlarmConfig::MAX_STRENGTH as i32),
             AlarmField::Ramp => (0, AlarmConfig::RAMP_MAX_SECS as i32),
-            AlarmField::MaxDuration => (
-                AlarmConfig::DURATION_MIN_SECS as i32,
-                AlarmConfig::DURATION_MAX_SECS as i32,
-            ),
+            AlarmField::MaxDuration => (AlarmConfig::DURATION_MIN_SECS as i32, AlarmConfig::DURATION_MAX_SECS as i32),
             AlarmField::Repeats => (1, AlarmConfig::MAX_REPEATS as i32),
-            AlarmField::PulseOn => (
-                AlarmConfig::PULSE_MIN_MS as i32,
-                AlarmConfig::PULSE_MAX_MS as i32,
-            ),
+            AlarmField::PulseOn => (AlarmConfig::PULSE_MIN_MS as i32, AlarmConfig::PULSE_MAX_MS as i32),
             AlarmField::PulseOff => (0, AlarmConfig::PULSE_MAX_MS as i32),
             AlarmField::Snooze => (1, AlarmConfig::SNOOZE_MAX_MINS as i32),
         }
@@ -438,12 +424,8 @@ impl AlarmField {
         };
         self.put(cfg, v);
         match self {
-            AlarmField::StartStrength => {
-                cfg.peak_strength = cfg.peak_strength.max(cfg.start_strength)
-            }
-            AlarmField::PeakStrength => {
-                cfg.start_strength = cfg.start_strength.min(cfg.peak_strength)
-            }
+            AlarmField::StartStrength => cfg.peak_strength = cfg.peak_strength.max(cfg.start_strength),
+            AlarmField::PeakStrength => cfg.start_strength = cfg.start_strength.min(cfg.peak_strength),
             _ => {}
         }
     }
@@ -558,15 +540,8 @@ impl ModParam {
 
     pub fn step(self) -> f32 {
         match self {
-            ModParam::BaseSpeed
-            | ModParam::Sensitivity
-            | ModParam::Phase
-            | ModParam::FreqMul
-            | ModParam::Power => 0.1,
-            ModParam::MaxDeviation
-            | ModParam::Offset
-            | ModParam::ClampMin
-            | ModParam::ClampMax => 1.0,
+            ModParam::BaseSpeed | ModParam::Sensitivity | ModParam::Phase | ModParam::FreqMul | ModParam::Power => 0.1,
+            ModParam::MaxDeviation | ModParam::Offset | ModParam::ClampMin | ModParam::ClampMax => 1.0,
         }
     }
 
@@ -617,10 +592,7 @@ impl ModParam {
         match self {
             ModParam::Offset => v.clamp(-hi, hi),
             ModParam::ClampMin | ModParam::ClampMax => v.clamp(lo, hi),
-            ModParam::BaseSpeed
-            | ModParam::Sensitivity
-            | ModParam::MaxDeviation
-            | ModParam::Power => v.max(0.0),
+            ModParam::BaseSpeed | ModParam::Sensitivity | ModParam::MaxDeviation | ModParam::Power => v.max(0.0),
             ModParam::Phase => v,
             ModParam::FreqMul => v.max(0.001),
         }
@@ -747,24 +719,26 @@ pub fn function_group(f: &ModulationFunction) -> FunctionGroup {
     use ModulationFunction as F;
     match f {
         F::None => FunctionGroup::Off,
-        F::Sin | F::Cos | F::Tan | F::Asin | F::Acos | F::Atan | F::SinCos | F::Sin2 | F::Cos2
-        | F::SinPlusCos | F::SinPow(_) | F::CosPow(_) => FunctionGroup::Trig,
+        F::Sin
+        | F::Cos
+        | F::Tan
+        | F::Asin
+        | F::Acos
+        | F::Atan
+        | F::SinCos
+        | F::Sin2
+        | F::Cos2
+        | F::SinPlusCos
+        | F::SinPow(_)
+        | F::CosPow(_) => FunctionGroup::Trig,
         F::Sinh | F::Cosh | F::Tanh => FunctionGroup::Hyperbolic,
-        F::Square | F::Cube | F::Pow4 | F::Sqrt | F::Cbrt | F::Abs | F::Sign => {
-            FunctionGroup::Power
-        }
+        F::Square | F::Cube | F::Pow4 | F::Sqrt | F::Cbrt | F::Abs | F::Sign => FunctionGroup::Power,
         F::Exp | F::ExpNeg | F::Pow2x | F::Pow10x => FunctionGroup::Exponential,
         F::Ln | F::Log2 | F::Log10 => FunctionGroup::Logarithmic,
-        F::Triangle | F::Saw | F::ReverseSaw | F::SquareWave | F::Pulse | F::Bounce => {
-            FunctionGroup::Wave
-        }
-        F::Sigmoid | F::SmoothStep | F::SmootherStep | F::Logistic | F::SoftSign => {
-            FunctionGroup::Curve
-        }
+        F::Triangle | F::Saw | F::ReverseSaw | F::SquareWave | F::Pulse | F::Bounce => FunctionGroup::Wave,
+        F::Sigmoid | F::SmoothStep | F::SmootherStep | F::Logistic | F::SoftSign => FunctionGroup::Curve,
         F::Perlin | F::Simplex | F::Fractal | F::ValueNoise => FunctionGroup::Noise,
-        F::SinPlusNoise | F::SinTimesNoise | F::TrianglePlusSin | F::SquareTimesSigmoid => {
-            FunctionGroup::Blend
-        }
+        F::SinPlusNoise | F::SinTimesNoise | F::TrianglePlusSin | F::SquareTimesSigmoid => FunctionGroup::Blend,
         F::Compose { .. } => FunctionGroup::Other,
     }
 }
@@ -891,10 +865,7 @@ mod tests {
     fn every_listed_function_lands_in_a_group() {
         for f in mod_function_list() {
             let g = function_group(&f);
-            assert!(
-                FunctionGroup::ALL.contains(&g),
-                "{f} fell outside the group list"
-            );
+            assert!(FunctionGroup::ALL.contains(&g), "{f} fell outside the group list");
         }
     }
 

@@ -124,9 +124,7 @@ fn mapped_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
             if e.scale != 100 {
                 sub.push_str(&format!(" · {}%", e.scale));
             }
-            if e.min_threshold != ZoneEntry::THRESHOLD_MIN
-                || e.max_threshold != ZoneEntry::THRESHOLD_MAX
-            {
+            if e.min_threshold != ZoneEntry::THRESHOLD_MIN || e.max_threshold != ZoneEntry::THRESHOLD_MAX {
                 sub.push_str(&format!(
                     " · thr {:.2}–{:.2}",
                     e.min_threshold as f32 / 100.0,
@@ -143,10 +141,7 @@ fn mapped_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
             );
 
             if live {
-                let dot = Rect::from_center_size(
-                    egui::pos2(inner.right() - 4.0, inner.top() + 7.0),
-                    vec2(6.0, 6.0),
-                );
+                let dot = Rect::from_center_size(egui::pos2(inner.right() - 4.0, inner.top() + 7.0), vec2(6.0, 6.0));
                 ui.painter().rect_filled(dot, w::SQUARE, pal.accent);
             }
 
@@ -169,29 +164,14 @@ fn mapped_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
 fn avatar_panel(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
     w::sheet(ui, pal, |ui| {
-        w::heading_with_suffix(
-            ui,
-            pal,
-            "Avatar",
-            Some(&format!("{} seen", cx.snap.avatar_zones.len())),
-        );
+        w::heading_with_suffix(ui, pal, "Avatar", Some(&format!("{} seen", cx.snap.avatar_zones.len())));
 
         if cx.snap.avatar_zones.is_empty() {
-            w::empty_state(
-                ui,
-                pal,
-                "nothing yet — enable OSC in VRChat and touch a contact",
-            );
+            w::empty_state(ui, pal, "nothing yet — enable OSC in VRChat and touch a contact");
             return;
         }
 
-        w::text_field(
-            ui,
-            pal,
-            &mut cx.ui_state.avatar_filter,
-            "filter…",
-            ui.available_width(),
-        );
+        w::text_field(ui, pal, &mut cx.ui_state.avatar_filter, "filter…", ui.available_width());
         ui.add_space(space::ROW_GAP);
 
         let filter = cx.ui_state.avatar_filter.to_lowercase();
@@ -227,10 +207,7 @@ fn avatar_panel(ui: &mut Ui, cx: &mut Ctx) {
 
                     w::text_in(
                         ui,
-                        Rect::from_min_max(
-                            inner.min,
-                            egui::pos2(inner.right() - 74.0, inner.bottom()),
-                        ),
+                        Rect::from_min_max(inner.min, egui::pos2(inner.right() - 74.0, inner.bottom())),
                         &name,
                         font::small(),
                         if f > 0.0 { pal.accent } else { pal.contrast },
@@ -240,21 +217,11 @@ fn avatar_panel(ui: &mut Ui, cx: &mut Ctx) {
                     let mut bx = inner.right();
                     for ch in [Channel::B, Channel::A] {
                         let bw = 32.0;
-                        let brect = Rect::from_min_size(
-                            egui::pos2(bx - bw, inner.center().y - 10.0),
-                            vec2(bw, 20.0),
-                        );
-                        let br = ui.interact(
-                            brect,
-                            ui.id().with(("addzone", i, ch.label())),
-                            Sense::click(),
-                        );
+                        let brect = Rect::from_min_size(egui::pos2(bx - bw, inner.center().y - 10.0), vec2(bw, 20.0));
+                        let br = ui.interact(brect, ui.id().with(("addzone", i, ch.label())), Sense::click());
                         let hot = br.hovered();
-                        ui.painter().rect_filled(
-                            brect,
-                            w::SQUARE,
-                            if hot { pal.accent } else { pal.well },
-                        );
+                        ui.painter()
+                            .rect_filled(brect, w::SQUARE, if hot { pal.accent } else { pal.well });
                         w::text_in(
                             ui,
                             brect,
@@ -319,8 +286,7 @@ fn calibration(ui: &mut Ui, cx: &mut Ctx) {
 
                     ui.horizontal(|ui| {
                         w::field_label(ui, pal, "Mode", 92.0, true);
-                        let labels: Vec<String> =
-                            MODES.iter().map(|m| m.to_string()).collect();
+                        let labels: Vec<String> = MODES.iter().map(|m| m.to_string()).collect();
                         let refs: Vec<&str> = labels.iter().map(|s| s.as_str()).collect();
                         let cur = MODES.iter().position(|m| *m == e.mode).unwrap_or(0);
                         if let Some(p) = w::segmented(ui, pal, &refs, cur) {
@@ -369,16 +335,8 @@ fn calibration(ui: &mut Ui, cx: &mut Ctx) {
                     ui.horizontal(|ui| {
                         if w::button(ui, pal, "Reset calibration").clicked() {
                             cx.send(Command::SetZoneScale(ch, i, 100));
-                            cx.send(Command::SetZoneThresholdMin(
-                                ch,
-                                i,
-                                ZoneEntry::THRESHOLD_MIN,
-                            ));
-                            cx.send(Command::SetZoneThresholdMax(
-                                ch,
-                                i,
-                                ZoneEntry::THRESHOLD_MAX,
-                            ));
+                            cx.send(Command::SetZoneThresholdMin(ch, i, ZoneEntry::THRESHOLD_MIN));
+                            cx.send(Command::SetZoneThresholdMax(ch, i, ZoneEntry::THRESHOLD_MAX));
                         }
                         if w::danger_button(ui, pal, "Remove zone", true).clicked() {
                             cx.send(Command::RemoveZone(ch, i));
@@ -403,16 +361,7 @@ fn slider_row(
     to_cmd: impl Fn(f32) -> Command,
 ) {
     let pal = cx.pal;
-    let changed = w::slider_row(
-        ui,
-        pal,
-        label,
-        92.0,
-        w::Slider::new(value, min, max),
-        display,
-        56.0,
-        None,
-    );
+    let changed = w::slider_row(ui, pal, label, 92.0, w::Slider::new(value, min, max), display, 56.0, None);
     if let Some(v) = changed {
         cx.send(to_cmd(v));
     }

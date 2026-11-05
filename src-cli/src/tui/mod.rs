@@ -5,24 +5,22 @@ pub mod preview;
 pub mod tabs;
 pub mod theme;
 pub mod tutorial;
+pub mod ui;
 pub mod update_overlay;
 pub mod zone_presets_overlay;
-pub mod ui;
 
 use std::io::{self, Stdout};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::app_state::AppState;
+use crate::tui_logger::LogBuffer;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-};
-use crate::app_state::AppState;
-use crate::tui_logger::LogBuffer;
+use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
 
 use app::App;
 use event::InputEvent;
@@ -30,22 +28,18 @@ use event::InputEvent;
 type Backend = CrosstermBackend<Stdout>;
 
 fn init_terminal() -> io::Result<Terminal<Backend>> {
-        enable_raw_mode()?;
+    enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     Terminal::new(CrosstermBackend::new(stdout))
 }
 
 fn restore_terminal(terminal: &mut Terminal<Backend>) -> io::Result<()> {
-        disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
-        Ok(())
-    }
+    Ok(())
+}
 
 fn restore_on_panic() {
     let _ = disable_raw_mode();

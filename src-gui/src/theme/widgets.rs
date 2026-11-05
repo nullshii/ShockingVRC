@@ -1,7 +1,4 @@
-use egui::{
-    Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui,
-    Vec2, vec2,
-};
+use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, vec2};
 
 use super::Palette;
 
@@ -51,14 +48,7 @@ pub fn dashed_rect_with(ui: &Ui, rect: Rect, color: Color32, dash: f32, gap: f32
     dashed_line(p, r.left_bottom(), r.left_top(), stroke, dash, gap);
 }
 
-pub fn dashed_line(
-    painter: &egui::Painter,
-    from: Pos2,
-    to: Pos2,
-    stroke: Stroke,
-    dash: f32,
-    gap: f32,
-) {
+pub fn dashed_line(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke, dash: f32, gap: f32) {
     let delta = to - from;
     let len = delta.length();
     if len <= 0.5 {
@@ -96,13 +86,7 @@ pub fn hatch(ui: &Ui, rect: Rect, color: Color32, spacing: f32) {
     let span = rect.width() + rect.height();
     let mut x = rect.left() - rect.height();
     while x < rect.left() + span {
-        p.line_segment(
-            [
-                Pos2::new(x, rect.bottom()),
-                Pos2::new(x + rect.height(), rect.top()),
-            ],
-            stroke,
-        );
+        p.line_segment([Pos2::new(x, rect.bottom()), Pos2::new(x + rect.height(), rect.top())], stroke);
         x += spacing;
     }
 }
@@ -127,12 +111,7 @@ pub fn sheet<R>(ui: &mut Ui, pal: &Palette, add: impl FnOnce(&mut Ui) -> R) -> R
     sheet_tinted(ui, pal, pal.hair, add)
 }
 
-pub fn sheet_tinted<R>(
-    ui: &mut Ui,
-    pal: &Palette,
-    border: Color32,
-    add: impl FnOnce(&mut Ui) -> R,
-) -> R {
+pub fn sheet_tinted<R>(ui: &mut Ui, pal: &Palette, border: Color32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let outer = egui::Frame::NONE
         .fill(pal.sheet)
         .inner_margin(egui::Margin::same(space::SHEET_PAD as i8));
@@ -148,48 +127,26 @@ pub fn heading(ui: &mut Ui, pal: &Palette, text: &str) {
 pub fn heading_with_suffix(ui: &mut Ui, pal: &Palette, text: &str, suffix: Option<&str>) {
     let label = text.to_uppercase();
     let font = font::heading();
-    let galley = ui
-        .painter()
-        .layout_no_wrap(label.clone(), font.clone(), pal.on_solid());
+    let galley = ui.painter().layout_no_wrap(label.clone(), font.clone(), pal.on_solid());
     let chip_w = galley.size().x + 18.0;
     let h = galley.size().y + 10.0;
 
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::hover());
     let p = ui.painter();
 
-    p.rect_stroke(
-        rect,
-        SQUARE,
-        Stroke::new(1.0, pal.contrast),
-        StrokeKind::Inside,
-    );
+    p.rect_stroke(rect, SQUARE, Stroke::new(1.0, pal.contrast), StrokeKind::Inside);
 
     let chip = Rect::from_min_size(rect.min, vec2(chip_w.min(rect.width()), h)).shrink(3.0);
     p.rect_filled(chip, SQUARE, pal.contrast);
-    p.text(
-        chip.center(),
-        Align2::CENTER_CENTER,
-        &label,
-        font,
-        pal.on_solid(),
-    );
+    p.text(chip.center(), Align2::CENTER_CENTER, &label, font, pal.on_solid());
 
-    let tail = Rect::from_min_max(
-        Pos2::new(rect.min.x + chip_w, rect.min.y),
-        rect.max,
-    );
+    let tail = Rect::from_min_max(Pos2::new(rect.min.x + chip_w, rect.min.y), rect.max);
     if tail.width() > 2.0 {
-        p.vline(
-            tail.left(),
-            tail.y_range(),
-            Stroke::new(1.0, pal.contrast),
-        );
+        p.vline(tail.left(), tail.y_range(), Stroke::new(1.0, pal.contrast));
         hatch(ui, tail.shrink(1.0), pal.faded(pal.contrast, 0.55), 10.0);
         if let Some(suffix) = suffix {
             let sf = font::small();
-            let sg = ui
-                .painter()
-                .layout_no_wrap(suffix.to_string(), sf.clone(), pal.dim);
+            let sg = ui.painter().layout_no_wrap(suffix.to_string(), sf.clone(), pal.dim);
             let pad = 8.0;
             let box_rect = Rect::from_min_size(
                 Pos2::new(tail.right() - sg.size().x - pad * 2.0, tail.top() + 2.0),
@@ -197,13 +154,8 @@ pub fn heading_with_suffix(ui: &mut Ui, pal: &Palette, text: &str, suffix: Optio
             );
             if box_rect.left() > tail.left() + 6.0 {
                 ui.painter().rect_filled(box_rect, SQUARE, pal.sheet);
-                ui.painter().text(
-                    box_rect.center(),
-                    Align2::CENTER_CENTER,
-                    suffix,
-                    sf,
-                    pal.dim,
-                );
+                ui.painter()
+                    .text(box_rect.center(), Align2::CENTER_CENTER, suffix, sf, pal.dim);
             }
         }
     }
@@ -211,19 +163,11 @@ pub fn heading_with_suffix(ui: &mut Ui, pal: &Palette, text: &str, suffix: Optio
 }
 
 pub fn body(ui: &mut Ui, pal: &Palette, text: impl Into<String>) {
-    ui.label(
-        egui::RichText::new(text)
-            .font(font::body())
-            .color(pal.contrast),
-    );
+    ui.label(egui::RichText::new(text).font(font::body()).color(pal.contrast));
 }
 
 pub fn dim(ui: &mut Ui, pal: &Palette, text: impl Into<String>) {
-    ui.label(
-        egui::RichText::new(text)
-            .font(font::small())
-            .color(pal.dim),
-    );
+    ui.label(egui::RichText::new(text).font(font::small()).color(pal.dim));
 }
 
 pub fn caption(ui: &mut Ui, pal: &Palette, text: &str) {
@@ -251,21 +195,14 @@ pub fn badge(ui: &mut Ui, pal: &Palette, text: &str, fill: Color32) -> Response 
     let size = galley.size() + vec2(14.0, 5.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter().rect_filled(rect, SQUARE, fill);
-    ui.painter().text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        text,
-        font,
-        pal.on_solid(),
-    );
+    ui.painter()
+        .text(rect.center(), Align2::CENTER_CENTER, text, font, pal.on_solid());
     resp
 }
 
 pub fn tag(ui: &mut Ui, _pal: &Palette, text: &str, color: Color32) -> Response {
     let font = font::small();
-    let galley = ui
-        .painter()
-        .layout_no_wrap(text.to_string(), font.clone(), color);
+    let galley = ui.painter().layout_no_wrap(text.to_string(), font.clone(), color);
     let size = galley.size() + vec2(14.0, 5.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter()
@@ -298,33 +235,19 @@ enum ButtonStyle {
     Danger,
 }
 
-fn button_inner(
-    ui: &mut Ui,
-    pal: &Palette,
-    text: &str,
-    style: ButtonStyle,
-    enabled: bool,
-) -> Response {
+fn button_inner(ui: &mut Ui, pal: &Palette, text: &str, style: ButtonStyle, enabled: bool) -> Response {
     let font = font::body();
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_string(), font.clone(), pal.contrast);
     let size = vec2(galley.size().x + 20.0, galley.size().y + 9.0);
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
+    let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(size, sense);
     let hovered = enabled && resp.hovered();
     let p = ui.painter();
 
     let (fill, fg, border) = match (style, enabled, hovered) {
-        (_, false, _) => (
-            Color32::TRANSPARENT,
-            pal.faded(pal.dim, 0.4),
-            pal.faded(pal.hair, 0.4),
-        ),
+        (_, false, _) => (Color32::TRANSPARENT, pal.faded(pal.dim, 0.4), pal.faded(pal.hair, 0.4)),
         (ButtonStyle::Cta, _, false) => (pal.accent, pal.on_solid(), pal.accent),
         (ButtonStyle::Cta, _, true) => (pal.contrast, pal.on_solid(), pal.contrast),
         (ButtonStyle::Outline, _, false) => (Color32::TRANSPARENT, pal.contrast, pal.hair),
@@ -461,14 +384,10 @@ impl<'a> Slider<'a> {
                 track.right_bottom(),
             )
         } else {
-            Rect::from_min_max(
-                track.left_top(),
-                Pos2::new(track.left() + frac * track.width(), track.bottom()),
-            )
+            Rect::from_min_max(track.left_top(), Pos2::new(track.left() + frac * track.width(), track.bottom()))
         };
         if filled.width() > 0.5 {
-            ui.painter()
-                .rect_filled(filled, SQUARE, pal.faded(accent, 0.35));
+            ui.painter().rect_filled(filled, SQUARE, pal.faded(accent, 0.35));
         }
         ui.painter().rect_stroke(
             track,
@@ -480,26 +399,23 @@ impl<'a> Slider<'a> {
         let tx = track.left() + frac * track.width();
         let thumb = Rect::from_center_size(Pos2::new(tx, track.center().y), vec2(11.0, 16.0));
         ui.painter().rect_filled(thumb, SQUARE, pal.contrast);
-        ui.painter().rect_stroke(
-            thumb,
-            SQUARE,
-            Stroke::new(1.0, pal.base),
-            StrokeKind::Inside,
-        );
+        ui.painter()
+            .rect_stroke(thumb, SQUARE, Stroke::new(1.0, pal.base), StrokeKind::Inside);
 
         if resp.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
         }
 
         if (resp.dragged() || resp.clicked())
-            && let Some(pos) = resp.interact_pointer_pos() {
-                let denom = track.width().max(1.0);
-                let mut f = ((pos.x - track.left()) / denom).clamp(0.0, 1.0);
-                if self.inverted {
-                    f = 1.0 - f;
-                }
-                return Some(self.min + f * span);
+            && let Some(pos) = resp.interact_pointer_pos()
+        {
+            let denom = track.width().max(1.0);
+            let mut f = ((pos.x - track.left()) / denom).clamp(0.0, 1.0);
+            if self.inverted {
+                f = 1.0 - f;
             }
+            return Some(self.min + f * span);
+        }
         None
     }
 }
@@ -528,19 +444,9 @@ pub fn slider_row(
         egui::pos2(rect.left() + label_w + gap, rect.center().y - 8.0),
         vec2(track_w, 16.0),
     );
-    let value_rect = Rect::from_min_size(
-        egui::pos2(rect.right() - value_w, rect.top()),
-        vec2(value_w, h),
-    );
+    let value_rect = Rect::from_min_size(egui::pos2(rect.right() - value_w, rect.top()), vec2(value_w, h));
 
-    text_in(
-        ui,
-        label_rect,
-        label,
-        font::body(),
-        pal.dim,
-        Align2::LEFT_CENTER,
-    );
+    text_in(ui, label_rect, label, font::body(), pal.dim, Align2::LEFT_CENTER);
     let changed = slider.show_in(ui, pal, track_rect);
     text_in(
         ui,
@@ -601,11 +507,8 @@ pub fn gauge_row(
     ui.painter().rect_filled(bar, SQUARE, pal.well);
     let r = ratio.clamp(0.0, 1.0);
     if r > 0.0 {
-        ui.painter().rect_filled(
-            Rect::from_min_size(bar.min, vec2(bar.width() * r, bar.height())),
-            SQUARE,
-            color,
-        );
+        ui.painter()
+            .rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * r, bar.height())), SQUARE, color);
     }
     ui.painter()
         .rect_stroke(bar, SQUARE, Stroke::new(1.0, pal.hair), StrokeKind::Inside);
@@ -631,13 +534,8 @@ pub fn stepper(ui: &mut Ui, pal: &Palette, value: &str, width: f32) -> Option<i3
         let (rect, _) = ui.allocate_exact_size(vec2(width, 25.0), Sense::hover());
         ui.painter()
             .rect_stroke(rect, SQUARE, Stroke::new(1.0, pal.hair), StrokeKind::Inside);
-        ui.painter().text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            value,
-            font,
-            pal.contrast,
-        );
+        ui.painter()
+            .text(rect.center(), Align2::CENTER_CENTER, value, font, pal.contrast);
         if button(ui, pal, "+").clicked() {
             delta = Some(1);
         }
@@ -650,13 +548,9 @@ pub fn row(ui: &mut Ui, pal: &Palette, selected: bool, height: f32) -> (Rect, Re
     let (rect, resp) = ui.allocate_exact_size(vec2(w, height), Sense::click());
     let hovered = resp.hovered();
     if selected {
+        ui.painter().rect_filled(rect, SQUARE, pal.faded(pal.accent, 0.82));
         ui.painter()
-            .rect_filled(rect, SQUARE, pal.faded(pal.accent, 0.82));
-        ui.painter().vline(
-            rect.left() + 1.0,
-            rect.y_range(),
-            Stroke::new(2.0, pal.accent),
-        );
+            .vline(rect.left() + 1.0, rect.y_range(), Stroke::new(2.0, pal.accent));
     } else if hovered {
         ui.painter().rect_filled(rect, SQUARE, pal.well);
     }
@@ -666,14 +560,7 @@ pub fn row(ui: &mut Ui, pal: &Palette, selected: bool, height: f32) -> (Rect, Re
     (rect, resp)
 }
 
-pub fn text_in(
-    ui: &Ui,
-    rect: Rect,
-    text: &str,
-    font: FontId,
-    color: Color32,
-    align: Align2,
-) {
+pub fn text_in(ui: &Ui, rect: Rect, text: &str, font: FontId, color: Color32, align: Align2) {
     let p = ui.painter().with_clip_rect(rect);
     let pos = match align {
         Align2::LEFT_CENTER => rect.left_center(),
@@ -770,10 +657,7 @@ pub fn column<R>(ui: &mut Ui, width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let inner = add(&mut child);
     let used = child.min_rect().height();
 
-    ui.allocate_rect(
-        Rect::from_min_size(origin, vec2(width, used)),
-        Sense::hover(),
-    );
+    ui.allocate_rect(Rect::from_min_size(origin, vec2(width, used)), Sense::hover());
     inner
 }
 
@@ -781,12 +665,7 @@ pub fn empty_state(ui: &mut Ui, pal: &Palette, text: &str) {
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(4.0);
-        ui.label(
-            egui::RichText::new(text)
-                .font(font::small())
-                .color(pal.dim)
-                .italics(),
-        );
+        ui.label(egui::RichText::new(text).font(font::small()).color(pal.dim).italics());
     });
     ui.add_space(6.0);
 }

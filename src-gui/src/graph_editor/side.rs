@@ -48,8 +48,11 @@ fn row_label(ui: &mut Ui, pal: &Palette, text: &str) {
     let galley = ui.painter().layout_job(job);
     let (rect, resp) = ui.allocate_exact_size(vec2(LABEL_W, 22.0), Sense::hover());
     let elided = galley.elided;
-    ui.painter()
-        .galley(egui::pos2(rect.left(), rect.center().y - galley.size().y * 0.5), galley, pal.dim);
+    ui.painter().galley(
+        egui::pos2(rect.left(), rect.center().y - galley.size().y * 0.5),
+        galley,
+        pal.dim,
+    );
     if elided {
         resp.on_hover_text(text);
     }
@@ -68,7 +71,13 @@ fn empty_note(ui: &mut Ui, pal: &Palette, text: &str) {
 fn seg_row(ui: &mut Ui, pal: &Palette, label: &str, options: &[&str], selected: usize) -> Option<usize> {
     let need: f32 = options
         .iter()
-        .map(|o| ui.painter().layout_no_wrap(o.to_string(), font::small(), pal.contrast).size().x + 18.0)
+        .map(|o| {
+            ui.painter()
+                .layout_no_wrap(o.to_string(), font::small(), pal.contrast)
+                .size()
+                .x
+                + 18.0
+        })
         .sum();
     if LABEL_W + ui.spacing().item_spacing.x + need <= ui.available_width() {
         ui.horizontal(|ui| {
@@ -152,9 +161,7 @@ fn choices(ui: &mut Ui, pal: &Palette, options: &[String], selected: Option<usiz
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
         for (i, label) in options.iter().enumerate() {
-            let galley = ui
-                .painter()
-                .layout_no_wrap(label.clone(), font::small(), pal.contrast);
+            let galley = ui.painter().layout_no_wrap(label.clone(), font::small(), pal.contrast);
             let size = vec2(galley.size().x + 14.0, galley.size().y + 6.0);
             let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
             let on = selected == Some(i);
@@ -182,7 +189,13 @@ fn choices(ui: &mut Ui, pal: &Palette, options: &[String], selected: Option<usiz
     picked
 }
 
-fn pick_enum<T: Copy + PartialEq>(ui: &mut Ui, pal: &Palette, all: &[T], cur: &mut T, label: impl Fn(T) -> String) -> bool {
+fn pick_enum<T: Copy + PartialEq>(
+    ui: &mut Ui,
+    pal: &Palette,
+    all: &[T],
+    cur: &mut T,
+    label: impl Fn(T) -> String,
+) -> bool {
     let names: Vec<String> = all.iter().map(|v| label(*v)).collect();
     let sel = all.iter().position(|v| v == cur);
     match choices(ui, pal, &names, sel) {
@@ -220,7 +233,9 @@ fn inspector(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<G
         summary(ui, ed, env);
         return;
     };
-    let Some(original) = ed.scope().node(id).cloned() else { return };
+    let Some(original) = ed.scope().node(id).cloned() else {
+        return;
+    };
     let mut node = original.clone();
     let connected: Vec<String> = ed
         .scope()
@@ -379,10 +394,7 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
             ui.add_space(4.0);
             w::caption(ui, pal, "Seen parameters");
             let filter_id = egui::Id::new("graph_param_filter");
-            let mut filter = ui
-                .ctx()
-                .data(|d| d.get_temp::<String>(filter_id))
-                .unwrap_or_default();
+            let mut filter = ui.ctx().data(|d| d.get_temp::<String>(filter_id)).unwrap_or_default();
             ui.horizontal(|ui| {
                 w::text_field(ui, pal, &mut filter, "filter…", ui.available_width());
             });
@@ -395,11 +407,29 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
                     if params.is_empty() {
                         empty_note(ui, pal, "nothing yet — VRChat sends parameters once connected");
                     }
-                    for (addr, value) in params.iter().filter(|(a, _)| needle.is_empty() || a.to_lowercase().contains(&needle)).take(200) {
+                    for (addr, value) in params
+                        .iter()
+                        .filter(|(a, _)| needle.is_empty() || a.to_lowercase().contains(&needle))
+                        .take(200)
+                    {
                         let (rect, resp) = w::row(ui, pal, *addr == p.address, 18.0);
                         let short = addr.strip_prefix("/avatar/parameters/").unwrap_or(addr);
-                        w::text_in(ui, rect.shrink2(vec2(6.0, 0.0)), short, font::tiny(), pal.contrast, Align2::LEFT_CENTER);
-                        w::text_in(ui, rect.shrink2(vec2(6.0, 0.0)), &node_ui::fmt_value(*value), font::tiny(), pal.dim, Align2::RIGHT_CENTER);
+                        w::text_in(
+                            ui,
+                            rect.shrink2(vec2(6.0, 0.0)),
+                            short,
+                            font::tiny(),
+                            pal.contrast,
+                            Align2::LEFT_CENTER,
+                        );
+                        w::text_in(
+                            ui,
+                            rect.shrink2(vec2(6.0, 0.0)),
+                            &node_ui::fmt_value(*value),
+                            font::tiny(),
+                            pal.dim,
+                            Align2::RIGHT_CENTER,
+                        );
                         if resp.clicked() {
                             p.address = addr.clone();
                         }
@@ -408,7 +438,13 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
             ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter));
         }
         NodeKind::Contact(p) => {
-            let types = [OldZoneType::Any, OldZoneType::Pen, OldZoneType::Orf, OldZoneType::Touch, OldZoneType::DGB];
+            let types = [
+                OldZoneType::Any,
+                OldZoneType::Pen,
+                OldZoneType::Orf,
+                OldZoneType::Touch,
+                OldZoneType::DGB,
+            ];
             let names = ["Any", "Pen", "Orf", "Tps", "DGB"];
             let sel = types.iter().position(|t| *t == p.zone.zone_type).unwrap_or(0);
             if let Some(i) = seg_row(ui, pal, "Zone type", &names, sel) {
@@ -429,14 +465,25 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
                     for z in &env.snap.avatar_zones {
                         let on = p.zone.zone_type == z.zone_type && p.zone.name == z.id;
                         let (rect, resp) = w::row(ui, pal, on, 18.0);
-                        w::text_in(ui, rect.shrink2(vec2(6.0, 0.0)), &format!("{}/{}", z.zone_type, z.id), font::tiny(), pal.contrast, Align2::LEFT_CENTER);
+                        w::text_in(
+                            ui,
+                            rect.shrink2(vec2(6.0, 0.0)),
+                            &format!("{}/{}", z.zone_type, z.id),
+                            font::tiny(),
+                            pal.contrast,
+                            Align2::LEFT_CENTER,
+                        );
                         if resp.clicked() {
                             p.zone.zone_type = z.zone_type;
                             p.zone.name = z.id.clone();
                         }
                     }
                 });
-            w::dim(ui, pal, "Raw level, before any filtering. Add a UKF Filter node for speed/acc/recoil.");
+            w::dim(
+                ui,
+                pal,
+                "Raw level, before any filtering. Add a UKF Filter node for speed/acc/recoil.",
+            );
         }
         NodeKind::Constant(p) => {
             num_row(ui, pal, "Value", &mut p.value, -1.0, 2.0);
@@ -483,7 +530,11 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
             if w::button(ui, pal, "Reset normalisation defaults").clicked() {
                 p.norms = MotionNorms::default();
             }
-            w::dim(ui, pal, "This node's own filter — the Tuning tab is Classic-only. Edits apply live.");
+            w::dim(
+                ui,
+                pal,
+                "This node's own filter — the Tuning tab is Classic-only. Edits apply live.",
+            );
         }
         NodeKind::Integrate(p) => {
             num_row(ui, pal, "Leak /s", &mut p.leak, 0.0, 5.0);
@@ -505,7 +556,11 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
         NodeKind::SpoofGuard(p) => {
             num_row(ui, pal, "Jump limit", &mut p.jump_limit, 0.0, 1.0);
             num_row(ui, pal, "Release level", &mut p.release_level, 0.0, 0.5);
-            w::dim(ui, pal, "Holds the signal at 0 when it jumps from idle above the limit in one tick.");
+            w::dim(
+                ui,
+                pal,
+                "Holds the signal at 0 when it jumps from idle above the limit in one tick.",
+            );
         }
         NodeKind::Math(p) => {
             pick_enum(ui, pal, &MathOp::ALL, &mut p.op, |o| o.label().to_string());
@@ -583,7 +638,11 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
                 DelayMode::Ms => "ms".to_string(),
             });
             int_row(ui, pal, "Amount", &mut p.amount, 1, 10_000);
-            w::dim(ui, pal, format!("= {} tick(s) of 25 ms. Feedback loops need a Delay.", p.ticks()));
+            w::dim(
+                ui,
+                pal,
+                format!("= {} tick(s) of 25 ms. Feedback loops need a Delay.", p.ticks()),
+            );
         }
         NodeKind::Sequencer(p) => {
             let mut n = p.steps.len() as u32;
@@ -674,7 +733,11 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
                     .color(pal.error),
             );
             let raw = serde_json::to_string_pretty(&m.raw).unwrap_or_default();
-            ui.label(egui::RichText::new(raw.chars().take(600).collect::<String>()).font(font::tiny()).color(pal.dim));
+            ui.label(
+                egui::RichText::new(raw.chars().take(600).collect::<String>())
+                    .font(font::tiny())
+                    .color(pal.dim),
+            );
         }
         _ => {
             w::dim(ui, pal, "No settings — tune it through its inputs.");
@@ -695,10 +758,12 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
         row_label(ui, pal, "Bound to");
         w::body(ui, pal, current);
     });
-    let online = d
-        .binding
-        .mac()
-        .is_some_and(|m| env.snap.devices.iter().any(|x| x.connected && x.mac.eq_ignore_ascii_case(m)));
+    let online = d.binding.mac().is_some_and(|m| {
+        env.snap
+            .devices
+            .iter()
+            .any(|x| x.connected && x.mac.eq_ignore_ascii_case(m))
+    });
     if !online {
         let mut candidates: Vec<(String, String)> = env
             .snap
@@ -721,7 +786,14 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
         }
         for (mac, label) in candidates {
             let (rect, resp) = w::row(ui, pal, false, 20.0);
-            w::text_in(ui, rect.shrink2(vec2(6.0, 0.0)), &label, font::small(), pal.contrast, Align2::LEFT_CENTER);
+            w::text_in(
+                ui,
+                rect.shrink2(vec2(6.0, 0.0)),
+                &label,
+                font::small(),
+                pal.contrast,
+                Align2::LEFT_CENTER,
+            );
             if resp.clicked() {
                 d.binding = DeviceBinding::Mac(mac.to_uppercase());
             }
@@ -740,7 +812,8 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
                 w::text_field(ui, pal, &mut typed, "AA:BB:CC:DD:EE:FF", width);
             });
         });
-        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("graph_mac_entry"), typed));
+        ui.ctx()
+            .data_mut(|m| m.insert_temp(egui::Id::new("graph_mac_entry"), typed));
     }
     for (ci, ch) in profile.channels.iter().enumerate() {
         let Some(cp) = d.channels.get_mut(ci) else { continue };
@@ -805,7 +878,11 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
 
 fn byline(e: &GraphPresetEntry) -> String {
     let who = if e.preset.author.trim().is_empty() {
-        if e.user { "mine".to_string() } else { "built-in".to_string() }
+        if e.user {
+            "mine".to_string()
+        } else {
+            "built-in".to_string()
+        }
     } else {
         format!("by {}", e.preset.author.trim())
     };
@@ -847,7 +924,15 @@ fn presets(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
         });
         ui.add_space(space::ROW_GAP);
         if visible.is_empty() {
-            empty_note(ui, pal, if entries.is_empty() { "no presets" } else { "nothing matches those filters" });
+            empty_note(
+                ui,
+                pal,
+                if entries.is_empty() {
+                    "no presets"
+                } else {
+                    "nothing matches those filters"
+                },
+            );
         }
         let mut delete = None;
         egui::ScrollArea::vertical()
@@ -876,8 +961,10 @@ fn presets(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
                         Align2::LEFT_CENTER,
                     );
                     if e.user {
-                        let t = Rect::from_min_size(egui::pos2(inner.right() - 40.0, inner.top() + 1.0), vec2(40.0, 15.0));
-                        ui.painter().rect_stroke(t, w::SQUARE, Stroke::new(1.0, pal.accent), StrokeKind::Inside);
+                        let t =
+                            Rect::from_min_size(egui::pos2(inner.right() - 40.0, inner.top() + 1.0), vec2(40.0, 15.0));
+                        ui.painter()
+                            .rect_stroke(t, w::SQUARE, Stroke::new(1.0, pal.accent), StrokeKind::Inside);
                         w::text_in(ui, t, "mine", font::tiny(), pal.accent, Align2::CENTER_CENTER);
                     }
                     if resp.clicked() {
@@ -963,7 +1050,11 @@ fn presets(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
             }
         });
         ui.add_space(4.0);
-        w::dim(ui, pal, "Presets never store a device's MAC — slots bind to connected devices in order.");
+        w::dim(
+            ui,
+            pal,
+            "Presets never store a device's MAC — slots bind to connected devices in order.",
+        );
     });
 
     ui.add_space(space::SHEET_GAP);
@@ -1014,13 +1105,27 @@ fn devices(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
         for (mac, name, online, battery) in &rows {
             let (rect, resp) = w::row(ui, pal, false, 24.0);
             let inner = rect.shrink2(vec2(8.0, 0.0));
-            w::text_in(ui, inner, name, font::body(), if *online { pal.contrast } else { pal.dim }, Align2::LEFT_CENTER);
+            w::text_in(
+                ui,
+                inner,
+                name,
+                font::body(),
+                if *online { pal.contrast } else { pal.dim },
+                Align2::LEFT_CENTER,
+            );
             let state = match (online, battery) {
                 (true, Some(b)) => format!("online · {b}%"),
                 (true, None) => "online".to_string(),
                 (false, _) => "offline".to_string(),
             };
-            w::text_in(ui, inner, &state, font::small(), if *online { pal.success } else { pal.error }, Align2::RIGHT_CENTER);
+            w::text_in(
+                ui,
+                inner,
+                &state,
+                font::small(),
+                if *online { pal.success } else { pal.error },
+                Align2::RIGHT_CENTER,
+            );
             if resp.clicked()
                 && let Some(n) = ed.doc.device_node_for(mac)
             {
@@ -1040,16 +1145,23 @@ fn devices(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
                     s.intensity[3],
                     if ci == 0 { short_mac(mac) } else { String::new() }
                 );
-                ui.label(
-                    egui::RichText::new(txt)
-                        .font(font::tiny())
-                        .color(if s.strength > 0 { pal.accent } else { pal.dim }),
-                );
+                ui.label(egui::RichText::new(txt).font(font::tiny()).color(if s.strength > 0 {
+                    pal.accent
+                } else {
+                    pal.dim
+                }));
             }
             ui.add_space(2.0);
         }
         ui.add_space(space::ITEM_GAP);
         let caps = env.snap.graph.caps;
-        w::dim(ui, pal, format!("Graph cap A {} · B {} — change it in Setup. Click a device to find its node.", caps[0], caps[1]));
+        w::dim(
+            ui,
+            pal,
+            format!(
+                "Graph cap A {} · B {} — change it in Setup. Click a device to find its node.",
+                caps[0], caps[1]
+            ),
+        );
     });
 }

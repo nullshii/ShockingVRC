@@ -57,7 +57,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if app.tutorial_active {
         tutorial::render_overlay(app, frame);
     }
-    
+
     if app.alarm_ringing() {
         alarm_overlay::render(app, frame, area);
     }
@@ -112,11 +112,7 @@ fn render_device_selector(frame: &mut Frame, app: &mut App, area: Rect) {
         let style = if *active {
             Style::default()
                 .fg(Color::Black)
-                .bg(if *reconnecting {
-                    theme::WARNING
-                } else {
-                    theme::ACCENT
-                })
+                .bg(if *reconnecting { theme::WARNING } else { theme::ACCENT })
                 .add_modifier(Modifier::BOLD)
         } else if *reconnecting {
             Style::default().fg(theme::WARNING)
@@ -131,10 +127,7 @@ fn render_device_selector(frame: &mut Frame, app: &mut App, area: Rect) {
 
     if devices.is_empty() {
         frame.render_widget(
-            Paragraph::new(Span::styled(
-                " Scanning for Coyote… ",
-                Style::default().fg(theme::TEXT_DIM),
-            )),
+            Paragraph::new(Span::styled(" Scanning for Coyote… ", Style::default().fg(theme::TEXT_DIM))),
             area,
         );
     } else if devices.len() > 1 {
@@ -199,11 +192,13 @@ fn render_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
         app.push_click(rect, Action::SwitchTab(*tab));
         x += w;
         if i + 1 < tab_labels.len() && x < inner.x + inner.width {
-            let sep = Rect { x, y: inner.y, width: 1, height: 1 };
-            frame.render_widget(
-                Paragraph::new("│").style(Style::default().fg(theme::ACCENT_DIM)),
-                sep,
-            );
+            let sep = Rect {
+                x,
+                y: inner.y,
+                width: 1,
+                height: 1,
+            };
+            frame.render_widget(Paragraph::new("│").style(Style::default().fg(theme::ACCENT_DIM)), sep);
             x += 1;
         }
     }
@@ -235,7 +230,9 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
         Tab::Status => "  Q/Esc — quit",
         Tab::Setup => "  ↑↓ select  ·  ←→ / Enter toggle  ·  OSC & OSCQuery auto-configured",
         Tab::Presets => "  ↑↓ select  ·  × delete mine  ·  → A/B apply  ·  Save A/B  ·  R refresh",
-        Tab::Zones => "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  R reset  ·  drag threshold sliders  ·  M mode  ·  X remove  ·  Z sets",
+        Tab::Zones => {
+            "  ↑↓ select  ·  ←→ pane  ·  − / + scale ±5  ·  R reset  ·  drag threshold sliders  ·  M mode  ·  X remove  ·  Z sets"
+        }
         Tab::Channels => "  ↑↓ field  ·  ←→ ±1  ·  Shift+←→ ±10  ·  wheel — scroll",
         Tab::Tuning => "  ↑↓ field  ·  ←→ adjust  ·  wheel — scroll  ·  Enter — reset",
         Tab::Modulation => "  Enter — function list  ·  source buttons  ·  ↑↓ field  ·  wheel — scroll",
@@ -250,14 +247,7 @@ fn render_status_bar(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-pub fn button(
-    frame: &mut Frame,
-    app: &mut App,
-    area: Rect,
-    label: &str,
-    keyboard_focus: bool,
-    action: Action,
-) {
+pub fn button(frame: &mut Frame, app: &mut App, area: Rect, label: &str, keyboard_focus: bool, action: Action) {
     let lit = app.button_lit(&action, keyboard_focus);
     frame.render_widget(
         Paragraph::new(format!(" {label} "))
@@ -268,14 +258,7 @@ pub fn button(
     app.push_click(area, action);
 }
 
-pub fn icon_button(
-    frame: &mut Frame,
-    app: &mut App,
-    area: Rect,
-    label: &str,
-    keyboard_focus: bool,
-    action: Action,
-) {
+pub fn icon_button(frame: &mut Frame, app: &mut App, area: Rect, label: &str, keyboard_focus: bool, action: Action) {
     let lit = app.button_lit(&action, keyboard_focus);
     frame.render_widget(
         Paragraph::new(label)
@@ -318,20 +301,13 @@ pub fn slider_row(
     focused: bool,
 ) {
     let cols = Layout::horizontal([Constraint::Length(24), Constraint::Min(8)]).split(area);
-    frame.render_widget(
-        Paragraph::new(name.to_string()).style(theme::label_style(focused)),
-        cols[0],
-    );
+    frame.render_widget(Paragraph::new(name.to_string()).style(theme::label_style(focused)), cols[0]);
     let span = (max - min).max(1) as f64;
     let mut ratio = (((value - min) as f64) / span).clamp(0.0, 1.0);
     if kind.is_inverted() {
         ratio = 1.0 - ratio;
     }
-    let bar_color = if focused {
-        theme::HIGHLIGHT
-    } else {
-        theme::ACCENT
-    };
+    let bar_color = if focused { theme::HIGHLIGHT } else { theme::ACCENT };
     let gauge = Gauge::default()
         .gauge_style(Style::default().fg(bar_color).bg(theme::SURFACE_ELEVATED))
         .ratio(ratio)
@@ -357,19 +333,13 @@ pub fn stepper_row(
         Constraint::Length(5),
     ])
     .split(area);
-    frame.render_widget(
-        Paragraph::new(label.to_string()).style(theme::label_style(focused)),
-        cols[0],
-    );
+    frame.render_widget(Paragraph::new(label.to_string()).style(theme::label_style(focused)), cols[0]);
     button(frame, app, cols[1], "−", false, minus);
     button(frame, app, cols[3], "+", false, plus);
 }
 
 pub fn header(frame: &mut Frame, area: Rect, text: &str) {
-    frame.render_widget(
-        Paragraph::new(text).style(theme::section_header_style()),
-        area,
-    );
+    frame.render_widget(Paragraph::new(text).style(theme::section_header_style()), area);
 }
 
 pub fn max_scroll(content_h: u16, viewport_h: u16) -> u16 {
@@ -417,10 +387,7 @@ pub fn clear_panel_inner(frame: &mut Frame, inner: Rect) {
     if inner.width == 0 || inner.height == 0 {
         return;
     }
-    frame.render_widget(
-        Block::default().style(Style::default().bg(theme::SURFACE)),
-        inner,
-    );
+    frame.render_widget(Block::default().style(Style::default().bg(theme::SURFACE)), inner);
 }
 
 pub fn battery_gauge(frame: &mut Frame, area: Rect, pct: Option<u8>) {
@@ -448,10 +415,7 @@ fn battery_gauge_inner(frame: &mut Frame, area: Rect, pct: Option<u8>, show_labe
                 area,
             );
         } else {
-            frame.render_widget(
-                Paragraph::new(Span::styled("…", Style::default().fg(theme::TEXT_DIM))),
-                area,
-            );
+            frame.render_widget(Paragraph::new(Span::styled("…", Style::default().fg(theme::TEXT_DIM))), area);
         }
         return;
     };
@@ -476,9 +440,7 @@ fn battery_gauge_inner(frame: &mut Frame, area: Rect, pct: Option<u8>, show_labe
     } else {
         0
     };
-    let bar_w_avail = area
-        .width
-        .saturating_sub(prefix_w + label_w + 1);
+    let bar_w_avail = area.width.saturating_sub(prefix_w + label_w + 1);
     if bar_w_avail < 4 {
         frame.render_widget(
             Paragraph::new(format!("{pct}%")).style(

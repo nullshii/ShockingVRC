@@ -33,10 +33,7 @@ pub struct PinRef {
 
 impl PinRef {
     pub fn new(node: NodeId, pin: impl Into<String>) -> Self {
-        Self {
-            node,
-            pin: pin.into(),
-        }
+        Self { node, pin: pin.into() }
     }
 }
 
@@ -203,10 +200,7 @@ impl fmt::Display for ConnectError {
             ConnectError::UnknownNode => write!(f, "that node no longer exists"),
             ConnectError::UnknownPin(p) => write!(f, "pin '{p}' does not exist"),
             ConnectError::SelfLoop => write!(f, "a node cannot feed itself"),
-            ConnectError::Cycle => write!(
-                f,
-                "that wire would make a loop — feedback needs a Delay node in the path"
-            ),
+            ConnectError::Cycle => write!(f, "that wire would make a loop — feedback needs a Delay node in the path"),
         }
     }
 }
@@ -286,12 +280,7 @@ impl Graph {
         if from == to {
             return true;
         }
-        let delays: HashSet<NodeId> = self
-            .nodes
-            .iter()
-            .filter(|n| n.kind.is_delay())
-            .map(|n| n.id)
-            .collect();
+        let delays: HashSet<NodeId> = self.nodes.iter().filter(|n| n.kind.is_delay()).map(|n| n.id).collect();
         let mut stack = vec![to];
         let mut seen = HashSet::new();
         while let Some(n) = stack.pop() {
@@ -397,9 +386,9 @@ impl Graph {
     }
 
     pub fn device_node_for(&self, mac: &str) -> Option<&Node> {
-        self.nodes.iter().find(|n| {
-            matches!(n.device_binding(), Some(DeviceBinding::Mac(m)) if m.eq_ignore_ascii_case(mac))
-        })
+        self.nodes
+            .iter()
+            .find(|n| matches!(n.device_binding(), Some(DeviceBinding::Mac(m)) if m.eq_ignore_ascii_case(mac)))
     }
 
     pub fn ensure_device_nodes(&mut self, devices: &[(String, String)]) -> Vec<NodeId> {
@@ -412,10 +401,7 @@ impl Graph {
                 Some((_, max)) => (max[0] + 280.0, self.free_device_row()),
                 None => (420.0, 40.0),
             };
-            let mut node = Node::new(
-                NodeKind::Device(super::kind::DeviceParams::bound_to(mac)),
-                [x.max(420.0), y],
-            );
+            let mut node = Node::new(NodeKind::Device(super::kind::DeviceParams::bound_to(mac)), [x.max(420.0), y]);
             node.title = device_title(name, mac);
             added.push(self.add(node));
         }
@@ -435,12 +421,7 @@ impl Graph {
         Graph {
             version: GRAPH_VERSION,
             view: ViewState::default(),
-            nodes: self
-                .nodes
-                .iter()
-                .filter(|n| ids.contains(&n.id))
-                .cloned()
-                .collect(),
+            nodes: self.nodes.iter().filter(|n| ids.contains(&n.id)).cloned().collect(),
             edges: self
                 .edges
                 .iter()
@@ -499,10 +480,7 @@ impl Graph {
         let ids: HashSet<NodeId> = ids
             .iter()
             .copied()
-            .filter(|id| {
-                self.node(*id)
-                    .is_some_and(|n| !matches!(n.kind, NodeKind::Device(_)))
-            })
+            .filter(|id| self.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Device(_))))
             .collect();
         if ids.is_empty() {
             return None;
@@ -637,19 +615,11 @@ impl Graph {
         let body = inner.extract(&body_ids);
         let centre = node.pos;
         let offset = match body.bounds() {
-            Some((min, max)) => [
-                centre[0] - (min[0] + max[0]) * 0.5,
-                centre[1] - (min[1] + max[1]) * 0.5,
-            ],
+            Some((min, max)) => [centre[0] - (min[0] + max[0]) * 0.5, centre[1] - (min[1] + max[1]) * 0.5],
             None => [0.0, 0.0],
         };
         let new_ids = self.insert(&body, offset);
-        let remap: HashMap<NodeId, NodeId> = body
-            .nodes
-            .iter()
-            .map(|n| n.id)
-            .zip(new_ids.iter().copied())
-            .collect();
+        let remap: HashMap<NodeId, NodeId> = body.nodes.iter().map(|n| n.id).zip(new_ids.iter().copied()).collect();
 
         let outer_in: Vec<Edge> = self.edges.iter().filter(|e| e.to.node == id).cloned().collect();
         let outer_out: Vec<Edge> = self.edges.iter().filter(|e| e.from.node == id).cloned().collect();
@@ -758,10 +728,7 @@ mod tests {
         let x = g.add_kind(add(MathOp::Add), [0.0, 0.0]);
         let y = g.add_kind(add(MathOp::Add), [0.0, 0.0]);
         g.connect(PinRef::new(x, "out"), PinRef::new(y, "a")).unwrap();
-        assert_eq!(
-            g.connect(PinRef::new(y, "out"), PinRef::new(x, "a")),
-            Err(ConnectError::Cycle)
-        );
+        assert_eq!(g.connect(PinRef::new(y, "out"), PinRef::new(x, "a")), Err(ConnectError::Cycle));
         assert_eq!(
             g.connect(PinRef::new(x, "out"), PinRef::new(x, "b")),
             Err(ConnectError::SelfLoop)
@@ -817,10 +784,7 @@ mod tests {
     fn expanding_a_device_pin_keeps_its_wire_on_segment_one() {
         let mut g = Graph::default();
         let t = g.add_kind(NodeKind::Time(NoParams {}), [0.0, 0.0]);
-        let d = g.add_kind(
-            NodeKind::Device(crate::graph::kind::DeviceParams::bound_to("AA")),
-            [0.0, 0.0],
-        );
+        let d = g.add_kind(NodeKind::Device(crate::graph::kind::DeviceParams::bound_to("AA")), [0.0, 0.0]);
         g.connect(PinRef::new(t, "t"), PinRef::new(d, "a.freq")).unwrap();
         let set = |g: &mut Graph, on: bool| {
             if let NodeKind::Device(p) = &mut g.node_mut(d).unwrap().kind {

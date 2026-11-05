@@ -1,21 +1,13 @@
-use shocking_vrc_core::cli::{
-    AggregationMode, ChannelConfig, CliConfig, ContactMode, PowerLimits, ZoneEntry, ZoneId,
-};
 use shocking_vrc_core::OldZoneType;
 use shocking_vrc_core::ZoneEvent;
+use shocking_vrc_core::cli::{AggregationMode, ChannelConfig, CliConfig, ContactMode, PowerLimits, ZoneEntry, ZoneId};
 
 pub fn demo_config() -> CliConfig {
     CliConfig {
         channel_a: ChannelConfig {
             zones: vec![
-                ZoneEntry::new(
-                    ZoneId::new(OldZoneType::Orf, "Pussy"),
-                    ContactMode::Depth,
-                ),
-                ZoneEntry::new(
-                    ZoneId::new(OldZoneType::DGB, "TouchAreaA"),
-                    ContactMode::Depth,
-                ),
+                ZoneEntry::new(ZoneId::new(OldZoneType::Orf, "Pussy"), ContactMode::Depth),
+                ZoneEntry::new(ZoneId::new(OldZoneType::DGB, "TouchAreaA"), ContactMode::Depth),
             ],
             frequency: [30, 200, 30, 200],
             intensity: [100, 100, 100, 100],

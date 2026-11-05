@@ -50,11 +50,7 @@ pub fn render_overlay(app: &mut App, frame: &mut Frame) {
         .border_type(BorderType::Double)
         .border_style(Style::default().fg(GUIDE_BORDER))
         .title(title)
-        .title_style(
-            Style::default()
-                .fg(GUIDE_TITLE)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(GUIDE_TITLE).add_modifier(Modifier::BOLD))
         .style(Style::default().bg(GUIDE_BG));
     let inner = block.inner(panel);
     frame.render_widget(block, panel);
@@ -68,9 +64,7 @@ pub fn render_overlay(app: &mut App, frame: &mut Frame) {
             if l.starts_with("**") && l.ends_with("**") {
                 Line::from(Span::styled(
                     l.trim_matches('*').trim(),
-                    Style::default()
-                        .fg(theme::HIGHLIGHT)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(theme::HIGHLIGHT).add_modifier(Modifier::BOLD),
                 ))
             } else if l.starts_with("  ") {
                 Line::from(Span::styled(*l, Style::default().fg(theme::TEXT)))

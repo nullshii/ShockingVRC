@@ -3,7 +3,7 @@ use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Clear, Gauge, Paragraph};
 
-use super::app::{format_secs, Action, App};
+use super::app::{Action, App, format_secs};
 use super::theme;
 use super::ui;
 
@@ -11,10 +11,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     let st = app.alarm_status;
 
     frame.render_widget(Clear, area);
-    frame.render_widget(
-        Block::default().style(Style::default().bg(Color::Rgb(30, 8, 10))),
-        area,
-    );
+    frame.render_widget(Block::default().style(Style::default().bg(Color::Rgb(30, 8, 10))), area);
 
     let popup_w = 54u16.min(area.width.saturating_sub(4));
     let popup_h = 11u16.min(area.height.saturating_sub(2));
@@ -45,11 +42,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     let cfg = app.alarm_config();
     frame.render_widget(
         Paragraph::new(format!("WAKE UP — {}", cfg.time_label()))
-            .style(
-                Style::default()
-                    .fg(theme::ERROR)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .style(Style::default().fg(theme::ERROR).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center),
         rows[0],
     );
@@ -115,14 +108,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     ])
     .split(rows[5]);
     ui::button(frame, app, btn_cols[1], "Stop", false, Action::AlarmStop);
-    ui::button(
-        frame,
-        app,
-        btn_cols[3],
-        "Snooze",
-        false,
-        Action::AlarmSnooze,
-    );
+    ui::button(frame, app, btn_cols[3], "Snooze", false, Action::AlarmSnooze);
 
     frame.render_widget(
         Paragraph::new("Enter / Esc / Space — stop   ·   S — snooze")

@@ -146,11 +146,7 @@ fn flatten(
         match &node.kind {
             NodeKind::Group(p) => {
                 if path.len() > MAX_GROUP_DEPTH {
-                    issues.push(GraphIssue::new(
-                        Severity::Error,
-                        Some(owner),
-                        "Groups are nested too deeply",
-                    ));
+                    issues.push(GraphIssue::new(Severity::Error, Some(owner), "Groups are nested too deeply"));
                 } else {
                     flatten(&p.graph, path, Some(owner), Some(&node.defaults), out, edges, issues);
                     let mut find = |input: bool| {

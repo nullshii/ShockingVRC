@@ -6,9 +6,7 @@ use shocking_vrc_core::OldZoneType;
 use shocking_vrc_core::cli::{CliEngine, EngineMode, GraphChannelOutput, spoof_guard_enabled};
 use shocking_vrc_core::graph::compile::ExternalRequest;
 use shocking_vrc_core::graph::device::{ChannelFrame, MAX_CHANNELS};
-use shocking_vrc_core::graph::{
-    AlarmSample, ExternalSample, Graph, GraphEvaluator, GraphIssue, GraphProbe,
-};
+use shocking_vrc_core::graph::{AlarmSample, ExternalSample, Graph, GraphEvaluator, GraphIssue, GraphProbe};
 use shocking_vrc_core::osc::RawInputs;
 
 use crate::app_state::AppState;
@@ -87,13 +85,7 @@ fn mode_byte(m: EngineMode) -> u8 {
 }
 
 impl GraphRuntime {
-    pub fn new(
-        graph: Graph,
-        mode: EngineMode,
-        caps: [u8; MAX_CHANNELS],
-        auto_save: bool,
-        notes: Vec<String>,
-    ) -> Self {
+    pub fn new(graph: Graph, mode: EngineMode, caps: [u8; MAX_CHANNELS], auto_save: bool, notes: Vec<String>) -> Self {
         let eval = GraphEvaluator::new(&graph);
         Self {
             inner: Arc::new(Inner {
@@ -138,11 +130,7 @@ impl GraphRuntime {
     }
 
     pub fn status(&self) -> GraphStatus {
-        self.inner
-            .status
-            .read()
-            .map(|s| s.clone())
-            .unwrap_or_default()
+        self.inner.status.read().map(|s| s.clone()).unwrap_or_default()
     }
 
     pub fn set_graph(&self, mut graph: Graph) -> u64 {
@@ -321,18 +309,9 @@ impl GraphRuntime {
                 engines = state
                     .device_slots
                     .read()
-                    .map(|slots| {
-                        slots
-                            .iter()
-                            .map(|s| (s.mac.clone(), s.engine.clone()))
-                            .collect()
-                    })
+                    .map(|slots| slots.iter().map(|s| (s.mac.clone(), s.engine.clone())).collect())
                     .unwrap_or_default();
-                let named: Vec<(String, String)> = state
-                    .slot_infos()
-                    .into_iter()
-                    .map(|i| (i.mac, i.name))
-                    .collect();
+                let named: Vec<(String, String)> = state.slot_infos().into_iter().map(|i| (i.mac, i.name)).collect();
                 self.ensure_device_nodes(&named);
             }
 
@@ -445,8 +424,7 @@ pub fn sample(req: &ExternalRequest, raw: &RawInputs, now: Instant, guard: bool)
         ExternalRequest::Osc(p) => match raw.params.get(p.address.as_str()) {
             Some(s) => ExternalSample {
                 value: s.value,
-                fresh: now.saturating_duration_since(s.updated)
-                    <= Duration::from_millis(p.stale_ms as u64),
+                fresh: now.saturating_duration_since(s.updated) <= Duration::from_millis(p.stale_ms as u64),
             },
             None => ExternalSample::default(),
         },
@@ -531,10 +509,7 @@ mod tests {
         let rt = GraphRuntime::new(Graph::default(), EngineMode::Graph, [40, 40], false, Vec::new());
         let r0 = rt.doc_rev();
         let mut g = Graph::default();
-        g.add_kind(
-            shocking_vrc_core::graph::NodeKind::Time(Default::default()),
-            [0.0, 0.0],
-        );
+        g.add_kind(shocking_vrc_core::graph::NodeKind::Time(Default::default()), [0.0, 0.0]);
         let r1 = rt.set_graph(g);
         assert!(r1 > r0);
         assert!(rt.inner.ramp_pending.load(Ordering::Acquire));
@@ -560,7 +535,8 @@ mod tests {
         let one = g.add_kind(NodeKind::Constant(ConstantParams { value: 1.0 }), [0.0, 0.0]);
         let dev = g.add_kind(NodeKind::Device(DeviceParams::bound_to("AA")), [0.0, 0.0]);
         g.connect(PinRef::new(osc, "value"), PinRef::new(scale, "a")).unwrap();
-        g.connect(PinRef::new(scale, "out"), PinRef::new(dev, "a.limit_max")).unwrap();
+        g.connect(PinRef::new(scale, "out"), PinRef::new(dev, "a.limit_max"))
+            .unwrap();
         g.connect(PinRef::new(one, "out"), PinRef::new(dev, "a.power")).unwrap();
 
         let engine = CliEngine::new(CliConfig::default(), AlarmController::new(AlarmConfig::default()));
@@ -574,7 +550,10 @@ mod tests {
             let mut raw = RawInputs::default();
             raw.params.insert(
                 "/avatar/parameters/MaxPower".into(),
-                ParamSample { value: slider, updated: now },
+                ParamSample {
+                    value: slider,
+                    updated: now,
+                },
             );
             ev.fill_external(|req| sample(req, &raw, now, true));
             ev.step(0.025);

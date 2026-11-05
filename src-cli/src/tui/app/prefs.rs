@@ -1,8 +1,7 @@
 use super::Action;
 
 pub(super) use shocking_vrc_app::prefs::{
-    CONFIG_FILE, load_ui_prefs, save_alarm_tab_pref, save_config, save_ui_prefs,
-    save_ui_prefs_full,
+    CONFIG_FILE, load_ui_prefs, save_alarm_tab_pref, save_config, save_ui_prefs, save_ui_prefs_full,
 };
 
 pub(super) fn should_persist_config(action: &Action) -> bool {

@@ -171,8 +171,7 @@ impl Backdrop {
             if b.z <= NEAR {
                 continue;
             }
-            let mut alpha =
-                ((FAR - b.z) / 1.3).min(1.0) * ((b.z - NEAR) / 0.9).min(1.0);
+            let mut alpha = ((FAR - b.z) / 1.3).min(1.0) * ((b.z - NEAR) / 0.9).min(1.0);
             if alpha <= 0.01 {
                 continue;
             }
@@ -207,18 +206,10 @@ impl Backdrop {
             }
 
             let base = if b.accent { pal.accent } else { pal.contrast };
-            let color = Color32::from_rgba_unmultiplied(
-                base.r(),
-                base.g(),
-                base.b(),
-                (alpha * 255.0) as u8,
-            );
+            let color = Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), (alpha * 255.0) as u8);
             let stroke = Stroke::new((1.1 / b.z).clamp(0.5, 1.6), color);
             for (a, c) in EDGES {
-                painter.line_segment(
-                    [Pos2::new(px[a], py[a]), Pos2::new(px[c], py[c])],
-                    stroke,
-                );
+                painter.line_segment([Pos2::new(px[a], py[a]), Pos2::new(px[c], py[c])], stroke);
             }
         }
     }

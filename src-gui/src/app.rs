@@ -339,9 +339,12 @@ impl eframe::App for GuiApp {
 
         self.overlays(ui, &pal, &snap);
 
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(
-            if self.backdrop.speed > 0.0 { 16 } else { 60 },
-        ));
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(if self.backdrop.speed > 0.0 {
+                16
+            } else {
+                60
+            }));
 
         if ui.ctx().input(|i| i.viewport().close_requested()) {
             self.quit = true;
@@ -355,8 +358,7 @@ impl GuiApp {
         for ch in Channel::ALL {
             let n = snap.channel(ch).zones.len();
             let cur = self.state.sel_zone_for(ch);
-            self.state
-                .set_sel_zone(ch, if n == 0 { 0 } else { cur.min(n - 1) });
+            self.state.set_sel_zone(ch, if n == 0 { 0 } else { cur.min(n - 1) });
         }
         let zones = snap.avatar_zones.len();
         if zones == 0 {
@@ -389,9 +391,7 @@ impl GuiApp {
                 if alarm_ringing {
                     match key {
                         egui::Key::S => self.bridge.send(Command::AlarmSnooze),
-                        egui::Key::Enter | egui::Key::Escape | egui::Key::Space => {
-                            self.bridge.send(Command::AlarmStop)
-                        }
+                        egui::Key::Enter | egui::Key::Escape | egui::Key::Space => self.bridge.send(Command::AlarmStop),
                         _ => {}
                     }
                     continue;
@@ -403,12 +403,13 @@ impl GuiApp {
                 }
 
                 if let Some(n) = digit_of(*key)
-                    && let Some(s) = Section::ALL.iter().copied().find(|s| {
-                        s.key().to_digit(10) == Some(n) && self.state.section_visible(*s)
-                    })
-                    {
-                        self.state.section = s;
-                    }
+                    && let Some(s) = Section::ALL
+                        .iter()
+                        .copied()
+                        .find(|s| s.key().to_digit(10) == Some(n) && self.state.section_visible(*s))
+                {
+                    self.state.section = s;
+                }
                 if *key == egui::Key::T {
                     self.state.show_theme_panel = !self.state.show_theme_panel;
                 }
@@ -476,17 +477,9 @@ impl GuiApp {
         );
         let ui = &mut child;
 
-        ui.label(
-            egui::RichText::new("coyote@vrc:~$ ")
-                .font(font::small())
-                .color(pal.dim),
-        );
+        ui.label(egui::RichText::new("coyote@vrc:~$ ").font(font::small()).color(pal.dim));
         let cmd = self.state.section.title().to_lowercase();
-        ui.label(
-            egui::RichText::new(&cmd)
-                .font(font::small())
-                .color(pal.contrast),
-        );
+        ui.label(egui::RichText::new(&cmd).font(font::small()).color(pal.contrast));
         let blink = (ui.input(|i| i.time) * 0.9).fract() < 0.5;
         let (cur, _) = ui.allocate_exact_size(vec2(7.0, 13.0), Sense::hover());
         if blink {
@@ -531,44 +524,42 @@ impl GuiApp {
         );
         let ui = &mut child;
 
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                let max_w = 1180.0_f32.min(ui.available_width() - 36.0);
-                let pad = ((ui.available_width() - max_w) * 0.5).max(18.0);
-                ui.add_space(20.0);
-                ui.horizontal(|ui| {
-                    ui.add_space(pad);
-                    w::column(ui, max_w, |ui| {
-                        self.section_header(ui, pal);
-                        let mut cx = Ctx {
-                            pal,
-                            snap,
-                            bridge: &self.bridge,
-                            ui_state: &mut self.state,
-                            log: &self.log,
-                        };
-                        match cx.ui_state.section {
-                            Section::Status => views::status::show(ui, &mut cx),
-                            Section::Zones => views::zones::show(ui, &mut cx),
-                            Section::Channels => views::channels::show(ui, &mut cx),
-                            Section::Tuning => views::tuning::show(ui, &mut cx),
-                            Section::Modulation => views::modulation::show(ui, &mut cx),
-                            Section::Log => views::log::show(ui, &mut cx),
-                            Section::Presets => views::presets::show(ui, &mut cx),
-                            Section::Setup => {
-                                let restart = views::setup::show(ui, &mut cx);
-                                if restart {
-                                    self.tutorial.start();
-                                }
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            let max_w = 1180.0_f32.min(ui.available_width() - 36.0);
+            let pad = ((ui.available_width() - max_w) * 0.5).max(18.0);
+            ui.add_space(20.0);
+            ui.horizontal(|ui| {
+                ui.add_space(pad);
+                w::column(ui, max_w, |ui| {
+                    self.section_header(ui, pal);
+                    let mut cx = Ctx {
+                        pal,
+                        snap,
+                        bridge: &self.bridge,
+                        ui_state: &mut self.state,
+                        log: &self.log,
+                    };
+                    match cx.ui_state.section {
+                        Section::Status => views::status::show(ui, &mut cx),
+                        Section::Zones => views::zones::show(ui, &mut cx),
+                        Section::Channels => views::channels::show(ui, &mut cx),
+                        Section::Tuning => views::tuning::show(ui, &mut cx),
+                        Section::Modulation => views::modulation::show(ui, &mut cx),
+                        Section::Log => views::log::show(ui, &mut cx),
+                        Section::Presets => views::presets::show(ui, &mut cx),
+                        Section::Setup => {
+                            let restart = views::setup::show(ui, &mut cx);
+                            if restart {
+                                self.tutorial.start();
                             }
-                            Section::Alarm => views::alarm::show(ui, &mut cx),
-                            Section::Graph => views::graph::show(ui, &mut cx),
                         }
-                        ui.add_space(28.0);
-                    });
+                        Section::Alarm => views::alarm::show(ui, &mut cx),
+                        Section::Graph => views::graph::show(ui, &mut cx),
+                    }
+                    ui.add_space(28.0);
                 });
             });
+        });
     }
 
     fn graph_body(&mut self, ui: &mut Ui, rect: Rect, pal: &Palette, snap: &Snapshot) {
@@ -602,20 +593,13 @@ impl GuiApp {
                 .color(pal.contrast),
         );
         ui.add_space(2.0);
-        ui.label(
-            egui::RichText::new(s.blurb())
-                .font(font::small())
-                .color(pal.dim),
-        );
+        ui.label(egui::RichText::new(s.blurb()).font(font::small()).color(pal.dim));
         ui.add_space(space::SHEET_GAP);
     }
 
     fn statusbar(&mut self, ui: &mut Ui, pal: &Palette, snap: &Snapshot, h: f32) {
         let full = ui.max_rect();
-        let bar = Rect::from_min_max(
-            egui::pos2(full.left(), full.bottom() - h),
-            full.max,
-        );
+        let bar = Rect::from_min_max(egui::pos2(full.left(), full.bottom() - h), full.max);
         ui.painter().rect_filled(bar, w::SQUARE, pal.sheet);
         w::dashed_line(
             ui.painter(),
@@ -638,11 +622,7 @@ impl GuiApp {
             let c = if on { pal.success } else { pal.error };
             let (r, _) = ui.allocate_exact_size(vec2(7.0, 7.0), Sense::hover());
             ui.painter().rect_filled(r, w::SQUARE, c);
-            ui.label(
-                egui::RichText::new(label)
-                    .font(font::tiny())
-                    .color(pal.dim),
-            );
+            ui.label(egui::RichText::new(label).font(font::tiny()).color(pal.dim));
         };
 
         ui.spacing_mut().item_spacing.x = 6.0;
@@ -661,13 +641,9 @@ impl GuiApp {
         dot(ui, snap.vrchat_found, "VRChat");
         ui.add_space(14.0);
         ui.label(
-            egui::RichText::new(format!(
-                "OSC :{}  ·  {} zone(s)",
-                snap.osc_port,
-                snap.avatar_zones.len()
-            ))
-            .font(font::tiny())
-            .color(pal.dim),
+            egui::RichText::new(format!("OSC :{}  ·  {} zone(s)", snap.osc_port, snap.avatar_zones.len()))
+                .font(font::tiny())
+                .color(pal.dim),
         );
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -737,11 +713,7 @@ impl GuiApp {
             .title_bar(false)
             .resizable(false)
             .anchor(Align2::RIGHT_TOP, vec2(-18.0, 58.0))
-            .frame(
-                egui::Frame::NONE
-                    .fill(pal.base)
-                    .inner_margin(egui::Margin::same(14)),
-            )
+            .frame(egui::Frame::NONE.fill(pal.base).inner_margin(egui::Margin::same(14)))
             .default_width(300.0)
             .show(ctx, |ui| {
                 let outer = ui.max_rect().expand(14.0);
@@ -771,15 +743,9 @@ impl GuiApp {
                     );
                     let mut x = inner.right();
                     for c in [t.accent, t.contrast, t.base] {
-                        let sw = Rect::from_min_size(
-                            egui::pos2(x - 16.0, inner.center().y - 8.0),
-                            vec2(16.0, 16.0),
-                        );
-                        ui.painter().rect_filled(
-                            sw.shrink(2.0),
-                            w::SQUARE,
-                            crate::theme::palette::oklch_to_color(c),
-                        );
+                        let sw = Rect::from_min_size(egui::pos2(x - 16.0, inner.center().y - 8.0), vec2(16.0, 16.0));
+                        ui.painter()
+                            .rect_filled(sw.shrink(2.0), w::SQUARE, crate::theme::palette::oklch_to_color(c));
                         ui.painter().rect_stroke(
                             sw,
                             w::SQUARE,
@@ -805,9 +771,7 @@ impl GuiApp {
                 ] {
                     ui.horizontal(|ui| {
                         w::field_label(ui, pal, label, 68.0, false);
-                        if let Some(v) =
-                            w::Slider::new(*value, 0.0, max).width(160.0).show(ui, pal)
-                        {
+                        if let Some(v) = w::Slider::new(*value, 0.0, max).width(160.0).show(ui, pal) {
                             *value = (v * 10.0).round() / 10.0;
                             changed = true;
                         }
@@ -820,11 +784,9 @@ impl GuiApp {
 
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new(
-                        "Nine palettes, three OKLCH colours each — the same set the website uses.",
-                    )
-                    .font(font::tiny())
-                    .color(pal.dim),
+                    egui::RichText::new("Nine palettes, three OKLCH colours each — the same set the website uses.")
+                        .font(font::tiny())
+                        .color(pal.dim),
                 );
             });
         if !open {
@@ -849,11 +811,7 @@ fn nav_link(ui: &mut Ui, pal: &Palette, key: char, label: &str, current: bool) -
 
     let (rect, resp) = ui.allocate_exact_size(vec2(kw + lw, 20.0), Sense::click());
     let hovered = resp.hovered();
-    let color = if current || hovered {
-        pal.accent
-    } else {
-        pal.contrast
-    };
+    let color = if current || hovered { pal.accent } else { pal.contrast };
     let p = ui.painter();
     p.text(
         rect.left_center(),
@@ -870,11 +828,7 @@ fn nav_link(ui: &mut Ui, pal: &Palette, key: char, label: &str, current: bool) -
         color,
     );
     if current {
-        p.hline(
-            rect.x_range(),
-            rect.bottom() - 1.0,
-            Stroke::new(1.0, pal.accent),
-        );
+        p.hline(rect.x_range(), rect.bottom() - 1.0, Stroke::new(1.0, pal.accent));
     }
     if hovered {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

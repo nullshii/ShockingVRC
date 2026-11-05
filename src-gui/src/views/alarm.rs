@@ -55,9 +55,10 @@ fn now_panel(ui: &mut Ui, cx: &mut Ctx) {
             ui.vertical(|ui| {
                 ui.add_space(3.0);
                 if let Some(next) = w::toggle(ui, pal, cfg.enabled)
-                    && next != cfg.enabled {
-                        commit(cx, |c| c.enabled = next);
-                    }
+                    && next != cfg.enabled
+                {
+                    commit(cx, |c| c.enabled = next);
+                }
                 ui.add_space(2.0);
                 let line = match st.phase {
                     AlarmPhase::Ringing => format!(
@@ -128,11 +129,9 @@ fn now_panel(ui: &mut Ui, cx: &mut Ctx) {
         );
         if cx.snap.devices.is_empty() {
             ui.label(
-                egui::RichText::new(
-                    "No Coyote connected — the alarm will still fire, but nothing will feel it.",
-                )
-                .font(font::tiny())
-                .color(pal.warning),
+                egui::RichText::new("No Coyote connected — the alarm will still fire, but nothing will feel it.")
+                    .font(font::tiny())
+                    .color(pal.warning),
             );
         }
     });

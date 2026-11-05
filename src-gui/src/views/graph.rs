@@ -58,29 +58,48 @@ fn toolbar(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
     let pal = env.pal;
     let g = &env.snap.graph;
     ui.horizontal(|ui| {
-        if w::cta(ui, pal, "+ Add").on_hover_text("Shift+A or right-click on the canvas").clicked() {
+        if w::cta(ui, pal, "+ Add")
+            .on_hover_text("Shift+A or right-click on the canvas")
+            .clicked()
+        {
             let centre = ed.view_centre();
             let r = ed.canvas_rect;
             ed.menu = Some(crate::graph_editor::AddMenu {
-                screen: if r.is_finite() { r.left_top() + vec2(12.0, 12.0) } else { pos2(40.0, 140.0) },
+                screen: if r.is_finite() {
+                    r.left_top() + vec2(12.0, 12.0)
+                } else {
+                    pos2(40.0, 140.0)
+                },
                 at: centre,
                 filter: String::new(),
                 from_wire: None,
                 focus: true,
             });
         }
-        if w::button_enabled(ui, pal, "Undo", ed.can_undo()).on_hover_text("Ctrl+Z").clicked() {
+        if w::button_enabled(ui, pal, "Undo", ed.can_undo())
+            .on_hover_text("Ctrl+Z")
+            .clicked()
+        {
             ed.undo();
         }
-        if w::button_enabled(ui, pal, "Redo", ed.can_redo()).on_hover_text("Ctrl+Shift+Z").clicked() {
+        if w::button_enabled(ui, pal, "Redo", ed.can_redo())
+            .on_hover_text("Ctrl+Shift+Z")
+            .clicked()
+        {
             ed.redo();
         }
         ui.add_space(6.0);
-        if w::button(ui, pal, "Save").on_hover_text("Write graph.json now").clicked() {
+        if w::button(ui, pal, "Save")
+            .on_hover_text("Write graph.json now")
+            .clicked()
+        {
             ed.flush(env.bridge, ui.ctx());
             env.bridge.send(Command::SaveGraph);
         }
-        if w::button(ui, pal, "Load").on_hover_text("Reload graph.json (undoable)").clicked() {
+        if w::button(ui, pal, "Load")
+            .on_hover_text("Reload graph.json (undoable)")
+            .clicked()
+        {
             env.bridge.send(Command::ReloadGraph);
         }
         if w::button(ui, pal, "Export…").clicked() {
@@ -118,8 +137,16 @@ fn toolbar(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
             } else if !g.valid && g.tick > 0 {
                 ("graph invalid — output 0".to_string(), pal.error)
             } else {
-                let errors = g.issues.iter().filter(|i| i.severity == shocking_vrc_core::graph::Severity::Error).count();
-                let warns = g.issues.iter().filter(|i| i.severity == shocking_vrc_core::graph::Severity::Warning).count();
+                let errors = g
+                    .issues
+                    .iter()
+                    .filter(|i| i.severity == shocking_vrc_core::graph::Severity::Error)
+                    .count();
+                let warns = g
+                    .issues
+                    .iter()
+                    .filter(|i| i.severity == shocking_vrc_core::graph::Severity::Warning)
+                    .count();
                 match (errors, warns) {
                     (0, 0) => ("ok".to_string(), pal.success),
                     (0, n) => (format!("{n} warning(s)"), pal.warning),

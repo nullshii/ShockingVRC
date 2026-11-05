@@ -5,12 +5,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use shocking_vrc_app::app_state::{AppState, DeviceSlotInfo};
 use shocking_vrc_app::graph_runtime::GraphStatus;
-use shocking_vrc_app::{
-    device_config, graph_presets, graph_store, prefs, presets as preset_store, zone_presets,
-};
+use shocking_vrc_app::{device_config, graph_presets, graph_store, prefs, presets as preset_store, zone_presets};
 use shocking_vrc_core::cli::{
-    AggregationMode, AlarmChannels, AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus,
-    ContactMode, EngineMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId,
+    AggregationMode, AlarmChannels, AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus, ContactMode,
+    EngineMode, MotionNorms, PowerLimits, UkfConfig, ZoneEntry, ZoneId,
 };
 use shocking_vrc_core::graph::{Graph, GraphPreset, GraphPresetEntry};
 use shocking_vrc_core::modulation::config::ModulationConfig;
@@ -414,10 +412,7 @@ impl Worker {
     }
 
     fn active_mac(&self) -> Option<String> {
-        self.state
-            .slot_infos()
-            .get(self.active_device)
-            .map(|d| d.mac.clone())
+        self.state.slot_infos().get(self.active_device).map(|d| d.mac.clone())
     }
 
     async fn publish(&mut self) {
@@ -496,10 +491,9 @@ impl Worker {
             .ok()
             .and_then(|t| t.clone())
             .is_some_and(|t| t.at.elapsed() > Duration::from_secs(4));
-        if stale
-            && let Ok(mut slot) = self.shared.toast.write() {
-                *slot = None;
-            }
+        if stale && let Ok(mut slot) = self.shared.toast.write() {
+            *slot = None;
+        }
     }
 
     fn notify(&self, kind: ToastKind, text: impl Into<String>) {
@@ -567,10 +561,7 @@ impl Worker {
                     .await;
                 if ok {
                     log::info!("[ch-{}] Added {added} zone(s) from avatar", ch.label());
-                    self.notify(
-                        ToastKind::Success,
-                        format!("Added {added} zone(s) to channel {}", ch.label()),
-                    );
+                    self.notify(ToastKind::Success, format!("Added {added} zone(s) to channel {}", ch.label()));
                 }
             }
             Command::RemoveZone(ch, i) => {
@@ -634,8 +625,7 @@ impl Worker {
                     .await;
             }
             Command::SetIntensity(ch, seg, v) => {
-                self.mutate_channel(ch, |c| c.intensity[seg.min(3)] = v.min(100))
-                    .await;
+                self.mutate_channel(ch, |c| c.intensity[seg.min(3)] = v.min(100)).await;
             }
             Command::SetLimitMin(ch, v) => {
                 self.mutate_channel(ch, |c| c.limits = PowerLimits::new(v, c.limits.max))
@@ -727,11 +717,7 @@ impl Worker {
                     })
                     .await;
                 if ok {
-                    log::info!(
-                        "[ch-{}] {}[{seg}] modulation set: {summary}",
-                        ch.label(),
-                        kind.short()
-                    );
+                    log::info!("[ch-{}] {}[{seg}] modulation set: {summary}", ch.label(), kind.short());
                     self.notify(
                         ToastKind::Success,
                         format!("Modulation applied to {} {}[{seg}]", ch.label(), kind.short()),
@@ -749,11 +735,7 @@ impl Worker {
                     })
                     .await;
                 if ok {
-                    log::info!(
-                        "[ch-{}] Modulation seg[{seg}] disabled ({})",
-                        ch.label(),
-                        kind.short()
-                    );
+                    log::info!("[ch-{}] Modulation seg[{seg}] disabled ({})", ch.label(), kind.short());
                 }
             }
             Command::ClearChannelModulation(ch) => {
@@ -767,43 +749,27 @@ impl Worker {
                     .await;
                 if ok {
                     log::info!("[ch-{}] All modulation disabled (both)", ch.label());
-                    self.notify(
-                        ToastKind::Info,
-                        format!("Cleared all modulation on channel {}", ch.label()),
-                    );
+                    self.notify(ToastKind::Info, format!("Cleared all modulation on channel {}", ch.label()));
                 }
             }
 
             Command::RefreshPresets => self.start_preset_refresh(),
             Command::ApplyPreset(ch, i) => {
-                let entry = self
-                    .shared
-                    .presets
-                    .read()
-                    .ok()
-                    .and_then(|p| p.entries.get(i).cloned());
+                let entry = self.shared.presets.read().ok().and_then(|p| p.entries.get(i).cloned());
                 let Some(entry) = entry else {
                     self.notify(ToastKind::Error, "No preset selected");
                     return;
                 };
                 let preset = entry.preset.clone();
                 if self.mutate_channel(ch, |c| preset.apply_to(c)).await {
-                    log::info!(
-                        "[ch-{}] Preset applied: {} (limits unchanged)",
-                        ch.label(),
-                        entry.name
-                    );
+                    log::info!("[ch-{}] Preset applied: {} (limits unchanged)", ch.label(), entry.name);
                     self.notify(
                         ToastKind::Success,
                         format!("“{}” applied to channel {}", entry.name, ch.label()),
                     );
                 }
             }
-            Command::SaveUserPreset {
-                channel,
-                name,
-                author,
-            } => {
+            Command::SaveUserPreset { channel, name, author } => {
                 let Some(engine) = self.engine() else {
                     self.notify(ToastKind::Error, "No device — nothing to save");
                     return;
@@ -831,12 +797,7 @@ impl Worker {
                 }
             }
             Command::DeleteUserPreset(i) => {
-                let entry = self
-                    .shared
-                    .presets
-                    .read()
-                    .ok()
-                    .and_then(|p| p.entries.get(i).cloned());
+                let entry = self.shared.presets.read().ok().and_then(|p| p.entries.get(i).cloned());
                 let Some(entry) = entry.filter(|e| e.user) else {
                     return;
                 };
@@ -867,14 +828,8 @@ impl Worker {
                 let preset = entry.preset.clone();
                 if self.mutate(|cfg| preset.apply_to(cfg)).await {
                     let (a, b) = entry.preset.counts();
-                    log::info!(
-                        "[zone-sets] Loaded \"{}\" — A: {a} zone(s), B: {b} zone(s)",
-                        entry.name()
-                    );
-                    self.notify(
-                        ToastKind::Success,
-                        format!("Loaded “{}” — A:{a}, B:{b}", entry.name()),
-                    );
+                    log::info!("[zone-sets] Loaded \"{}\" — A: {a} zone(s), B: {b} zone(s)", entry.name());
+                    self.notify(ToastKind::Success, format!("Loaded “{}” — A:{a}, B:{b}", entry.name()));
                 }
             }
             Command::SaveZonePreset(name) => {
@@ -888,14 +843,8 @@ impl Worker {
                 match zone_presets::save_zone_preset(&name, &cfg) {
                     Ok(entry) => {
                         let (a, b) = entry.preset.counts();
-                        log::info!(
-                            "[zone-sets] Saved \"{}\" (A:{a}, B:{b}) → presets/zones/",
-                            entry.name()
-                        );
-                        self.notify(
-                            ToastKind::Success,
-                            format!("Saved zone set “{}”", entry.name()),
-                        );
+                        log::info!("[zone-sets] Saved \"{}\" (A:{a}, B:{b}) → presets/zones/", entry.name());
+                        self.notify(ToastKind::Success, format!("Saved zone set “{}”", entry.name()));
                         self.reload_zone_presets();
                     }
                     Err(e) => {
@@ -940,10 +889,7 @@ impl Worker {
                 self.auto_save = on;
                 self.state.graph.set_auto_save(on);
                 match prefs::save_ui_prefs(on) {
-                    Ok(()) => log::info!(
-                        "[prefs] Auto-save {}",
-                        if on { "enabled" } else { "disabled" }
-                    ),
+                    Ok(()) => log::info!("[prefs] Auto-save {}", if on { "enabled" } else { "disabled" }),
                     Err(e) => log::error!("[prefs] Failed to save: {e}"),
                 }
                 if on {
@@ -955,10 +901,7 @@ impl Worker {
                 if let Err(e) = prefs::update_ui_prefs(|p| p.spoof_guard = on) {
                     log::error!("[prefs] Failed to save: {e}");
                 }
-                log::info!(
-                    "[prefs] Spoofed-contact guard {}",
-                    if on { "enabled" } else { "disabled" }
-                );
+                log::info!("[prefs] Spoofed-contact guard {}", if on { "enabled" } else { "disabled" });
             }
             Command::SetAlarmTabVisible(on) => {
                 if let Err(e) = prefs::save_alarm_tab_pref(on) {
@@ -1039,20 +982,18 @@ impl Worker {
                 Err(e) => self.notify(ToastKind::Error, format!("Import failed: {e}")),
             },
             Command::RefreshGraphPresets => self.reload_graph_presets(),
-            Command::SaveGraphPreset(preset) => {
-                match graph_presets::save_user_graph_preset(&preset) {
-                    Ok(entry) => {
-                        log::info!(
-                            "[graph-presets] Saved \"{}\" ({} node(s)) → graph-presets/user/",
-                            entry.name(),
-                            entry.preset.node_count()
-                        );
-                        self.notify(ToastKind::Success, format!("Saved preset “{}”", entry.name()));
-                        self.reload_graph_presets();
-                    }
-                    Err(e) => self.notify(ToastKind::Error, format!("Save failed: {e}")),
+            Command::SaveGraphPreset(preset) => match graph_presets::save_user_graph_preset(&preset) {
+                Ok(entry) => {
+                    log::info!(
+                        "[graph-presets] Saved \"{}\" ({} node(s)) → graph-presets/user/",
+                        entry.name(),
+                        entry.preset.node_count()
+                    );
+                    self.notify(ToastKind::Success, format!("Saved preset “{}”", entry.name()));
+                    self.reload_graph_presets();
                 }
-            }
+                Err(e) => self.notify(ToastKind::Error, format!("Save failed: {e}")),
+            },
             Command::DeleteGraphPreset(id) => match graph_presets::delete_user_graph_preset(&id) {
                 Ok(()) => {
                     log::info!("[graph-presets] Deleted {id}");
@@ -1061,15 +1002,13 @@ impl Worker {
                 }
                 Err(e) => self.notify(ToastKind::Error, format!("Delete failed: {e}")),
             },
-            Command::RenameGraphPreset(id, name) => {
-                match graph_presets::rename_user_graph_preset(&id, &name) {
-                    Ok(entry) => {
-                        self.notify(ToastKind::Success, format!("Renamed to “{}”", entry.name()));
-                        self.reload_graph_presets();
-                    }
-                    Err(e) => self.notify(ToastKind::Error, format!("Rename failed: {e}")),
+            Command::RenameGraphPreset(id, name) => match graph_presets::rename_user_graph_preset(&id, &name) {
+                Ok(entry) => {
+                    self.notify(ToastKind::Success, format!("Renamed to “{}”", entry.name()));
+                    self.reload_graph_presets();
                 }
-            }
+                Err(e) => self.notify(ToastKind::Error, format!("Rename failed: {e}")),
+            },
             Command::ImportGraphPreset(path) => match graph_presets::import_graph_preset(&path) {
                 Ok(entry) => {
                     self.notify(ToastKind::Success, format!("Imported “{}”", entry.name()));
@@ -1095,9 +1034,7 @@ impl Worker {
                     .ok()
                     .and_then(|u| u.available.as_ref().map(|r| r.tag.clone()));
                 if let Some(tag) = tag {
-                    if let Err(e) = prefs::update_ui_prefs(|p| {
-                        p.skipped_update_version = Some(tag.clone())
-                    }) {
+                    if let Err(e) = prefs::update_ui_prefs(|p| p.skipped_update_version = Some(tag.clone())) {
                         log::warn!("[update] failed to save skip preference: {e}");
                     }
                     log::info!("[update] Skipped version {tag}");
@@ -1120,10 +1057,7 @@ impl Worker {
         cfg.sanitise();
         self.state.alarm.set_config(cfg.clone());
         if let Err(e) = shocking_vrc_app::alarm_store::save_alarm(&cfg) {
-            log::error!(
-                "[alarm] Failed to save {}: {e}",
-                shocking_vrc_app::alarm_store::ALARM_FILE
-            );
+            log::error!("[alarm] Failed to save {}: {e}", shocking_vrc_app::alarm_store::ALARM_FILE);
         }
     }
 
@@ -1385,8 +1319,7 @@ mod tests {
         w.apply(Command::AddZone(Channel::A, pen("Cock"))).await;
         assert_eq!(config_of(&w).await.channel_a.zones.len(), 1);
 
-        w.apply(Command::SetZoneMode(Channel::A, 0, ContactMode::Recoil))
-            .await;
+        w.apply(Command::SetZoneMode(Channel::A, 0, ContactMode::Recoil)).await;
         w.apply(Command::SetZoneScale(Channel::A, 0, 60)).await;
         w.apply(Command::SetZoneThresholdMin(Channel::A, 0, 30)).await;
         w.apply(Command::SetZoneThresholdMax(Channel::A, 0, 80)).await;
@@ -1437,11 +1370,7 @@ mod tests {
     #[tokio::test]
     async fn aggregation_round_trips() {
         let mut w = worker().await;
-        for mode in [
-            AggregationMode::Sum,
-            AggregationMode::Average,
-            AggregationMode::Max,
-        ] {
+        for mode in [AggregationMode::Sum, AggregationMode::Average, AggregationMode::Max] {
             w.apply(Command::SetAggregation(Channel::B, mode)).await;
             assert_eq!(config_of(&w).await.channel_b.aggregation, mode);
         }
@@ -1456,35 +1385,21 @@ mod tests {
         };
         cfg.sanitise(false);
 
-        w.apply(Command::ApplyModulation(
-            Channel::A,
-            ModKind::Freq,
-            2,
-            Box::new(cfg.clone()),
-        ))
-        .await;
+        w.apply(Command::ApplyModulation(Channel::A, ModKind::Freq, 2, Box::new(cfg.clone())))
+            .await;
         let a = config_of(&w).await.channel_a;
         assert!(a.freq_modulation[2].is_some(), "the chosen slot is filled");
         assert!(a.freq_modulation[0].is_none(), "its neighbours are not");
         assert!(a.intensity_modulation[2].is_none(), "nor is the other kind");
 
-        w.apply(Command::ApplyModulation(
-            Channel::A,
-            ModKind::Intensity,
-            2,
-            Box::new(cfg),
-        ))
-        .await;
+        w.apply(Command::ApplyModulation(Channel::A, ModKind::Intensity, 2, Box::new(cfg)))
+            .await;
         assert!(config_of(&w).await.channel_a.intensity_modulation[2].is_some());
 
-        w.apply(Command::ClearModulation(Channel::A, ModKind::Freq, 2))
-            .await;
+        w.apply(Command::ClearModulation(Channel::A, ModKind::Freq, 2)).await;
         let a = config_of(&w).await.channel_a;
         assert!(a.freq_modulation[2].is_none(), "cleared");
-        assert!(
-            a.intensity_modulation[2].is_some(),
-            "clearing one kind leaves the other alone"
-        );
+        assert!(a.intensity_modulation[2].is_some(), "clearing one kind leaves the other alone");
 
         w.apply(Command::ClearChannelModulation(Channel::A)).await;
         let a = config_of(&w).await.channel_a;
@@ -1500,13 +1415,8 @@ mod tests {
             clamp_max: 900.0,
             ..ModulationConfig::default()
         };
-        w.apply(Command::ApplyModulation(
-            Channel::A,
-            ModKind::Intensity,
-            0,
-            Box::new(cfg),
-        ))
-        .await;
+        w.apply(Command::ApplyModulation(Channel::A, ModKind::Intensity, 0, Box::new(cfg)))
+            .await;
         let slot = config_of(&w).await.channel_a.intensity_modulation[0]
             .clone()
             .expect("slot");
@@ -1545,8 +1455,7 @@ mod tests {
         let mut w = worker().await;
         w.apply(Command::AddZone(Channel::A, pen("Keep"))).await;
         w.apply(Command::SetLimitMax(Channel::A, 25)).await;
-        w.apply(Command::SetAggregation(Channel::A, AggregationMode::Sum))
-            .await;
+        w.apply(Command::SetAggregation(Channel::A, AggregationMode::Sum)).await;
 
         if let Ok(mut p) = w.shared.presets.write() {
             p.entries = vec![PresetEntry {
@@ -1648,10 +1557,7 @@ mod tests {
         assert!(!Command::SwitchDevice(1).persists());
         assert!(!Command::RefreshPresets.persists());
         assert!(!Command::AlarmTest.persists());
-        assert!(
-            !Command::SaveConfig.persists(),
-            "an explicit save is not an auto-save"
-        );
+        assert!(!Command::SaveConfig.persists(), "an explicit save is not an auto-save");
     }
 
     #[tokio::test]

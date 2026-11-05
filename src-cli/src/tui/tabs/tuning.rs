@@ -1,9 +1,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 
-use crate::tui::app::{
-    tuning_control_row, tuning_controls, Action, App, NormField, TuningControl, UkfField,
-};
+use crate::tui::app::{Action, App, NormField, TuningControl, UkfField, tuning_control_row, tuning_controls};
 use crate::tui::theme;
 use crate::tui::ui;
 
@@ -11,22 +9,13 @@ const UKF_ROWS: u16 = 6;
 const NORM_ROWS: u16 = 4;
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
-    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(area);
+    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
 
     let viewport_h = area.height.saturating_sub(2);
     app.tuning_viewport_h = viewport_h;
-    app.tuning_scroll = ui::clamp_scroll(
-        app.tuning_scroll,
-        UKF_ROWS.max(NORM_ROWS),
-        viewport_h,
-    );
+    app.tuning_scroll = ui::clamp_scroll(app.tuning_scroll, UKF_ROWS.max(NORM_ROWS), viewport_h);
     if let Some(ctrl) = tuning_controls().get(app.tuning_focus).copied() {
-        app.tuning_scroll = ui::scroll_to_row(
-            app.tuning_scroll,
-            viewport_h,
-            tuning_control_row(ctrl),
-        );
+        app.tuning_scroll = ui::scroll_to_row(app.tuning_scroll, viewport_h, tuning_control_row(ctrl));
     }
 
     let focus = tuning_controls().get(app.tuning_focus).copied();

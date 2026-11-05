@@ -55,9 +55,17 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
 
     let dismissed = match &mut dialog {
         GraphDialog::SavePreset { name, author, fragment } => {
-            let title = if *fragment { "Save selection as fragment" } else { "Save graph as preset" };
+            let title = if *fragment {
+                "Save selection as fragment"
+            } else {
+                "Save graph as preset"
+            };
             let ed = &cx.ui_state.graph;
-            let count = if *fragment { ed.selection.len() } else { ed.doc.nodes.len() };
+            let count = if *fragment {
+                ed.selection.len()
+            } else {
+                ed.doc.nodes.len()
+            };
             let mut commit = false;
             let d = super::modal(ctx, pal, "graph_preset_save", title, 420.0, |ui| {
                 w::dim(ui, pal, "Stored in graph-presets/user/ as one JSON file per preset.");
@@ -169,7 +177,11 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
         GraphDialog::ConfirmDelete { id, name } => {
             let mut delete = false;
             let d = super::modal(ctx, pal, "graph_preset_delete", "Delete preset", 360.0, |ui| {
-                ui.label(egui::RichText::new(format!("“{name}”")).font(font::mono_big()).color(pal.contrast));
+                ui.label(
+                    egui::RichText::new(format!("“{name}”"))
+                        .font(font::mono_big())
+                        .color(pal.contrast),
+                );
                 ui.add_space(4.0);
                 w::dim(ui, pal, "This removes the file from graph-presets/user/. It cannot be undone.");
                 ui.add_space(space::ITEM_GAP);
@@ -241,7 +253,11 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
                 });
             });
             if commit {
-                let n = if name.trim().is_empty() { "graph".to_string() } else { name.trim().to_string() };
+                let n = if name.trim().is_empty() {
+                    "graph".to_string()
+                } else {
+                    name.trim().to_string()
+                };
                 cx.send(Command::ExportGraph(n));
                 close = true;
             }
@@ -261,7 +277,11 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
 fn import_dialog(ctx: &Context, cx: &mut Ctx, is_preset: bool, path: &mut String, close: &mut bool) -> bool {
     let pal = cx.pal;
     let mut commit = false;
-    let title = if is_preset { "Import graph preset" } else { "Import graph" };
+    let title = if is_preset {
+        "Import graph preset"
+    } else {
+        "Import graph"
+    };
     let files = shocking_vrc_app::graph_store::list_graph_files();
     let d = super::modal(ctx, pal, "graph_import", title, 460.0, |ui| {
         w::dim(

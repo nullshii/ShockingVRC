@@ -31,12 +31,7 @@ fn overview(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
     w::sheet(ui, pal, |ui| {
         let connected = cx.snap.active().map(|d| d.connected).unwrap_or(false);
-        w::heading_with_suffix(
-            ui,
-            pal,
-            "Overview",
-            Some(if connected { "linked" } else { "waiting" }),
-        );
+        w::heading_with_suffix(ui, pal, "Overview", Some(if connected { "linked" } else { "waiting" }));
 
         let cols = 4.0;
         let gap = 8.0;
@@ -68,16 +63,8 @@ fn overview(ui: &mut Ui, cx: &mut Ctx) {
                     ui,
                     pal,
                     "VRChat",
-                    if cx.snap.vrchat_found {
-                        "online"
-                    } else {
-                        "offline"
-                    },
-                    if cx.snap.vrchat_found {
-                        pal.success
-                    } else {
-                        pal.error
-                    },
+                    if cx.snap.vrchat_found { "online" } else { "offline" },
+                    if cx.snap.vrchat_found { pal.success } else { pal.error },
                 );
             });
 
@@ -108,12 +95,7 @@ fn overview(ui: &mut Ui, cx: &mut Ctx) {
 fn devices(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
     w::sheet(ui, pal, |ui| {
-        w::heading_with_suffix(
-            ui,
-            pal,
-            "Devices",
-            Some(&format!("{} connected", cx.snap.devices.len())),
-        );
+        w::heading_with_suffix(ui, pal, "Devices", Some(&format!("{} connected", cx.snap.devices.len())));
         w::dim(
             ui,
             pal,
@@ -150,28 +132,11 @@ fn devices(ui: &mut Ui, cx: &mut Ctx) {
                 if active { pal.accent } else { pal.dim },
                 font::small(),
             );
-            cell(
-                ui,
-                &mut x,
-                160.0,
-                &dev.name,
-                pal.contrast,
-                font::body(),
-            );
-            cell(
-                ui,
-                &mut x,
-                90.0,
-                &short_mac(&dev.mac),
-                pal.dim,
-                font::small(),
-            );
+            cell(ui, &mut x, 160.0, &dev.name, pal.contrast, font::body());
+            cell(ui, &mut x, 90.0, &short_mac(&dev.mac), pal.dim, font::small());
 
             let bar_w = 90.0;
-            let bar = Rect::from_min_size(
-                egui::pos2(x, inner.center().y - 5.0),
-                vec2(bar_w, 10.0),
-            );
+            let bar = Rect::from_min_size(egui::pos2(x, inner.center().y - 5.0), vec2(bar_w, 10.0));
             ui.painter().rect_filled(bar, w::SQUARE, pal.well);
             if let Some(b) = dev.battery {
                 let f = (b as f32 / 100.0).clamp(0.0, 1.0);
@@ -181,12 +146,8 @@ fn devices(ui: &mut Ui, cx: &mut Ctx) {
                     pal.gradient(f),
                 );
             }
-            ui.painter().rect_stroke(
-                bar,
-                w::SQUARE,
-                Stroke::new(1.0, pal.hair),
-                StrokeKind::Inside,
-            );
+            ui.painter()
+                .rect_stroke(bar, w::SQUARE, Stroke::new(1.0, pal.hair), StrokeKind::Inside);
             x += bar_w + 8.0;
             cell(
                 ui,
@@ -266,11 +227,7 @@ fn channel_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
                 ui.label(
                     egui::RichText::new(format!("{} / {limit_max}", st.strength))
                         .font(font::body())
-                        .color(if st.strength > 0 {
-                            pal.contrast
-                        } else {
-                            pal.dim
-                        }),
+                        .color(if st.strength > 0 { pal.contrast } else { pal.dim }),
                 );
             });
         });
@@ -295,10 +252,7 @@ fn channel_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
                 );
                 w::text_in(
                     ui,
-                    Rect::from_min_size(
-                        rect.min + vec2(6.0, 15.0),
-                        vec2(rect.width() - 12.0, 15.0),
-                    ),
+                    Rect::from_min_size(rect.min + vec2(6.0, 15.0), vec2(rect.width() - 12.0, 15.0)),
                     &format!("{:.0} Hz", raw_to_hz(*raw)),
                     font::body(),
                     if st.strength > 0 { pal.accent } else { pal.dim },
@@ -314,10 +268,7 @@ fn channel_panel(ui: &mut Ui, cx: &mut Ctx, ch: Channel) {
             w::empty_state(ui, pal, "none — waiting for contact");
         } else {
             for (id, level) in &st.active_zones {
-                let (rect, _) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), 20.0),
-                    Sense::hover(),
-                );
+                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::hover());
                 let f = level.clamp(0.0, 1.0);
                 ui.painter().rect_filled(
                     Rect::from_min_size(rect.min, vec2(rect.width() * f, rect.height())),

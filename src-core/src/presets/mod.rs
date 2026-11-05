@@ -1,6 +1,6 @@
 mod zones;
 
-pub use zones::{parse_zone_preset, ZonePreset, ZonePresetEntry, ZONE_PRESET_VERSION};
+pub use zones::{ZONE_PRESET_VERSION, ZonePreset, ZonePresetEntry, parse_zone_preset};
 
 use serde::{Deserialize, Serialize};
 
@@ -106,8 +106,8 @@ pub fn entry_from_file(id: String, preset: ChannelPreset, user: bool) -> PresetE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{AggregationMode, PowerLimits, ZoneEntry, ZoneId};
     use crate::OldZoneType;
+    use crate::cli::{AggregationMode, PowerLimits, ZoneEntry, ZoneId};
 
     #[test]
     fn parse_sample_manifest() {
@@ -122,14 +122,12 @@ mod tests {
             .parent()
             .expect("workspace root")
             .join("presets");
-        let manifest_txt =
-            std::fs::read_to_string(dir.join("manifest.json")).expect("read manifest");
+        let manifest_txt = std::fs::read_to_string(dir.join("manifest.json")).expect("read manifest");
         let manifest = parse_manifest(&manifest_txt).expect("parse manifest");
         for pref in &manifest.presets {
             let txt = std::fs::read_to_string(dir.join(&pref.file))
                 .unwrap_or_else(|e| panic!("missing preset file '{}': {e}", pref.file));
-            parse_preset(&txt)
-                .unwrap_or_else(|e| panic!("preset '{}' failed to parse: {e}", pref.file));
+            parse_preset(&txt).unwrap_or_else(|e| panic!("preset '{}' failed to parse: {e}", pref.file));
         }
     }
 
@@ -146,10 +144,7 @@ mod tests {
         let json = include_str!("../../../presets/steady-hum.json");
         let preset = parse_preset(json).expect("preset");
         let mut ch = ChannelConfig {
-            zones: vec![ZoneEntry::with_default_mode(ZoneId::new(
-                OldZoneType::Pen,
-                "test",
-            ))],
+            zones: vec![ZoneEntry::with_default_mode(ZoneId::new(OldZoneType::Pen, "test"))],
             limits: PowerLimits::new(0, 25),
             aggregation: AggregationMode::Sum,
             ..ChannelConfig::default()

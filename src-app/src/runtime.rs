@@ -5,8 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use shocking_vrc_core::cli::{
-    AggregationMode, ChannelConfig, CliConfig, ContactMode, EngineMode, PowerLimits, ZoneEntry,
-    ZoneId,
+    AggregationMode, ChannelConfig, CliConfig, ContactMode, EngineMode, PowerLimits, ZoneEntry, ZoneId,
 };
 use shocking_vrc_core::{AlarmController, AvatarScanner, CliEngine, CoyoteDevice, OldZoneType};
 
@@ -46,20 +45,12 @@ impl SessionOptions {
             match args[i].as_str() {
                 "--help" | "-h" => {
                     println!("{usage}");
-                    println!(
-                        "  --port               Legacy fixed OSC UDP port (e.g. 9001). Default: automatic"
-                    );
-                    println!(
-                        "                       via OSCQuery — a free port is chosen and advertised to"
-                    );
-                    println!(
-                        "                       VRChat over mDNS, no VRChat configuration needed."
-                    );
+                    println!("  --port               Legacy fixed OSC UDP port (e.g. 9001). Default: automatic");
+                    println!("                       via OSCQuery — a free port is chosen and advertised to");
+                    println!("                       VRChat over mDNS, no VRChat configuration needed.");
                     println!("  --scan-timeout       BLE scan timeout in seconds (default: 8)");
                     println!("  --skip-update-check  Do not check GitHub for updates on startup");
-                    println!(
-                        "  --mode classic|graph Run this session in Classic or Graph mode (graph.json)"
-                    );
+                    println!("  --mode classic|graph Run this session in Classic or Graph mode (graph.json)");
                     std::process::exit(0);
                 }
                 "--port" => {
@@ -161,9 +152,9 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
             "[osc] Port {osc_port} selected (OSC UDP + OSCQuery HTTP). Advertising to VRChat \
              over mDNS — enable OSC in VRChat and it will connect automatically."
         ),
-        Some(http_port) => log::info!(
-            "[osc] OSC on UDP :{osc_port} (fixed); OSCQuery HTTP on :{http_port} (not advertised)"
-        ),
+        Some(http_port) => {
+            log::info!("[osc] OSC on UDP :{osc_port} (fixed); OSCQuery HTTP on :{http_port} (not advertised)")
+        }
         None => log::warn!("[osc] OSCQuery server did not start"),
     }
 
@@ -176,13 +167,7 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
     for note in &loaded.notes {
         log::warn!("[graph] {note}");
     }
-    let graph = GraphRuntime::new(
-        loaded.graph,
-        mode,
-        prefs.graph_power_cap,
-        prefs.auto_save,
-        loaded.notes,
-    );
+    let graph = GraphRuntime::new(loaded.graph, mode, prefs.graph_power_cap, prefs.auto_save, loaded.notes);
     log::info!("[mode] {} mode", mode.label());
     if mode == EngineMode::Graph {
         log::info!(
@@ -214,11 +199,7 @@ pub async fn shutdown_session(state: &Arc<AppState>) {
     tokio::time::sleep(Duration::from_millis(600)).await;
 }
 
-async fn attach_device_to_slot(
-    state: &Arc<AppState>,
-    mac: &str,
-    mut dev: CoyoteDevice,
-) -> Arc<CoyoteDevice> {
+async fn attach_device_to_slot(state: &Arc<AppState>, mac: &str, mut dev: CoyoteDevice) -> Arc<CoyoteDevice> {
     dev.start();
     let arc = Arc::new(dev);
     if let Some(engine) = state.engine_for_mac(mac) {
@@ -384,11 +365,7 @@ pub fn spawn_ble_coordinator(state: Arc<AppState>, scanner: AvatarScanner, scan_
                 Err(e) => log::warn!("[ble] Scan error: {e}"),
             }
 
-            let interval = if state
-                .slot_infos()
-                .iter()
-                .any(|s| s.reconnecting || !s.connected)
-            {
+            let interval = if state.slot_infos().iter().any(|s| s.reconnecting || !s.connected) {
                 Duration::from_secs(5)
             } else {
                 Duration::from_secs(15)
