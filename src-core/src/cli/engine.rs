@@ -495,8 +495,12 @@ impl CliEngine {
 
     pub async fn apply_eye(&self, eye: Option<u8>) {
         let Some(preset) = eye else { return };
-        let Some(bytes) = crate::protocol::eye::packet(preset) else { return };
-        let Some(dev) = self.state.device.lock().await.clone() else { return };
+        let Some(bytes) = crate::protocol::eye::packet(preset) else {
+            return;
+        };
+        let Some(dev) = self.state.device.lock().await.clone() else {
+            return;
+        };
         let mut last = self.state.last_eye.lock().await;
         if *last == Some(preset) {
             return;

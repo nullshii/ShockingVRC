@@ -1,4 +1,3 @@
-
 pub const EYE_OPCODE: u8 = 0x50;
 pub const EYE_PACKET_LEN: usize = 17;
 
