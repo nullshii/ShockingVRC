@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu, src_ext: "",     suffix: "" }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,   src_ext: ".exe", suffix: ".exe" }
+          - { os: macos-latest,   target: aarch64-apple-darwin,     src_ext: "",     suffix: "-macos" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --profile distribution -p shocking_vrc_cli -p shocking_vrc_gui --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          mkdir dist
+          for b in shocking_vrc_cli shockingvrc; do
+            cp "target/${{ matrix.target }}/distribution/$b${{ matrix.src_ext }}" "dist/$b${{ matrix.suffix }}"
+          done
+          ls dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
