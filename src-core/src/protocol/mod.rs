@@ -1,3 +1,4 @@
+pub mod eye;
 pub mod waveform;
 pub mod waveform_bf;
 

@@ -280,6 +280,7 @@ impl Default for ChannelFrame {
 pub struct DeviceFrame {
     pub node: super::model::NodeId,
     pub binding: DeviceBinding,
+    pub eye: Option<u8>,
     pub channels: [ChannelFrame; MAX_CHANNELS],
 }
 

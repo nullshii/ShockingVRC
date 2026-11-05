@@ -682,6 +682,10 @@ pub fn draw(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView, typing
     }
 
     let header_fill = match (&node.kind, node.tint) {
+        (NodeKind::Device(d), _) if d.eye.is_some() && !offline => {
+            let [r, g, b] = shocking_vrc_core::protocol::eye::EYE_COLORS[d.eye.unwrap() as usize - 1].1;
+            Color32::from_rgb(r, g, b)
+        }
         (_, Some(t)) => tint_color(pal, t),
         (NodeKind::Device(_), None) => {
             if offline {

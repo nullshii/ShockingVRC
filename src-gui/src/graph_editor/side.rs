@@ -8,6 +8,7 @@ use shocking_vrc_core::graph::kind::*;
 use shocking_vrc_core::graph::{
     DeviceBinding, GraphPresetEntry, GraphPresetKind, Node, NodeKind, NodeTint, PinType, Severity,
 };
+use shocking_vrc_core::protocol::eye;
 use shocking_vrc_core::raw_to_hz;
 
 use super::{Env, GraphEditor, SideTab, node_ui};
@@ -251,25 +252,70 @@ fn inspector(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<G
     w::sheet(ui, pal, |ui| {
         w::heading_with_suffix(ui, pal, &node.kind.label(), Some(node.kind.category().label()));
         text_row(ui, pal, "Title", &mut node.title, &node.kind.label());
-        ui.horizontal(|ui| {
-            row_label(ui, pal, "Colour");
-            let mut opts = vec![None];
-            opts.extend(NodeTint::ALL.iter().copied().map(Some));
-            for t in opts {
-                let (rect, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
-                let c = t.map(|t| node_ui::tint_color(pal, t)).unwrap_or(pal.contrast);
-                ui.painter().rect_filled(rect.shrink(2.0), w::SQUARE, c);
-                ui.painter().rect_stroke(
-                    rect,
-                    w::SQUARE,
-                    Stroke::new(1.0, if node.tint == t { pal.accent } else { pal.hair }),
-                    StrokeKind::Inside,
-                );
-                if resp.clicked() {
-                    node.tint = t;
+        let mut eye_row = false;
+        if let NodeKind::Device(d) = &mut node.kind {
+            eye_row = true;
+            let online = d.binding.mac().is_some_and(|m| {
+                env.snap
+                    .devices
+                    .iter()
+                    .any(|x| x.connected && x.mac.eq_ignore_ascii_case(m))
+            });
+            ui.horizontal(|ui| {
+                row_label(ui, pal, "Colour");
+                let mut opts: Vec<Option<u8>> = vec![None];
+                opts.extend((1..=eye::EYE_COLORS.len() as u8).map(Some));
+                for o in opts {
+                    let (rect, resp) =
+                        ui.allocate_exact_size(vec2(18.0, 18.0), if online { Sense::click() } else { Sense::hover() });
+                    let mut c = o
+                        .map(|p| {
+                            let [r, g, b] = eye::EYE_COLORS[p as usize - 1].1;
+                            Color32::from_rgb(r, g, b)
+                        })
+                        .unwrap_or(pal.contrast);
+                    if !online {
+                        c = pal.faded(c, 0.3);
+                    }
+                    ui.painter().rect_filled(rect.shrink(2.0), w::SQUARE, c);
+                    ui.painter().rect_stroke(
+                        rect,
+                        w::SQUARE,
+                        Stroke::new(1.0, if d.eye == o { pal.accent } else { pal.hair }),
+                        StrokeKind::Inside,
+                    );
+                    let tip = if online {
+                        o.and_then(eye::label).unwrap_or("Leave eyes unchanged")
+                    } else {
+                        "Device offline"
+                    };
+                    if resp.on_hover_text(tip).clicked() {
+                        d.eye = o;
+                    }
                 }
-            }
-        });
+            });
+        }
+        if !eye_row {
+            ui.horizontal(|ui| {
+                row_label(ui, pal, "Colour");
+                let mut opts = vec![None];
+                opts.extend(NodeTint::ALL.iter().copied().map(Some));
+                for t in opts {
+                    let (rect, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
+                    let c = t.map(|t| node_ui::tint_color(pal, t)).unwrap_or(pal.contrast);
+                    ui.painter().rect_filled(rect.shrink(2.0), w::SQUARE, c);
+                    ui.painter().rect_stroke(
+                        rect,
+                        w::SQUARE,
+                        Stroke::new(1.0, if node.tint == t { pal.accent } else { pal.hair }),
+                        StrokeKind::Inside,
+                    );
+                    if resp.clicked() {
+                        node.tint = t;
+                    }
+                }
+            });
+        }
         text_row(ui, pal, "Comment", &mut node.comment, "(none)");
         toggle_row(ui, pal, "Collapsed", &mut node.collapsed, "H");
     });

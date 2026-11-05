@@ -88,7 +88,7 @@ pub struct Plan {
     pub value_count: usize,
     pub delays: Vec<usize>,
     pub external: Vec<ExternalRequest>,
-    pub devices: Vec<(NodeId, DeviceBinding)>,
+    pub devices: Vec<(NodeId, DeviceBinding, Option<u8>)>,
     pub issues: Vec<GraphIssue>,
     pub valid: bool,
     pub signature: u64,
@@ -405,7 +405,7 @@ pub fn compile(graph: &Graph) -> Plan {
                             "Device node is not bound — pick a device on the node",
                         ));
                     }
-                    plan.devices.push((f.root, p.binding.clone()));
+                    plan.devices.push((f.root, p.binding.clone(), p.eye));
                     Extra::Device(plan.devices.len() - 1)
                 }
             }

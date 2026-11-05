@@ -311,9 +311,10 @@ impl GraphEvaluator {
         self.frames = plan
             .devices
             .iter()
-            .map(|(node, binding)| DeviceFrame {
+            .map(|(node, binding, eye)| DeviceFrame {
                 node: *node,
                 binding: binding.clone(),
+                eye: *eye,
                 channels: [ChannelFrame::default(); MAX_CHANNELS],
             })
             .collect();

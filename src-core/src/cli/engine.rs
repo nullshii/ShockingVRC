@@ -135,6 +135,7 @@ struct EngineState {
     last_wave_tick: Mutex<Instant>,
     alarm: AlarmController,
     last_bf: Mutex<Option<(u8, u8)>>,
+    last_eye: Mutex<Option<u8>>,
     pending_bf: std::sync::Mutex<Option<(u8, u8)>>,
     bf_sender_running: std::sync::atomic::AtomicBool,
     mode: std::sync::atomic::AtomicU8,
@@ -161,6 +162,7 @@ impl CliEngine {
                 last_wave_tick: Mutex::new(Instant::now()),
                 alarm,
                 last_bf: Mutex::new(None),
+                last_eye: Mutex::new(None),
                 pending_bf: std::sync::Mutex::new(None),
                 bf_sender_running: std::sync::atomic::AtomicBool::new(false),
                 mode: std::sync::atomic::AtomicU8::new(0),
@@ -481,6 +483,7 @@ impl CliEngine {
 
     pub async fn connect_device(&self, device: Arc<CoyoteDevice>) {
         *self.state.last_bf.lock().await = None;
+        *self.state.last_eye.lock().await = None;
         *self.state.device.lock().await = Some(device);
         info!("[cli] Device attached");
         if let Ok(mut g) = self.state.graph.lock() {
@@ -488,6 +491,20 @@ impl CliEngine {
             g.ramp_from = Some(Instant::now());
         }
         self.try_sync_hardware_limits().await;
+    }
+
+    pub async fn apply_eye(&self, eye: Option<u8>) {
+        let Some(preset) = eye else { return };
+        let Some(bytes) = crate::protocol::eye::packet(preset) else { return };
+        let Some(dev) = self.state.device.lock().await.clone() else { return };
+        let mut last = self.state.last_eye.lock().await;
+        if *last == Some(preset) {
+            return;
+        }
+        match dev.write_command(&bytes).await {
+            Ok(_) => *last = Some(preset),
+            Err(e) => warn!("[cli] Eye colour write failed: {e}"),
+        }
     }
 
     pub async fn disconnect_device(&self) {

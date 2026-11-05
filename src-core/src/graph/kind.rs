@@ -852,6 +852,7 @@ pub struct DeviceParams {
     pub profile: String,
     pub binding: DeviceBinding,
     pub channels: Vec<ChannelParams>,
+    pub eye: Option<u8>,
 }
 
 impl Default for DeviceParams {
@@ -861,6 +862,7 @@ impl Default for DeviceParams {
             profile: p.id.into(),
             binding: DeviceBinding::Unbound,
             channels: vec![ChannelParams::default(); p.channels.len()],
+            eye: None,
         }
     }
 }

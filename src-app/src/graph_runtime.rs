@@ -282,6 +282,7 @@ impl GraphRuntime {
         let mut last = Instant::now();
         let mut engines: Vec<(String, CliEngine)> = Vec::new();
         let mut frames: Vec<Option<[ChannelFrame; MAX_CHANNELS]>> = Vec::new();
+        let mut eyes: Vec<Option<u8>> = Vec::new();
         let mut outs: Vec<[GraphChannelOutput; MAX_CHANNELS]> = Vec::new();
         let mut was_panic = false;
         let mut n: u64 = 0;
@@ -332,7 +333,16 @@ impl GraphRuntime {
                 ev.set_alarm(alarm);
                 ev.step(dt);
                 frames.clear();
+                eyes.clear();
                 for (mac, _) in &engines {
+                    eyes.push(if ev.is_valid() {
+                        ev.frames()
+                            .iter()
+                            .find(|f| f.binding.mac().is_some_and(|m| m.eq_ignore_ascii_case(mac)))
+                            .and_then(|f| f.eye)
+                    } else {
+                        None
+                    });
                     let f = if ev.is_valid() {
                         ev.frames()
                             .iter()
@@ -355,6 +365,10 @@ impl GraphRuntime {
                 for (_, e) in &engines {
                     e.restart_graph_ramp().await;
                 }
+            }
+
+            for ((_, e), eye) in engines.iter().zip(&eyes) {
+                e.apply_eye(*eye).await;
             }
 
             outs.clear();
