@@ -1,5 +1,5 @@
 use crate::cli::config::PowerLimits;
-use crate::protocol::waveform::WaveformV3;
+use crate::protocol::waveform::{MAX_PULSE_FREQUENCY, WaveformV3};
 
 use super::device::{ChannelFrame, SEGMENTS};
 
@@ -77,7 +77,9 @@ pub fn safe_channel(f: &ChannelFrame, cap: u8, alarm: AlarmOverlay, ramp: f32) -
 
     SafeChannel {
         strength,
-        freq: f.freq.map(|v| clean(v).clamp(10.0, 255.0).round() as u8),
+        freq: f
+            .freq
+            .map(|v| clean(v).clamp(10.0, MAX_PULSE_FREQUENCY as f32).round() as u8),
         intensity: intensity.map(|v| v.round() as u8),
         limit_min,
         limit_max,
@@ -117,6 +119,18 @@ mod tests {
     };
 
     #[test]
+    fn generated_graph_waveforms_limit_legacy_frequencies_to_valid_wire_values() {
+        let mut f = frame(1.0, 0.0, 30.0);
+        f.freq = [10.0, 240.0, 241.0, 255.0];
+        let channel = safe_channel(&f, 50, NO_ALARM, 1.0);
+        let wave = build_wave(&channel, &channel);
+        assert_eq!(wave.frequency_a, [10, 240, 240, 240]);
+        assert_eq!(wave.frequency_b, [10, 240, 240, 240]);
+        assert_eq!(wave.strength_a, 30);
+        assert_eq!(f.freq, [10.0, 240.0, 241.0, 255.0]);
+    }
+
+    #[test]
     fn non_finite_values_are_sanitised() {
         let f = ChannelFrame {
             power: f32::NAN,
@@ -129,7 +143,7 @@ mod tests {
         };
         let s = safe_channel(&f, 50, NO_ALARM, 1.0);
         assert_eq!(s.strength, 0, "NaN power is no power");
-        assert_eq!(s.freq, [10, 10, 10, 255]);
+        assert_eq!(s.freq, [10, 10, 10, 240]);
         assert_eq!(s.intensity, [0, 0, 50, 100]);
         assert_eq!(s.limit_max, 0, "infinite limit reads 0");
     }
@@ -236,6 +250,10 @@ mod tests {
         let z = SafeChannel::default();
         let w = build_wave(&z, &z);
         assert_eq!(w.strength_a, 0);
-        assert_eq!(w.frequency_a, [0; 4], "the idle packet");
+        assert_eq!(w.strength_b, 0);
+        assert_eq!(w.strength_mode, 0x0F, "idle clears both stored device strengths");
+        assert_eq!(w.frequency_a, [10; 4], "the idle packet uses valid pulse data");
+        assert_eq!(w.intensity_a, [0; 4]);
+        assert_eq!(w.intensity_b, [0; 4]);
     }
 }

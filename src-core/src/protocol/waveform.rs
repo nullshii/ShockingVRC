@@ -20,17 +20,19 @@ pub const MODE_NO_CHANGE: u8 = 0b0000;
 pub const MODE_A_ABSOLUTE: u8 = 0b1100;
 pub const MODE_B_ABSOLUTE: u8 = 0b0011;
 pub const MODE_BOTH_ABSOLUTE: u8 = 0b1111;
+pub const MIN_PULSE_FREQUENCY: u8 = 10;
+pub const MAX_PULSE_FREQUENCY: u8 = 240;
 
 impl Default for WaveformV3 {
     fn default() -> Self {
         Self {
             head: 0xB0,
-            strength_mode: MODE_NO_CHANGE,
+            strength_mode: MODE_BOTH_ABSOLUTE,
             strength_a: 0,
             strength_b: 0,
-            frequency_a: [0; 4],
+            frequency_a: [MIN_PULSE_FREQUENCY; 4],
             intensity_a: [0; 4],
-            frequency_b: [0; 4],
+            frequency_b: [MIN_PULSE_FREQUENCY; 4],
             intensity_b: [0; 4],
             number: 0,
         }
@@ -47,12 +49,16 @@ impl WaveformV3 {
         frequency_b: [u8; 4],
         intensity_b: [u8; 4],
     ) -> Self {
-        let number: u8 = rand::random::<u8>() & 0x0F;
+        // Sequence zero is the documented fire-and-forget mode. Callers that
+        // explicitly request a B1 acknowledgement can supply the high nibble.
+        let number = strength_mode >> 4;
         Self {
             head: 0xB0,
-            strength_mode: (number << 4) | (strength_mode & 0x0F),
+            strength_mode,
             strength_a,
             strength_b,
+            // Preserve raw construction, including intentional invalid values
+            // used by V3 to suppress a whole channel's pulse data.
             frequency_a,
             intensity_a,
             frequency_b,
@@ -183,35 +189,134 @@ impl fmt::Display for WaveformV3 {
 
 pub fn map_freq_to_ms(value: u8) -> f64 {
     let v = value as f64;
-    if (100.0..=180.0).contains(&v) {
-        5.0 * v - 400.0
-    } else if v > 180.0 && v <= 200.0 {
-        5.0 * (v - 180.0) + 500.0
-    } else if v > 200.0 && v <= 240.0 {
-        10.0 * (v - 200.0) + 600.0
-    } else {
-        100.0
+    match value {
+        10..=100 => v,
+        101..=200 => (v - 100.0) * 5.0 + 100.0,
+        201..=240 => (v - 200.0) * 10.0 + 600.0,
+        _ => 10.0,
     }
 }
 
 pub fn map_ms_to_freq(ms: f64) -> u8 {
-    (ms * (7.0 / 45.0) + 84.4444) as u8
+    map_ms_to_freq_value(ms) as u8
+}
+
+fn map_ms_to_freq_value(ms: f64) -> f64 {
+    if (10.0..=100.0).contains(&ms) {
+        ms
+    } else if (100.0..=600.0).contains(&ms) {
+        (ms - 100.0) / 5.0 + 100.0
+    } else if (600.0..=1000.0).contains(&ms) {
+        (ms - 600.0) / 10.0 + 200.0
+    } else {
+        MIN_PULSE_FREQUENCY as f64
+    }
 }
 
 pub fn raw_to_hz(raw: u8) -> f32 {
-    const INPUT_START: f32 = 10.0;
-    const INPUT_END: f32 = 255.0;
-    const OUTPUT_START: f32 = 100.0;
-    const OUTPUT_END: f32 = 1.0;
-    OUTPUT_START + (OUTPUT_END - OUTPUT_START) / (INPUT_END - INPUT_START) * (raw as f32 - INPUT_START)
+    (1000.0 / map_freq_to_ms(raw.min(MAX_PULSE_FREQUENCY))) as f32
 }
 
 pub fn hz_to_raw(hz: f32) -> u8 {
-    const INPUT_START: f32 = 100.0;
-    const INPUT_END: f32 = 1.0;
-    const OUTPUT_START: f32 = 10.0;
-    const OUTPUT_END: f32 = 255.0;
-    let hz = hz.clamp(INPUT_END, INPUT_START);
-    let raw = OUTPUT_START + (OUTPUT_END - OUTPUT_START) / (INPUT_END - INPUT_START) * (hz - INPUT_START);
-    raw.round() as u8
+    hz_to_raw_f32(hz) as u8
+}
+
+pub(crate) fn hz_to_raw_f32(hz: f32) -> f32 {
+    let hz = if hz.is_finite() { hz.clamp(1.0, 100.0) } else { 100.0 };
+    map_ms_to_freq_value(1000.0 / hz as f64) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waveform_matches_official_b0_example() {
+        let wave = WaveformV3::waveform_only_a([10; 4], [0, 10, 20, 30]);
+        assert_eq!(
+            wave.to_bytes(),
+            [0xB0, 0, 0, 0, 10, 10, 10, 10, 0, 10, 20, 30, 0, 0, 0, 0, 0, 0, 0, 101]
+        );
+    }
+
+    #[test]
+    fn normal_commands_do_not_request_unhandled_acknowledgements() {
+        for _ in 0..32 {
+            let wave = WaveformV3::new(15, 20, [10; 4], [100; 4], [100; 4], [50; 4]);
+            assert_eq!(wave.to_bytes()[1], MODE_BOTH_ABSOLUTE);
+            assert_eq!(wave.number, 0);
+        }
+        let wave = WaveformV3::waveform_only_a([10; 4], [0; 4]);
+        assert_eq!(wave.to_bytes()[1], MODE_NO_CHANGE);
+    }
+
+    #[test]
+    fn explicit_sequence_and_disabled_channel_data_are_preserved() {
+        let wave = WaveformV3::with_mode(0x14, 5, 0, [10; 4], [0, 10, 20, 30], [0; 4], [0, 0, 0, 101]);
+        assert_eq!(wave.to_bytes()[1], 0x14);
+        assert_eq!(wave.number, 1);
+        assert_eq!(&wave.to_bytes()[12..], &[0, 0, 0, 0, 0, 0, 0, 101]);
+        let raw = WaveformV3 {
+            frequency_a: [255; 4],
+            intensity_a: [101; 4],
+            ..WaveformV3::default()
+        };
+        assert_eq!(&raw.to_bytes()[4..12], &[255, 255, 255, 255, 101, 101, 101, 101]);
+    }
+
+    #[test]
+    fn raw_high_frequency_suppression_is_preserved() {
+        let wave = WaveformV3::new(10, 10, [10, 100, 240, 255], [100; 4], [255; 4], [100; 4]);
+        assert_eq!(wave.frequency_a, [10, 100, 240, 255]);
+        assert_eq!(
+            wave.frequency_b, [255; 4],
+            "a deliberately invalid channel must remain disabled"
+        );
+        assert_eq!(wave.intensity_b, [100; 4]);
+    }
+
+    #[test]
+    fn idle_explicitly_clears_both_strengths_with_zero_pulses() {
+        assert_eq!(
+            WaveformV3::default().to_bytes(),
+            [0xB0, 0x0F, 0, 0, 10, 10, 10, 10, 0, 0, 0, 0, 10, 10, 10, 10, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn pulse_period_mapping_follows_official_piecewise_boundaries() {
+        for (ms, raw) in [
+            (10.0, 10),
+            (100.0, 100),
+            (105.0, 101),
+            (600.0, 200),
+            (610.0, 201),
+            (1000.0, 240),
+        ] {
+            assert_eq!(map_ms_to_freq(ms), raw, "{ms} ms");
+            assert_eq!(map_freq_to_ms(raw), ms, "raw {raw}");
+        }
+        assert_eq!(map_ms_to_freq(104.0), 100);
+        assert_eq!(map_ms_to_freq(609.0), 200);
+        for invalid in [0.0, 9.0, 1001.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(map_ms_to_freq(invalid), 10);
+        }
+    }
+
+    #[test]
+    fn hz_conversion_uses_pulse_periods_and_valid_wire_values() {
+        for (hz, raw) in [(1.0, 240), (10.0, 100), (50.0, 20), (100.0, 10)] {
+            assert_eq!(hz_to_raw(hz), raw);
+            assert_eq!(raw_to_hz(raw), hz);
+        }
+        assert_eq!(hz_to_raw(0.0), 240);
+        assert_eq!(hz_to_raw(1000.0), 10);
+        assert_eq!(raw_to_hz(255), 1.0);
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(hz_to_raw(invalid), 10);
+        }
+        for raw in MIN_PULSE_FREQUENCY..=MAX_PULSE_FREQUENCY {
+            assert!((1.0..=100.0).contains(&raw_to_hz(raw)));
+        }
+    }
 }

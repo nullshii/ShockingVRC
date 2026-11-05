@@ -50,3 +50,14 @@ impl From<WaveformBF> for Vec<u8> {
         w.to_bytes().to_vec()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bf_preserves_both_limits_and_all_balance_parameters() {
+        let bf = WaveformBF::new(150, 30, 255, 0, 120, 90);
+        assert_eq!(bf.to_bytes(), [0xBF, 150, 30, 255, 0, 120, 90]);
+    }
+}

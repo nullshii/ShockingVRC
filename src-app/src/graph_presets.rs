@@ -433,7 +433,14 @@ mod tests {
     }
 
     fn hz(raw: f32) -> f32 {
-        100.0 + (1.0 - 100.0) / 245.0 * (raw - 10.0)
+        let period_ms = if raw <= 100.0 {
+            raw
+        } else if raw <= 200.0 {
+            (raw - 100.0) * 5.0 + 100.0
+        } else {
+            (raw - 200.0) * 10.0 + 600.0
+        };
+        1000.0 / period_ms
     }
 
     const DROPS: [&str; 3] = ["drop-freefall", "drop-undertow", "drop-fault-line"];

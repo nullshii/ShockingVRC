@@ -248,8 +248,7 @@ impl ChannelParams {
 }
 
 pub fn hz_to_raw_f(hz: f32) -> f32 {
-    let hz = if hz.is_finite() { hz.clamp(1.0, 100.0) } else { 100.0 };
-    10.0 + (255.0 - 10.0) / (1.0 - 100.0) * (hz - 100.0)
+    crate::protocol::waveform::hz_to_raw_f32(hz)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

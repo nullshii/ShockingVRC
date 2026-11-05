@@ -27,3 +27,6 @@ socket2 = "0.6"
 reqwest = { workspace = true }
 semver = { workspace = true }
 futures-util = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

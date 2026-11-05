@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use btleplug::api::{Central, Characteristic, Peripheral as _, WriteType};
+use btleplug::api::{Central, CharPropFlags, Characteristic, Peripheral as _};
 use btleplug::platform::{Adapter, Peripheral};
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use tokio::sync::{Mutex, broadcast, watch};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -12,13 +12,12 @@ use uuid::Uuid;
 use crate::ble::adapter;
 use crate::ble::constants::*;
 use crate::ble::known_devices::KnownDeviceList;
+use crate::ble::transport;
 use crate::error::{DGLabError, Result};
 use crate::protocol::waveform::WaveformV3;
 use crate::protocol::waveform_bf::WaveformBF;
 
-const POST_WRITE_DELAY_MS: u64 = 50;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceNotification {
     Raw { uuid: Uuid, data: Vec<u8> },
     B1 { number: u8, volt: [u8; 2] },
@@ -29,6 +28,7 @@ pub enum DeviceNotification {
 pub struct CoyoteDevice {
     peripheral: Peripheral,
     write_char: Characteristic,
+    write_lock: Arc<Mutex<()>>,
     name: String,
     id: String,
     mac_address: String,
@@ -78,42 +78,8 @@ impl CoyoteDevice {
     }
 
     async fn write_to_char(&self, ch: &Characteristic, data: &[u8]) -> Result<bool> {
-        let has_write = ch.properties.contains(btleplug::api::CharPropFlags::WRITE);
-        let has_write_no_resp = ch
-            .properties
-            .contains(btleplug::api::CharPropFlags::WRITE_WITHOUT_RESPONSE);
-
-        let write_type = if has_write {
-            WriteType::WithResponse
-        } else if has_write_no_resp {
-            WriteType::WithoutResponse
-        } else {
-            return Err(DGLabError::WriteError(format!(
-                "Characteristic {} has no write property (props: {:?})",
-                ch.uuid, ch.properties
-            )));
-        };
-
-        debug!("Writing {} bytes to {} ({:?}): {:02X?}", data.len(), ch.uuid, write_type, data);
-
-        match self.peripheral.write(ch, data, write_type).await {
-            Ok(()) => {
-                if matches!(write_type, WriteType::WithoutResponse) {
-                    tokio::time::sleep(Duration::from_millis(POST_WRITE_DELAY_MS)).await;
-                }
-                Ok(true)
-            }
-            Err(e) if has_write && has_write_no_resp => {
-                warn!("WriteWithResponse failed ({}), retrying with WriteWithoutResponse", e);
-                self.peripheral
-                    .write(ch, data, WriteType::WithoutResponse)
-                    .await
-                    .map_err(|e2| DGLabError::WriteError(format!("both write modes failed: {e}, {e2}")))?;
-                tokio::time::sleep(Duration::from_millis(POST_WRITE_DELAY_MS)).await;
-                Ok(true)
-            }
-            Err(e) => Err(DGLabError::WriteError(e.to_string())),
-        }
+        let _guard = self.write_lock.lock().await;
+        transport::write_packet(&self.peripheral, ch, data).await
     }
 
     pub async fn read_characteristic(&self, uuid: Uuid) -> Result<Vec<u8>> {
@@ -126,7 +92,7 @@ impl CoyoteDevice {
 
     pub async fn battery_level(&self) -> Result<Option<u8>> {
         let data = self.read_characteristic(CHARACTERISTIC_BATTERY).await?;
-        Ok(data.first().copied())
+        Ok(parse_battery(&data))
     }
 
     pub async fn set_waveform(&self, wave: &WaveformV3) -> Result<bool> {
@@ -158,7 +124,6 @@ impl CoyoteDevice {
             .map(|c| (c.service_uuid, c.uuid, c.properties))
             .collect()
     }
-    //TODO if chenel power = 0 then 0 out, otherwise 1 out? or maybe preserve original value for non-zero power levels and just set to 0 for off? idk if i send send zero power to devise zero power != 0 XD
     pub fn start(&mut self) -> bool {
         if self.input_task.is_some() {
             return false;
@@ -167,65 +132,13 @@ impl CoyoteDevice {
         let (stop_tx, stop_rx) = watch::channel(false);
         self.stop_tx = Some(stop_tx);
 
-        let peripheral = self.peripheral.clone();
-        let write_char = self.write_char.clone();
-        let wave_now = Arc::clone(&self.wave_now);
-
-        let handle = tokio::spawn(async move {
-            info!("[dglab] Waveform output loop started");
-            let mut stop_rx = stop_rx;
-            let mut last_log = String::new();
-
-            loop {
-                if *stop_rx.borrow() {
-                    break;
-                }
-
-                let connected = peripheral.is_connected().await.unwrap_or(false);
-                if !connected {
-                    warn!("[dglab] Device disconnected, stopping output loop");
-                    break;
-                }
-
-                let wave = wave_now.lock().await.clone();
-                let bytes = wave.to_bytes();
-                let delay_ms = 100u64;
-
-                let has_write = write_char.properties.contains(btleplug::api::CharPropFlags::WRITE);
-                let write_type = if has_write {
-                    WriteType::WithResponse
-                } else {
-                    WriteType::WithoutResponse
-                };
-
-                match peripheral.write(&write_char, &bytes, write_type).await {
-                    Ok(()) => {
-                        tokio::time::sleep(Duration::from_millis(POST_WRITE_DELAY_MS)).await;
-                        let desc = format!("{wave}");
-                        if desc != last_log {
-                            debug!("Sent waveform: {desc}");
-                            last_log = desc;
-                        }
-                    }
-                    Err(e) => {
-                        if has_write {
-                            if let Err(e2) = peripheral.write(&write_char, &bytes, WriteType::WithoutResponse).await {
-                                error!("Write failed (both modes): {e}, {e2}");
-                            }
-                        } else {
-                            error!("Write failed: {e}");
-                        }
-                    }
-                }
-
-                tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_millis(delay_ms)) => {}
-                    _ = stop_rx.changed() => { break; }
-                }
-            }
-
-            info!("[dglab] Waveform output loop ended");
-        });
+        let handle = tokio::spawn(transport::run_output(
+            self.peripheral.clone(),
+            self.write_char.clone(),
+            Arc::clone(&self.wave_now),
+            Arc::clone(&self.write_lock),
+            stop_rx,
+        ));
 
         self.input_task = Some(handle);
         true
@@ -244,6 +157,14 @@ impl CoyoteDevice {
 
     async fn from_peripheral(peripheral: Peripheral) -> Result<Self> {
         peripheral.connect().await?;
+        let result = Self::from_connected_peripheral(peripheral.clone()).await;
+        if result.is_err() {
+            let _ = peripheral.disconnect().await;
+        }
+        result
+    }
+
+    async fn from_connected_peripheral(peripheral: Peripheral) -> Result<Self> {
         peripheral.discover_services().await?;
 
         let props = peripheral.properties().await?;
@@ -276,114 +197,77 @@ impl CoyoteDevice {
             write_char.uuid, write_char.service_uuid, write_char.properties
         );
 
-        if let Some(ch) = characteristics.iter().find(|c| c.uuid == CHARACTERISTIC_BATTERY) {
+        if let Some(ch) = characteristics
+            .iter()
+            .find(|c| c.uuid == CHARACTERISTIC_BATTERY && c.properties.contains(CharPropFlags::READ))
+        {
             if let Ok(data) = peripheral.read(ch).await {
-                if !data.is_empty() {
-                    info!("[dglab] Battery read: {}%", data[0]);
+                if let Some(level) = parse_battery(&data) {
+                    info!("[dglab] Battery read: {level}%");
                 }
             }
         }
-        tokio::time::sleep(Duration::from_millis(25)).await;
 
-        if let Some(ch) = characteristics.iter().find(|c| c.uuid == CHARACTERISTIC_1501) {
+        // shit post becuse vilet update dag-lab firemwere
+        if let Some(ch) = characteristics
+            .iter()
+            .find(|c| c.uuid == CHARACTERISTIC_1501 && c.properties.contains(CharPropFlags::READ))
+        {
             if let Ok(data) = peripheral.read(ch).await {
                 debug!("[dglab] 1501 read: {:02X?}", data);
             }
         }
-        tokio::time::sleep(Duration::from_millis(25)).await;
-
         let (notification_tx, _) = broadcast::channel(64);
 
         let notify_ch = characteristics
             .iter()
             .find(|c| c.uuid == CHARACTERISTIC_NOTIFY && c.service_uuid == SERVICE_NOTIFY)
             .or_else(|| characteristics.iter().find(|c| c.uuid == CHARACTERISTIC_NOTIFY))
-            .cloned();
+            .cloned()
+            .ok_or(DGLabError::CharacteristicNotFound(CHARACTERISTIC_NOTIFY))?;
+        if !notify_ch
+            .properties
+            .intersects(CharPropFlags::NOTIFY | CharPropFlags::INDICATE)
+        {
+            return Err(DGLabError::NotifyError(
+                "150B does not support notifications or indications".into(),
+            ));
+        }
 
-        let notification_task = if let Some(ch) = notify_ch {
-            peripheral
-                .subscribe(&ch)
-                .await
-                .map_err(|e| DGLabError::NotifyError(format!("subscribe to {}: {e}", CHARACTERISTIC_NOTIFY)))?;
+        let mut stream = peripheral
+            .notifications()
+            .await
+            .map_err(|e| DGLabError::NotifyError(format!("notification stream: {e}")))?;
+        peripheral
+            .subscribe(&notify_ch)
+            .await
+            .map_err(|e| DGLabError::NotifyError(format!("subscribe to {}: {e}", CHARACTERISTIC_NOTIFY)))?;
 
-            let tx = notification_tx.clone();
-            let p = peripheral.clone();
-            Some(tokio::spawn(async move {
-                use tokio_stream::StreamExt;
-                let mut stream = match p.notifications().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("Failed to get notification stream: {e}");
-                        return;
-                    }
-                };
-                while let Some(notif) = stream.next().await {
-                    let data = notif.value;
-                    let uuid = notif.uuid;
+        transport::initialize_output(&peripheral, &write_char).await?;
 
-                    let _ = tx.send(DeviceNotification::Raw {
-                        uuid,
-                        data: data.clone(),
-                    });
+        let tx = notification_tx.clone();
+        let notification_task = Some(tokio::spawn(async move {
+            use tokio_stream::StreamExt;
+            while let Some(notif) = stream.next().await {
+                dispatch_notification(&tx, notif.uuid, notif.value);
+            }
+        }));
 
-                    if data.is_empty() {
-                        continue;
-                    }
-
-                    match data[0] {
-                        0xB1 if data.len() >= 4 => {
-                            let _ = tx.send(DeviceNotification::B1 {
-                                number: data[1],
-                                volt: [data[2], data[3]],
-                            });
-                        }
-                        0xBE if data.len() >= 2 => {
-                            let _ = tx.send(DeviceNotification::BE {
-                                params: data[1..].to_vec(),
-                            });
-                        }
-                        0xE0 if data.len() >= 2 => {
-                            let _ = tx.send(DeviceNotification::E0Reset { number: data[1] });
-                        }
-                        _ => {}
-                    }
-                }
-            }))
-        } else {
-            warn!("Notify characteristic not found on device");
-            None
-        };
-
-        let default_wave = WaveformV3::channel_a_quick(40, [100, 100, 100, 100]);
         let device = Self {
-            peripheral: peripheral.clone(),
+            peripheral,
             write_char,
+            write_lock: Arc::new(Mutex::new(())),
             name,
             id,
             mac_address,
-            wave_now: Arc::new(Mutex::new(default_wave)),
+            wave_now: Arc::new(Mutex::new(WaveformV3::default())),
             notification_tx,
             stop_tx: None,
             input_task: None,
             notification_task,
         };
 
-        let bf = WaveformBF::new(200, 0, 0, 0, 0, 0);
-        match device.set_wave_bf(&bf).await {
-            Ok(_) => info!("[dglab] Initial BF command sent OK"),
-            Err(e) => warn!("[dglab] Failed to send initial BF command: {e}"),
-        }
-
-        tokio::time::sleep(Duration::from_millis(150)).await;
-
-        let init_b0 = WaveformV3::waveform_only_a([10, 10, 10, 10], [0, 10, 20, 30]);
-        match device.set_waveform(&init_b0).await {
-            Ok(_) => info!("[dglab] Initial B0 sent OK (device should show connected)"),
-            Err(e) => warn!("[dglab] Initial B0 failed: {e}"),
-        }
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
+        info!("[dglab] Initialized with zero limits and output; engine will apply configured limits");
         Ok(device)
     }
 
@@ -562,8 +446,7 @@ impl CoyoteDevice {
                         let addr = props.address.to_string().to_uppercase();
                         if addr == target {
                             let connect_timeout = Duration::from_secs(12);
-                            match tokio::time::timeout(connect_timeout, Self::from_peripheral(p)).await
-                            {
+                            match tokio::time::timeout(connect_timeout, Self::from_peripheral(p)).await {
                                 Ok(Ok(dev)) => {
                                     info!("Reconnected to {} ({target})", dev.name());
                                     return Ok(Some(dev));
@@ -621,6 +504,39 @@ impl Drop for CoyoteDevice {
     }
 }
 
+fn parse_battery(data: &[u8]) -> Option<u8> {
+    match data {
+        [level] if *level <= 100 => Some(*level),
+        _ => None,
+    }
+}
+
+fn parse_notification(uuid: Uuid, data: &[u8]) -> Option<DeviceNotification> {
+    if uuid != CHARACTERISTIC_NOTIFY {
+        return None;
+    }
+    match data {
+        [0xB1, number, a, b] if *number <= 15 && *a <= 200 && *b <= 200 => Some(DeviceNotification::B1 {
+            number: *number,
+            volt: [*a, *b],
+        }),
+        // Keep the application's existing opaque legacy BE event.
+        [0xBE, _, ..] => Some(DeviceNotification::BE {
+            params: data[1..].to_vec(),
+        }),
+        [0xE0, number, ..] => Some(DeviceNotification::E0Reset { number: *number }),
+        _ => None,
+    }
+}
+
+fn dispatch_notification(tx: &broadcast::Sender<DeviceNotification>, uuid: Uuid, data: Vec<u8>) {
+    let parsed = parse_notification(uuid, &data);
+    let _ = tx.send(DeviceNotification::Raw { uuid, data });
+    if let Some(notification) = parsed {
+        let _ = tx.send(notification);
+    }
+}
+
 async fn find_coyote_peripherals(adapter: &Adapter) -> Result<Vec<Peripheral>> {
     let mut found = Vec::new();
     for p in adapter.peripherals().await? {
@@ -634,4 +550,116 @@ async fn find_coyote_peripherals(adapter: &Adapter) -> Result<Vec<Peripheral>> {
         }
     }
     Ok(found)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn b1_parses_solicited_and_wheel_responses() {
+        for number in [0, 1, 15] {
+            assert_eq!(
+                parse_notification(CHARACTERISTIC_NOTIFY, &[0xB1, number, 0, 200]),
+                Some(DeviceNotification::B1 { number, volt: [0, 200] })
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_be_is_accepted_without_becoming_required() {
+        assert_eq!(
+            parse_notification(CHARACTERISTIC_NOTIFY, &[0xBE, 100, 200, 0, 255, 128, 10]),
+            Some(DeviceNotification::BE {
+                params: vec![100, 200, 0, 255, 128, 10]
+            })
+        );
+        assert_eq!(
+            parse_notification(CHARACTERISTIC_NOTIFY, &[0xBE, 255]),
+            Some(DeviceNotification::BE { params: vec![255] })
+        );
+        assert!(matches!(
+            parse_notification(CHARACTERISTIC_NOTIFY, &[0xB1, 0, 10, 20]),
+            Some(DeviceNotification::B1 { .. })
+        ));
+    }
+
+    #[test]
+    fn legacy_and_current_response_streams_deliver_the_same_b1_events() {
+        for legacy_be in [None, Some(vec![0xBE, 100, 200, 0, 255, 128, 10])] {
+            let (tx, mut rx) = broadcast::channel(16);
+            if let Some(data) = legacy_be {
+                dispatch_notification(&tx, CHARACTERISTIC_NOTIFY, data);
+            }
+            dispatch_notification(&tx, CHARACTERISTIC_NOTIFY, vec![0xB1, 0, 10, 20]);
+            dispatch_notification(&tx, CHARACTERISTIC_NOTIFY, vec![0xB1, 15, 30, 40]);
+            let mut b1 = Vec::new();
+            while let Ok(event) = rx.try_recv() {
+                if let DeviceNotification::B1 { number, volt } = event {
+                    b1.push((number, volt));
+                }
+            }
+            assert_eq!(b1, vec![(0, [10, 20]), (15, [30, 40])]);
+        }
+    }
+
+    #[test]
+    fn malformed_and_unknown_messages_remain_raw_only() {
+        let (tx, mut rx) = broadcast::channel(64);
+        for data in [
+            vec![],
+            vec![0xB1],
+            vec![0xB1, 1, 2],
+            vec![0xB1, 1, 2, 3, 4],
+            vec![0xB1, 16, 2, 3],
+            vec![0xB1, 1, 201, 3],
+            vec![0xBE],
+            vec![0xE0],
+            vec![0xFF, 1, 2, 3],
+        ] {
+            dispatch_notification(&tx, CHARACTERISTIC_NOTIFY, data.clone());
+            assert_eq!(
+                rx.try_recv().unwrap(),
+                DeviceNotification::Raw {
+                    uuid: CHARACTERISTIC_NOTIFY,
+                    data
+                }
+            );
+            assert!(rx.try_recv().is_err());
+        }
+        dispatch_notification(&tx, CHARACTERISTIC_BATTERY, vec![0xB1, 1, 2, 3]);
+        assert!(matches!(rx.try_recv().unwrap(), DeviceNotification::Raw { .. }));
+        assert!(rx.try_recv().is_err(), "never decode another characteristic as B1");
+    }
+
+    #[test]
+    fn valid_messages_keep_raw_and_typed_subscription_events() {
+        let (tx, mut rx) = broadcast::channel(4);
+        dispatch_notification(&tx, CHARACTERISTIC_NOTIFY, vec![0xB1, 1, 2, 3]);
+        assert!(matches!(rx.try_recv().unwrap(), DeviceNotification::Raw { .. }));
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            DeviceNotification::B1 {
+                number: 1,
+                volt: [2, 3]
+            }
+        );
+        assert_eq!(
+            parse_notification(CHARACTERISTIC_NOTIFY, &[0xE0, 9]),
+            Some(DeviceNotification::E0Reset { number: 9 })
+        );
+        assert_eq!(
+            parse_notification(CHARACTERISTIC_NOTIFY, &[0xE0, 9, 42]),
+            Some(DeviceNotification::E0Reset { number: 9 })
+        );
+    }
+
+    #[test]
+    fn battery_requires_one_valid_percentage_byte() {
+        assert_eq!(parse_battery(&[0]), Some(0));
+        assert_eq!(parse_battery(&[100]), Some(100));
+        for data in [vec![], vec![101], vec![255], vec![50, 0]] {
+            assert_eq!(parse_battery(&data), None);
+        }
+    }
 }

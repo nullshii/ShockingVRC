@@ -12,7 +12,7 @@ use crate::graph::safety::{self, AlarmOverlay, SafeChannel};
 use crate::modulation::evaluator::{KinematicsInput, advance_and_evaluate_segments};
 use crate::osc::scanner::AvatarScanner;
 use crate::osc::types::ZoneEvent;
-use crate::protocol::waveform::WaveformV3;
+use crate::protocol::waveform::{MAX_PULSE_FREQUENCY, WaveformV3};
 use crate::protocol::waveform_bf::WaveformBF;
 
 use super::alarm::{AlarmConfig, AlarmController};
@@ -569,6 +569,9 @@ impl CliEngine {
                     Err(e) => {
                         warn!("[cli] Failed to send BF ceiling: {e}");
                         *state.last_bf.lock().await = None;
+                        if let Ok(mut graph) = state.graph.lock() {
+                            graph.bf_sent = None;
+                        }
                     }
                 }
             }
@@ -794,10 +797,10 @@ fn modulate_channel(
     let mod_int = advance_and_evaluate_segments(&channel.intensity_modulation, int_accums, int_f, kin, dt);
 
     let freq_out = [
-        (mod_freq[0].round() as u8).clamp(10, 255),
-        (mod_freq[1].round() as u8).clamp(10, 255),
-        (mod_freq[2].round() as u8).clamp(10, 255),
-        (mod_freq[3].round() as u8).clamp(10, 255),
+        (mod_freq[0].round() as u8).clamp(10, MAX_PULSE_FREQUENCY),
+        (mod_freq[1].round() as u8).clamp(10, MAX_PULSE_FREQUENCY),
+        (mod_freq[2].round() as u8).clamp(10, MAX_PULSE_FREQUENCY),
+        (mod_freq[3].round() as u8).clamp(10, MAX_PULSE_FREQUENCY),
     ];
     let int_out = [
         (mod_int[0].round() as u8).clamp(0, 100),
@@ -807,6 +810,31 @@ fn modulate_channel(
     ];
 
     (freq_out, int_out)
+}
+
+#[cfg(test)]
+mod protocol_output_tests {
+    use super::*;
+
+    #[test]
+    fn classic_limits_legacy_preset_frequencies_to_the_v3_wire_range() {
+        let config = ChannelConfig {
+            frequency: [10, 240, 241, 255],
+            ..ChannelConfig::default()
+        };
+        let (frequency, intensity) = modulate_channel(
+            config.frequency,
+            [100; 4],
+            &config,
+            &KinematicsInput::default(),
+            &mut [0.0; 4],
+            &mut [0.0; 4],
+            0.1,
+        );
+        assert_eq!(frequency, [10, 240, 240, 240]);
+        assert_eq!(intensity, [100; 4]);
+        assert_eq!(config.frequency, [10, 240, 241, 255], "saved presets are preserved");
+    }
 }
 
 fn threshold_window_is_open(min_threshold: u8, max_threshold: u8) -> bool {
