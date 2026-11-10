@@ -105,6 +105,10 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
     ("drop-undertow.json", include_str!("../../graph-presets/drop-undertow.json")),
     ("drop-fault-line.json", include_str!("../../graph-presets/drop-fault-line.json")),
     (
+        "four-zone-aggressive.json",
+        include_str!("../../graph-presets/four-zone-aggressive.json"),
+    ),
+    (
         "fragment-ukf-speed.json",
         include_str!("../../graph-presets/fragment-ukf-speed.json"),
     ),
@@ -760,6 +764,188 @@ mod tests {
                 assert!(jump <= 0.02, "{id}: power jumps by {jump:.3} in one tick");
             }
         }
+    }
+
+    fn four_zone(tweak: impl FnOnce(&mut Graph)) -> shocking_vrc_core::graph::GraphEvaluator {
+        let mut g = preset("four-zone-aggressive").preset.instantiate(&["AA:AA".into()]);
+        tweak(&mut g);
+        shocking_vrc_core::graph::GraphEvaluator::new(&g)
+    }
+
+    fn feed(
+        ev: &mut shocking_vrc_core::graph::GraphEvaluator,
+        level: f32,
+        fresh: bool,
+    ) -> [shocking_vrc_core::graph::device::ChannelFrame; 2] {
+        use shocking_vrc_core::graph::ExternalSample;
+        ev.fill_external(|_| ExternalSample { value: level, fresh });
+        let f = &ev.step(0.025)[0];
+        [f.channels[0], f.channels[1]]
+    }
+
+    fn wobble(centre: f32, k: usize) -> f32 {
+        centre + 0.04 * ((k as f32) * 0.025 * std::f32::consts::TAU * 1.3).sin()
+    }
+
+    const ZONES: [f32; 4] = [0.1, 0.3, 0.6, 0.9];
+
+    #[test]
+    fn four_zone_drives_only_channel_a_within_the_slider_bounds() {
+        for centre in ZONES {
+            let mut ev = four_zone(|_| {});
+            for k in 0..2400 {
+                let [a, b] = feed(&mut ev, wobble(centre, k), true);
+                assert_eq!((b.power, b.limit_max), (0.0, 0.0), "channel B must stay silent");
+                if k < 40 {
+                    continue;
+                }
+                assert_eq!(a.limit_max, 10.0, "zone {centre}: aggressive armed while moving");
+                for s in 0..4 {
+                    let h = hz(a.freq[s]);
+                    assert!((29.4..=70.6).contains(&h), "zone {centre}: {h:.1} Hz outside 50 ± 20");
+                    assert!((35.0..=95.0).contains(&a.intensity[s]), "zone {centre}: {} %", a.intensity[s]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn four_zone_segment_gaps_differ_and_every_zone_has_its_own_pattern() {
+        let mut signatures = Vec::new();
+        for centre in ZONES {
+            let mut ev = four_zone(|_| {});
+            let frames: Vec<_> = (0..2400).map(|k| feed(&mut ev, wobble(centre, k), true)[0]).collect();
+            let frames = &frames[40..];
+            let n = frames.len() as f32;
+            let mean = |f: &dyn Fn(&shocking_vrc_core::graph::device::ChannelFrame) -> f32| {
+                frames.iter().map(f).sum::<f32>() / n
+            };
+            let mf: Vec<f32> = (0..4).map(|s| mean(&|c| hz(c.freq[s]))).collect();
+            let mi: Vec<f32> = (0..4).map(|s| mean(&|c| c.intensity[s])).collect();
+            let gaps = [mf[1] - mf[0], mf[2] - mf[1], mf[3] - mf[2]];
+            for x in 0..3 {
+                for y in x + 1..3 {
+                    assert!(
+                        (gaps[x] - gaps[y]).abs() > 1.5,
+                        "zone {centre}: segment gaps {gaps:?} are not all different"
+                    );
+                }
+            }
+            let mut moves = [0.0f32; 4];
+            for w in frames.windows(2) {
+                for (s, m) in moves.iter_mut().enumerate() {
+                    *m += (hz(w[1].freq[s]) - hz(w[0].freq[s])).abs();
+                }
+            }
+            assert!(
+                moves.iter().all(|m| *m > 20.0),
+                "zone {centre}: a segment never moves {moves:?}"
+            );
+            signatures.push((mf, mi, moves.iter().sum::<f32>() / n));
+        }
+        for x in 0..4 {
+            for y in x + 1..4 {
+                let (a, b) = (&signatures[x], &signatures[y]);
+                let df: f32 = a.0.iter().zip(&b.0).map(|(p, q)| (p - q).abs()).sum();
+                let di: f32 = a.1.iter().zip(&b.1).map(|(p, q)| (p - q).abs()).sum();
+                let dm = (a.2 - b.2).abs();
+                assert!(df + di > 12.0 || dm > 0.3, "zones {x} and {y} sound alike: {a:?} / {b:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn four_zone_patterns_never_repeat() {
+        for centre in ZONES {
+            let mut ev = four_zone(|_| {});
+            let q: Vec<[i32; 8]> = (0..24_000)
+                .map(|k| {
+                    let a = feed(&mut ev, wobble(centre, k), true)[0];
+                    let mut v = [0; 8];
+                    for s in 0..4 {
+                        v[s] = hz(a.freq[s]).round() as i32;
+                        v[s + 4] = a.intensity[s].round() as i32;
+                    }
+                    v
+                })
+                .collect();
+            let mut seen = std::collections::HashSet::new();
+            for w in q[200..].windows(40).step_by(4) {
+                assert!(seen.insert(w.to_vec()), "zone {centre}: a one-second stretch came back");
+            }
+        }
+    }
+
+    #[test]
+    fn four_zone_power_follows_depth_directly() {
+        let mut ev = four_zone(|g| set_slider(g, "Pattern power depth", 0.0));
+        let mut last = 0.0f32;
+        for k in 0..=400 {
+            let x = k as f32 / 400.0;
+            let p = feed(&mut ev, x, true)[0].power;
+            assert!(p + 1e-4 >= last, "power fell while depth rose ({x:.3}: {p} < {last})");
+            last = p;
+        }
+        assert!((last - 1.0).abs() < 1e-3, "full depth is full power ({last})");
+
+        let mut ev = four_zone(|_| {});
+        for _ in 0..40 {
+            feed(&mut ev, 0.3, true);
+        }
+        let before = feed(&mut ev, 0.3, true)[0].power;
+        let up = feed(&mut ev, 0.7, true)[0].power;
+        assert!(
+            up > before + 0.2,
+            "a deeper press must raise power on the same tick ({before} → {up})"
+        );
+        let falls: Vec<f32> = (0..5).map(|_| feed(&mut ev, 0.0, false)[0].power).collect();
+        assert_eq!(falls[4], 0.0, "power must be gone 100 ms after release: {falls:?}");
+    }
+
+    #[test]
+    fn four_zone_aggressive_needs_a_still_dwell_and_lets_go_late() {
+        let secs = |s: f32| (s / 0.025).round() as usize;
+        let hold = |ev: &mut shocking_vrc_core::graph::GraphEvaluator, s: f32, level: &dyn Fn(usize) -> f32| {
+            let mut a = feed(ev, level(0), true)[0];
+            for k in 1..secs(s) {
+                a = feed(ev, level(k), true)[0];
+            }
+            a
+        };
+
+        let mut ev = four_zone(|_| {});
+        hold(&mut ev, 0.5, &|_| 0.6);
+        assert_eq!(hold(&mut ev, 2.0, &|_| 0.9).limit_max, 10.0, "armed before the dwell");
+        let on = hold(&mut ev, 1.5, &|_| 0.9);
+        assert_eq!(on.limit_max, 14.0, "not armed after a still dwell");
+        assert!((on.power - 1.0).abs() < 1e-3, "aggressive power is full ({})", on.power);
+
+        let strokes = |k: usize| wobble(0.9, k) + 0.04 * ((k as f32) * 0.05).sin();
+        assert_eq!(hold(&mut ev, 1.0, &strokes).limit_max, 14.0, "released before the delay");
+        assert_eq!(hold(&mut ev, 1.2, &strokes).limit_max, 10.0, "turning points kept it alive");
+        assert_eq!(hold(&mut ev, 6.0, &strokes).limit_max, 10.0, "strokes re-armed it");
+
+        let mut ev = four_zone(|_| {});
+        hold(&mut ev, 4.0, &|_| 0.9);
+        assert_eq!(
+            hold(&mut ev, 1.0, &|_| 0.6).limit_max,
+            14.0,
+            "leaving zone 4 must wait for the delay"
+        );
+        assert_eq!(hold(&mut ev, 1.0, &|_| 0.6).limit_max, 10.0, "still on after leaving zone 4");
+
+        let mut ev = four_zone(|_| {});
+        hold(&mut ev, 4.0, &|_| 0.9);
+        let gone: Vec<f32> = (0..5).map(|_| feed(&mut ev, 0.0, false)[0].power).collect();
+        assert_eq!(gone[4], 0.0, "releasing the contact must stop at once: {gone:?}");
+
+        let mut ev = four_zone(|g| {
+            let n = g.nodes.iter_mut().find(|n| n.title == "Aggressive enabled").unwrap();
+            if let NodeKind::Toggle(t) = &mut n.kind {
+                t.on = false;
+            }
+        });
+        assert_eq!(hold(&mut ev, 6.0, &|_| 0.9).limit_max, 10.0, "the toggle did not disable it");
     }
 
     #[test]

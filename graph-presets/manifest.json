@@ -224,6 +224,12 @@
       "file": "drop-fault-line.json"
     },
     {
+      "id": "four-zone-aggressive",
+      "name": "Four zones · aggressive hold",
+      "description": "Channel A only: depth picks one of four patterns around your carrier; hold deep and still to unlock aggressive mode",
+      "file": "four-zone-aggressive.json"
+    },
+    {
       "id": "fragment-ukf-speed",
       "name": "UKF speed tap",
       "description": "Contact → UKF → smoothed speed, with a scope — wire it in",

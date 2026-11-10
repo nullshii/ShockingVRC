@@ -1,0 +1,6224 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Four zones · aggressive hold",
+  "description": "Channel A only: depth picks one of four patterns around your carrier; hold deep and still to unlock aggressive mode",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -360.0
+        ],
+        "title": "READ ME · how to set up",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            1020.0,
+            300.0
+          ],
+          "text": "ONE CHANNEL (A), FOUR ZONES + AGGRESSIVE MODE. The contact depth is split into four zones and each zone plays its own frequency and intensity pattern on all four 25 ms segments of channel A. Channel B is not used.\nHOW TO SET IT UP\n1. Bind your Coyote to Device 1. Set 'Max output power' LOW first (it is Limit Max of channel A — the Graph cap in Setup still wins), then raise it while touching.\n2. Pick your 'Carrier frequency': every segment frequency is Carrier ± up to 'Max frequency deviation' (both directions, a hard bound). Low carrier = thumps, high carrier = buzz.\n3. Pick 'Base intensity' and 'Max intensity deviation': every segment intensity stays inside Base ± deviation.\n4. Zone tempo sliders speed each zone's pattern up or down (1 = as designed).\n5. Aggressive mode: go past 0.8 and hold still. Watch the left scope: when the orange |velocity| line stays under the threshold line, the dwell bar in the right scope fills; after 'Dwell time' it switches on. Raise 'Stillness threshold' if it never arms, lower it if it arms while you move. It stops 'Release delay' seconds after you leave 0.8–1 or start moving, and instantly if the contact is released.\n6. 'Test aggressive' (hold) previews the aggressive pattern while touching; 'Aggressive enabled' turns the mode off entirely."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          1100.0,
+          -360.0
+        ],
+        "title": "1 · Settings",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            500.0,
+            300.0
+          ],
+          "text": "SETTINGS — every knob of the preset lives here. Power: Max output power = Limit Max (0–100). Pattern power depth: 0 = power follows depth only, 1 = the active zone's texture (swell, steps, surge) also shapes power. Frequency/intensity: carrier and base are the centre; deviations are the maximum swing in BOTH directions. Aggressive: dwell, stillness, release, extra power (added to Limit Max only while aggressive) and its tempo."
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          1620.0,
+          -360.0
+        ],
+        "title": "2 · Zones",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            500.0,
+            300.0
+          ],
+          "text": "ZONES — raw contact depth, no smoothing. Compare ≥ 0.2 / 0.4 / 0.8 (±0.01 hysteresis so a boundary does not chatter) summed = zone 0–3. Each Remap gives the position inside its zone (0–1) so every pattern still follows small depth changes. The UKF only supplies velocity and speed."
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          2140.0,
+          -360.0
+        ],
+        "title": "3 · Aggressive latch",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            500.0,
+            300.0
+          ],
+          "text": "AGGRESSIVE LATCH — Armed = in zone 4 AND |UKF velocity| < threshold AND enabled. The Ramp Timer must stay armed for the dwell time (any movement resets it). Peak Hold keeps it on for the release delay after the conditions break, then fades in 0.25 s. If you settle again inside that window (still for 0.35 s, 'Re-settled') it carries on without a new dwell — but the brief stop at the turn of every stroke is too short to count, so steady strokes always let it go."
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          2660.0,
+          -360.0
+        ],
+        "title": "4 · Patterns",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            760.0,
+            300.0
+          ],
+          "text": "PATTERNS — each group outputs 4 frequency shapes and 4 intensity shapes in −1…+1 plus a power texture. Each segment has its own resting offset, so the gaps between segments are all different, and its own shape/phase; noise drift and your motion bend every rate so nothing loops.\nZone 1 · 0–0.2 Ripple: slow smooth waves, soft.   Zone 2 · 0.2–0.4 Staircase: stepped melodies 5/6/7/9 long, random intensity steps.\nZone 3 · 0.4–0.8 Surge: rising chirps, intensity throbs, deeper = longer on-time.   Zone 4 · 0.8–1 Storm: fast chaotic flutter, strong.\nAggressive: hard zig-zag at the extremes, near-max intensity, short gaps. Open a group (double-click) to edit offsets, shapes and rates."
+        }
+      },
+      {
+        "id": 6,
+        "pos": [
+          3440.0,
+          -360.0
+        ],
+        "title": "5 · Output",
+        "kind": {
+          "type": "Frame",
+          "size": [
+            760.0,
+            300.0
+          ],
+          "text": "OUTPUT — Switches pick the active pattern (zone, or 4 = aggressive). Remap turns −1…+1 into Carrier ± deviation (Hz) and Base ± deviation, clamped, so the sliders are hard limits. Power = Curve(depth) — a different slope per zone, continuous at the edges, no hold — times the zone texture (by depth slider), or full while aggressive. Edit the Curve to reshape the power response."
+        }
+      },
+      {
+        "id": 7,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "title": "Max output power",
+        "kind": {
+          "type": "Slider",
+          "value": 10.0,
+          "min": 0.0,
+          "max": 100.0,
+          "step": 1.0,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 8,
+        "pos": [
+          40.0,
+          100.0
+        ],
+        "title": "Pattern power depth",
+        "kind": {
+          "type": "Slider",
+          "value": 0.25,
+          "min": 0.0,
+          "max": 1.0,
+          "step": 0.05,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 9,
+        "pos": [
+          40.0,
+          200.0
+        ],
+        "title": "Carrier frequency Hz",
+        "kind": {
+          "type": "Slider",
+          "value": 50.0,
+          "min": 5.0,
+          "max": 100.0,
+          "step": 1.0,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 10,
+        "pos": [
+          40.0,
+          300.0
+        ],
+        "title": "Max frequency deviation ± Hz",
+        "kind": {
+          "type": "Slider",
+          "value": 20.0,
+          "min": 0.0,
+          "max": 50.0,
+          "step": 1.0,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 11,
+        "pos": [
+          40.0,
+          400.0
+        ],
+        "title": "Base intensity",
+        "kind": {
+          "type": "Slider",
+          "value": 0.65,
+          "min": 0.0,
+          "max": 1.0,
+          "step": 0.01,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 12,
+        "pos": [
+          40.0,
+          500.0
+        ],
+        "title": "Max intensity deviation ±",
+        "kind": {
+          "type": "Slider",
+          "value": 0.3,
+          "min": 0.0,
+          "max": 0.5,
+          "step": 0.01,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 13,
+        "pos": [
+          40.0,
+          600.0
+        ],
+        "title": "Zone 1 tempo ×",
+        "kind": {
+          "type": "Slider",
+          "value": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 14,
+        "pos": [
+          40.0,
+          700.0
+        ],
+        "title": "Zone 2 tempo ×",
+        "kind": {
+          "type": "Slider",
+          "value": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 15,
+        "pos": [
+          40.0,
+          800.0
+        ],
+        "title": "Zone 3 tempo ×",
+        "kind": {
+          "type": "Slider",
+          "value": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 16,
+        "pos": [
+          40.0,
+          900.0
+        ],
+        "title": "Zone 4 tempo ×",
+        "kind": {
+          "type": "Slider",
+          "value": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 17,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "title": "Aggressive enabled",
+        "kind": {
+          "type": "Toggle",
+          "on": true,
+          "momentary": false,
+          "key": ""
+        }
+      },
+      {
+        "id": 18,
+        "pos": [
+          300.0,
+          100.0
+        ],
+        "title": "Test aggressive (hold)",
+        "kind": {
+          "type": "Toggle",
+          "on": false,
+          "momentary": true,
+          "key": ""
+        }
+      },
+      {
+        "id": 19,
+        "pos": [
+          300.0,
+          200.0
+        ],
+        "title": "Aggressive · dwell time s",
+        "kind": {
+          "type": "Slider",
+          "value": 2.5,
+          "min": 0.5,
+          "max": 15.0,
+          "step": 0.5,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 20,
+        "pos": [
+          300.0,
+          300.0
+        ],
+        "title": "Aggressive · stillness threshold /s",
+        "kind": {
+          "type": "Slider",
+          "value": 0.12,
+          "min": 0.02,
+          "max": 1.0,
+          "step": 0.01,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 21,
+        "pos": [
+          300.0,
+          400.0
+        ],
+        "title": "Aggressive · release delay s",
+        "kind": {
+          "type": "Slider",
+          "value": 1.5,
+          "min": 0.0,
+          "max": 10.0,
+          "step": 0.25,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 22,
+        "pos": [
+          300.0,
+          500.0
+        ],
+        "title": "Aggressive · extra power",
+        "kind": {
+          "type": "Slider",
+          "value": 4.0,
+          "min": 0.0,
+          "max": 30.0,
+          "step": 1.0,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 23,
+        "pos": [
+          300.0,
+          600.0
+        ],
+        "title": "Aggressive · tempo Hz",
+        "kind": {
+          "type": "Slider",
+          "value": 8.0,
+          "min": 2.0,
+          "max": 20.0,
+          "step": 0.5,
+          "key_up": "",
+          "key_down": ""
+        }
+      },
+      {
+        "id": 24,
+        "pos": [
+          560.0,
+          0.0
+        ],
+        "title": "Input",
+        "kind": {
+          "type": "Contact",
+          "zone": {
+            "zone_type": "Any",
+            "name": "*"
+          },
+          "stale_ms": 500,
+          "spoof_guard": true
+        }
+      },
+      {
+        "id": 25,
+        "pos": [
+          560.0,
+          140.0
+        ],
+        "kind": {
+          "type": "Ukf"
+        }
+      },
+      {
+        "id": 26,
+        "pos": [
+          560.0,
+          400.0
+        ],
+        "title": "|velocity|",
+        "kind": {
+          "type": "Math",
+          "op": "Abs"
+        }
+      },
+      {
+        "id": 27,
+        "pos": [
+          820.0,
+          0.0
+        ],
+        "title": "≥ 0.2",
+        "kind": {
+          "type": "Compare",
+          "op": "GreaterEq",
+          "hysteresis": 0.02
+        },
+        "defaults": {
+          "b": 0.2
+        }
+      },
+      {
+        "id": 28,
+        "pos": [
+          820.0,
+          160.0
+        ],
+        "title": "≥ 0.4",
+        "kind": {
+          "type": "Compare",
+          "op": "GreaterEq",
+          "hysteresis": 0.02
+        },
+        "defaults": {
+          "b": 0.4
+        }
+      },
+      {
+        "id": 29,
+        "pos": [
+          820.0,
+          320.0
+        ],
+        "title": "≥ 0.8",
+        "kind": {
+          "type": "Compare",
+          "op": "GreaterEq",
+          "hysteresis": 0.02
+        },
+        "defaults": {
+          "b": 0.8
+        }
+      },
+      {
+        "id": 30,
+        "pos": [
+          820.0,
+          480.0
+        ],
+        "title": "Zone 0–3",
+        "kind": {
+          "type": "Combine",
+          "mode": "Weighted",
+          "count": 3,
+          "weights": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": 31,
+        "pos": [
+          1080.0,
+          0.0
+        ],
+        "title": "Zone 1 position",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": 0.0,
+          "in_max": 0.2,
+          "out_min": 0.0,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 32,
+        "pos": [
+          1080.0,
+          200.0
+        ],
+        "title": "Zone 2 position",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": 0.2,
+          "in_max": 0.4,
+          "out_min": 0.0,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 33,
+        "pos": [
+          1340.0,
+          0.0
+        ],
+        "title": "Zone 3 position",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": 0.4,
+          "in_max": 0.8,
+          "out_min": 0.0,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 34,
+        "pos": [
+          1340.0,
+          200.0
+        ],
+        "title": "Zone 4 position",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": 0.8,
+          "in_max": 1.0,
+          "out_min": 0.0,
+          "out_max": 1.0
+        }
+      },
+      {
+        "id": 35,
+        "pos": [
+          1600.0,
+          0.0
+        ],
+        "title": "Still?",
+        "kind": {
+          "type": "Compare",
+          "op": "Less",
+          "hysteresis": 0.04
+        }
+      },
+      {
+        "id": 36,
+        "pos": [
+          1600.0,
+          160.0
+        ],
+        "title": "Zone 4 and still",
+        "kind": {
+          "type": "Logic",
+          "op": "And"
+        }
+      },
+      {
+        "id": 37,
+        "pos": [
+          1600.0,
+          300.0
+        ],
+        "title": "Armed",
+        "kind": {
+          "type": "Logic",
+          "op": "And"
+        }
+      },
+      {
+        "id": 38,
+        "pos": [
+          1600.0,
+          440.0
+        ],
+        "title": "Dwell",
+        "kind": {
+          "type": "Timer"
+        },
+        "defaults": {
+          "ramp": 0.0
+        }
+      },
+      {
+        "id": 39,
+        "pos": [
+          1860.0,
+          0.0
+        ],
+        "title": "Was on (1 tick ago)",
+        "kind": {
+          "type": "Delay",
+          "mode": "Ticks",
+          "amount": 1
+        }
+      },
+      {
+        "id": 40,
+        "pos": [
+          1860.0,
+          140.0
+        ],
+        "title": "Re-settled",
+        "kind": {
+          "type": "Timer"
+        },
+        "defaults": {
+          "hold": 0.35,
+          "ramp": 0.0
+        }
+      },
+      {
+        "id": 41,
+        "pos": [
+          1860.0,
+          300.0
+        ],
+        "title": "Keep on",
+        "kind": {
+          "type": "Logic",
+          "op": "And"
+        }
+      },
+      {
+        "id": 42,
+        "pos": [
+          1860.0,
+          440.0
+        ],
+        "title": "Dwell done or kept",
+        "kind": {
+          "type": "Logic",
+          "op": "Or"
+        }
+      },
+      {
+        "id": 43,
+        "pos": [
+          1860.0,
+          580.0
+        ],
+        "title": "+ test button",
+        "kind": {
+          "type": "Logic",
+          "op": "Or"
+        }
+      },
+      {
+        "id": 44,
+        "pos": [
+          2120.0,
+          0.0
+        ],
+        "title": "Aggressive (release delay)",
+        "kind": {
+          "type": "PeakHold"
+        },
+        "defaults": {
+          "decay": 4.0
+        }
+      },
+      {
+        "id": 45,
+        "pos": [
+          2120.0,
+          140.0
+        ],
+        "title": "Pattern 0–4",
+        "kind": {
+          "type": "Switch",
+          "count": 2
+        },
+        "defaults": {
+          "in2": 4.0
+        }
+      },
+      {
+        "id": 46,
+        "pos": [
+          2120.0,
+          300.0
+        ],
+        "title": "Dwell progress",
+        "kind": {
+          "type": "Math",
+          "op": "Divide"
+        }
+      },
+      {
+        "id": 47,
+        "pos": [
+          2640.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Zone 1 · Ripple (0–0.2)",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "u",
+                      "label": "Position in band"
+                    },
+                    {
+                      "key": "s",
+                      "label": "Speed n"
+                    },
+                    {
+                      "key": "k",
+                      "label": "Tempo"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  180.0
+                ],
+                "title": "Drift (never repeats)",
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Perlin",
+                  "seed": 11
+                },
+                "defaults": {
+                  "rate": 0.09
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "title": "Freq rate Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    0.8,
+                    0.9,
+                    0.5,
+                    0.35
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "title": "Freq rate Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  340.0
+                ],
+                "title": "Int rate Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    0.5,
+                    0.4,
+                    0.3,
+                    0.25
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  540.0
+                ],
+                "title": "Int rate Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  300.0,
+                  680.0
+                ],
+                "title": "Chord width ← depth",
+                "kind": {
+                  "type": "Remap",
+                  "clamp": true
+                },
+                "defaults": {
+                  "out_min": 0.25,
+                  "out_max": 0.45
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "title": "F1 · sine -0.20",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": -0.2,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  560.0,
+                  310.0
+                ],
+                "title": "F2 · triangle +0.15",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.13,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": 0.15,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  560.0,
+                  620.0
+                ],
+                "title": "F3 · sine -0.55",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.37,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": -0.55,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  560.0,
+                  930.0
+                ],
+                "title": "F4 · noise +0.45",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 7
+                },
+                "defaults": {
+                  "bias": 0.45,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  820.0,
+                  0.0
+                ],
+                "title": "I1 · sine -0.45",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.05,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": -0.45,
+                  "amp": 0.35
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  820.0,
+                  310.0
+                ],
+                "title": "I2 · sine -0.30",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.29,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": -0.3,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 14,
+                "pos": [
+                  820.0,
+                  620.0
+                ],
+                "title": "I3 · triangle -0.55",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.61,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": -0.55,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 15,
+                "pos": [
+                  820.0,
+                  930.0
+                ],
+                "title": "I4 · noise -0.20",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 13
+                },
+                "defaults": {
+                  "bias": -0.2,
+                  "amp": 0.45
+                }
+              },
+              {
+                "id": 16,
+                "pos": [
+                  1080.0,
+                  0.0
+                ],
+                "title": "Swell",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.8,
+                  "amp": 0.2
+                }
+              },
+              {
+                "id": 17,
+                "pos": [
+                  1340.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "f1",
+                      "label": "Freq 1"
+                    },
+                    {
+                      "key": "f2",
+                      "label": "Freq 2"
+                    },
+                    {
+                      "key": "f3",
+                      "label": "Freq 3"
+                    },
+                    {
+                      "key": "f4",
+                      "label": "Freq 4"
+                    },
+                    {
+                      "key": "i1",
+                      "label": "Int 1"
+                    },
+                    {
+                      "key": "i2",
+                      "label": "Int 2"
+                    },
+                    {
+                      "key": "i3",
+                      "label": "Int 3"
+                    },
+                    {
+                      "key": "i4",
+                      "label": "Int 4"
+                    },
+                    {
+                      "key": "p",
+                      "label": "Power texture"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 14,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "f1"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "f2"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "f3"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "f4"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "i1"
+                }
+              },
+              {
+                "from": {
+                  "node": 13,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "i2"
+                }
+              },
+              {
+                "from": {
+                  "node": 14,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "i3"
+                }
+              },
+              {
+                "from": {
+                  "node": 15,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "i4"
+                }
+              },
+              {
+                "from": {
+                  "node": 16,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "p"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 48,
+        "pos": [
+          2900.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Zone 2 · Staircase (0.2–0.4)",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "u",
+                      "label": "Position in band"
+                    },
+                    {
+                      "key": "s",
+                      "label": "Speed n"
+                    },
+                    {
+                      "key": "k",
+                      "label": "Tempo"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  180.0
+                ],
+                "title": "Drift A",
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Value",
+                  "seed": 21
+                },
+                "defaults": {
+                  "rate": 0.07
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  40.0,
+                  370.0
+                ],
+                "title": "Drift B",
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Perlin",
+                  "seed": 23
+                },
+                "defaults": {
+                  "rate": 0.05
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "title": "Steps 1·2 Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    1.6,
+                    1.5,
+                    0.8,
+                    1.4
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "title": "Steps 1·2 Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  340.0
+                ],
+                "title": "Steps 3·4 Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    1.2,
+                    1.9,
+                    1.0,
+                    1.1
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  300.0,
+                  540.0
+                ],
+                "title": "Steps 3·4 Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  300.0,
+                  680.0
+                ],
+                "title": "Int jumps Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    2.0,
+                    2.0,
+                    0.5,
+                    2.5
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  300.0,
+                  880.0
+                ],
+                "title": "Int jumps Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "title": "F1 · 5 steps",
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    -0.85,
+                    -0.3,
+                    -0.6,
+                    -0.15,
+                    -0.55
+                  ]
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  560.0,
+                  190.0
+                ],
+                "title": "F2 · 6 steps",
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    0.4,
+                    -0.2,
+                    0.25,
+                    -0.05,
+                    0.45,
+                    -0.25
+                  ]
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  560.0,
+                  380.0
+                ],
+                "title": "F3 · 7 steps",
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    -0.5,
+                    0.1,
+                    -0.35,
+                    0.15,
+                    -0.05,
+                    -0.45,
+                    -0.3
+                  ]
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  560.0,
+                  570.0
+                ],
+                "title": "F4 · 9 steps",
+                "kind": {
+                  "type": "Sequencer",
+                  "steps": [
+                    0.95,
+                    0.3,
+                    0.75,
+                    0.45,
+                    0.85,
+                    0.25,
+                    0.6,
+                    0.9,
+                    0.35
+                  ]
+                }
+              },
+              {
+                "id": 14,
+                "pos": [
+                  820.0,
+                  0.0
+                ],
+                "title": "I1 · samplehold -0.10",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 31
+                },
+                "defaults": {
+                  "bias": -0.1,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 15,
+                "pos": [
+                  820.0,
+                  310.0
+                ],
+                "title": "I2 · samplehold +0.10",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 37
+                },
+                "defaults": {
+                  "bias": 0.1,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 16,
+                "pos": [
+                  820.0,
+                  620.0
+                ],
+                "title": "I3 · samplehold -0.25",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 41
+                },
+                "defaults": {
+                  "bias": -0.25,
+                  "amp": 0.35
+                }
+              },
+              {
+                "id": 17,
+                "pos": [
+                  820.0,
+                  930.0
+                ],
+                "title": "I4 · samplehold +0.20",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 43
+                },
+                "defaults": {
+                  "bias": 0.2,
+                  "amp": 0.45
+                }
+              },
+              {
+                "id": 18,
+                "pos": [
+                  1080.0,
+                  0.0
+                ],
+                "title": "Step accent",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Square",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.9,
+                  "amp": 0.1
+                }
+              },
+              {
+                "id": 19,
+                "pos": [
+                  1340.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "f1",
+                      "label": "Freq 1"
+                    },
+                    {
+                      "key": "f2",
+                      "label": "Freq 2"
+                    },
+                    {
+                      "key": "f3",
+                      "label": "Freq 3"
+                    },
+                    {
+                      "key": "f4",
+                      "label": "Freq 4"
+                    },
+                    {
+                      "key": "i1",
+                      "label": "Int 1"
+                    },
+                    {
+                      "key": "i2",
+                      "label": "Int 2"
+                    },
+                    {
+                      "key": "i3",
+                      "label": "Int 3"
+                    },
+                    {
+                      "key": "i4",
+                      "label": "Int 4"
+                    },
+                    {
+                      "key": "p",
+                      "label": "Power texture"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "rate"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "rate"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "rate"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "rate"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 14,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "f1"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "f2"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "f3"
+                }
+              },
+              {
+                "from": {
+                  "node": 13,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "f4"
+                }
+              },
+              {
+                "from": {
+                  "node": 14,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "i1"
+                }
+              },
+              {
+                "from": {
+                  "node": 15,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "i2"
+                }
+              },
+              {
+                "from": {
+                  "node": 16,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "i3"
+                }
+              },
+              {
+                "from": {
+                  "node": 17,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "i4"
+                }
+              },
+              {
+                "from": {
+                  "node": 18,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 19,
+                  "pin": "p"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 49,
+        "pos": [
+          2640.0,
+          320.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Zone 3 · Surge (0.4–0.8)",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "u",
+                      "label": "Position in band"
+                    },
+                    {
+                      "key": "s",
+                      "label": "Speed n"
+                    },
+                    {
+                      "key": "k",
+                      "label": "Tempo"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  180.0
+                ],
+                "title": "Drift",
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Simplex",
+                  "seed": 51
+                },
+                "defaults": {
+                  "rate": 0.11
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "title": "Sweep rate Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    2.0,
+                    2.0,
+                    0.6,
+                    0.9
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "title": "Sweep rate Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  340.0
+                ],
+                "title": "Throb rate Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    1.5,
+                    2.5,
+                    0.7,
+                    2.0
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  540.0
+                ],
+                "title": "Throb rate Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  300.0,
+                  680.0
+                ],
+                "title": "Sweep width ← depth",
+                "kind": {
+                  "type": "Remap",
+                  "clamp": true
+                },
+                "defaults": {
+                  "out_min": 0.3,
+                  "out_max": 0.5
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  300.0,
+                  880.0
+                ],
+                "title": "On-time ← depth",
+                "kind": {
+                  "type": "Remap",
+                  "clamp": true
+                },
+                "defaults": {
+                  "out_min": 0.35,
+                  "out_max": 0.8
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "title": "F1 · saw +0.10",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Saw",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.1,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  560.0,
+                  310.0
+                ],
+                "title": "F2 · saw -0.40",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Saw",
+                  "phase": 0.17,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": -0.4,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  560.0,
+                  620.0
+                ],
+                "title": "F3 · saw +0.50",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Saw",
+                  "phase": 0.41,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": 0.5,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  560.0,
+                  930.0
+                ],
+                "title": "F4 · noise -0.25",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 57
+                },
+                "defaults": {
+                  "bias": -0.25,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  820.0,
+                  0.0
+                ],
+                "title": "I1 · pulse +0.10",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Pulse",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.1,
+                  "amp": 0.5
+                }
+              },
+              {
+                "id": 14,
+                "pos": [
+                  820.0,
+                  310.0
+                ],
+                "title": "I2 · pulse +0.30",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Pulse",
+                  "phase": 0.23,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": 0.3,
+                  "amp": 0.5
+                }
+              },
+              {
+                "id": 15,
+                "pos": [
+                  820.0,
+                  620.0
+                ],
+                "title": "I3 · pulse +0.00",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Pulse",
+                  "phase": 0.52,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": 0.0,
+                  "amp": 0.5
+                }
+              },
+              {
+                "id": 16,
+                "pos": [
+                  820.0,
+                  930.0
+                ],
+                "title": "I4 · triangle +0.40",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.79,
+                  "one_shot": false,
+                  "seed": 4
+                },
+                "defaults": {
+                  "bias": 0.4,
+                  "amp": 0.5
+                }
+              },
+              {
+                "id": 17,
+                "pos": [
+                  1080.0,
+                  0.0
+                ],
+                "title": "Surge",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Saw",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.8,
+                  "amp": 0.2
+                }
+              },
+              {
+                "id": 18,
+                "pos": [
+                  1340.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "f1",
+                      "label": "Freq 1"
+                    },
+                    {
+                      "key": "f2",
+                      "label": "Freq 2"
+                    },
+                    {
+                      "key": "f3",
+                      "label": "Freq 3"
+                    },
+                    {
+                      "key": "f4",
+                      "label": "Freq 4"
+                    },
+                    {
+                      "key": "i1",
+                      "label": "Int 1"
+                    },
+                    {
+                      "key": "i2",
+                      "label": "Int 2"
+                    },
+                    {
+                      "key": "i3",
+                      "label": "Int 3"
+                    },
+                    {
+                      "key": "i4",
+                      "label": "Int 4"
+                    },
+                    {
+                      "key": "p",
+                      "label": "Power texture"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "in"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "amp"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "width"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 14,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 14,
+                  "pin": "width"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "width"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "width"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 17,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "f1"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "f2"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "f3"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "f4"
+                }
+              },
+              {
+                "from": {
+                  "node": 13,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "i1"
+                }
+              },
+              {
+                "from": {
+                  "node": 14,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "i2"
+                }
+              },
+              {
+                "from": {
+                  "node": 15,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "i3"
+                }
+              },
+              {
+                "from": {
+                  "node": 16,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "i4"
+                }
+              },
+              {
+                "from": {
+                  "node": 17,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 18,
+                  "pin": "p"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 50,
+        "pos": [
+          2900.0,
+          320.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Zone 4 · Storm (0.8–1)",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "u",
+                      "label": "Position in band"
+                    },
+                    {
+                      "key": "s",
+                      "label": "Speed n"
+                    },
+                    {
+                      "key": "k",
+                      "label": "Tempo"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  180.0
+                ],
+                "title": "Drift",
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Fractal",
+                  "seed": 61
+                },
+                "defaults": {
+                  "rate": 0.17
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "title": "Flutter rate Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    3.0,
+                    3.0,
+                    1.5,
+                    4.0
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  300.0,
+                  200.0
+                ],
+                "title": "Flutter rate Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  340.0
+                ],
+                "title": "Shimmer rate Hz",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 4,
+                  "weights": [
+                    2.0,
+                    3.0,
+                    1.0,
+                    5.0
+                  ]
+                },
+                "defaults": {
+                  "in4": 1.0
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  300.0,
+                  540.0
+                ],
+                "title": "Shimmer rate Hz × tempo",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "title": "F1 · noise +0.55",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 63
+                },
+                "defaults": {
+                  "bias": 0.55,
+                  "amp": 0.35
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  560.0,
+                  310.0
+                ],
+                "title": "F2 · noise +0.05",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 67
+                },
+                "defaults": {
+                  "bias": 0.05,
+                  "amp": 0.35
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  560.0,
+                  620.0
+                ],
+                "title": "F3 · noise +0.80",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 71
+                },
+                "defaults": {
+                  "bias": 0.8,
+                  "amp": 0.25
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  560.0,
+                  930.0
+                ],
+                "title": "F4 · samplehold -0.30",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 73
+                },
+                "defaults": {
+                  "bias": -0.3,
+                  "amp": 0.35
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  820.0,
+                  0.0
+                ],
+                "title": "I1 · triangle +0.55",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.55,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  820.0,
+                  310.0
+                ],
+                "title": "I2 · triangle +0.40",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Triangle",
+                  "phase": 0.31,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": 0.4,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  820.0,
+                  620.0
+                ],
+                "title": "I3 · sine +0.70",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Sine",
+                  "phase": 0.58,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": 0.7,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 14,
+                "pos": [
+                  820.0,
+                  930.0
+                ],
+                "title": "I4 · noise +0.50",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 79
+                },
+                "defaults": {
+                  "bias": 0.5,
+                  "amp": 0.4
+                }
+              },
+              {
+                "id": 15,
+                "pos": [
+                  1080.0,
+                  0.0
+                ],
+                "title": "Grit",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Noise",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 83
+                },
+                "defaults": {
+                  "bias": 0.95,
+                  "amp": 0.05
+                }
+              },
+              {
+                "id": 16,
+                "pos": [
+                  1340.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "f1",
+                      "label": "Freq 1"
+                    },
+                    {
+                      "key": "f2",
+                      "label": "Freq 2"
+                    },
+                    {
+                      "key": "f3",
+                      "label": "Freq 3"
+                    },
+                    {
+                      "key": "f4",
+                      "label": "Freq 4"
+                    },
+                    {
+                      "key": "i1",
+                      "label": "Int 1"
+                    },
+                    {
+                      "key": "i2",
+                      "label": "Int 2"
+                    },
+                    {
+                      "key": "i3",
+                      "label": "Int 3"
+                    },
+                    {
+                      "key": "i4",
+                      "label": "Int 4"
+                    },
+                    {
+                      "key": "p",
+                      "label": "Power texture"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "u"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "s"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in2"
+                }
+              },
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "in3"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 14,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "f1"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "f2"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "f3"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "f4"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "i1"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "i2"
+                }
+              },
+              {
+                "from": {
+                  "node": 13,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "i3"
+                }
+              },
+              {
+                "from": {
+                  "node": 14,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "i4"
+                }
+              },
+              {
+                "from": {
+                  "node": 15,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 16,
+                  "pin": "p"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 51,
+        "pos": [
+          2640.0,
+          640.0
+        ],
+        "kind": {
+          "type": "Group",
+          "name": "Aggressive · Zig-zag",
+          "graph": {
+            "version": 1,
+            "nodes": [
+              {
+                "id": 1,
+                "pos": [
+                  40.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupInput",
+                  "ports": [
+                    {
+                      "key": "u",
+                      "label": "Position in band"
+                    },
+                    {
+                      "key": "s",
+                      "label": "Speed n"
+                    },
+                    {
+                      "key": "k",
+                      "label": "Tempo"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": 2,
+                "pos": [
+                  40.0,
+                  180.0
+                ],
+                "title": "Drift",
+                "kind": {
+                  "type": "Noise",
+                  "kind": "Value",
+                  "seed": 91
+                },
+                "defaults": {
+                  "rate": 0.23
+                }
+              },
+              {
+                "id": 3,
+                "pos": [
+                  300.0,
+                  0.0
+                ],
+                "title": "Tempo jitter",
+                "kind": {
+                  "type": "Combine",
+                  "mode": "Weighted",
+                  "count": 2,
+                  "weights": [
+                    0.5,
+                    0.75
+                  ]
+                },
+                "defaults": {
+                  "in2": 1.0
+                }
+              },
+              {
+                "id": 4,
+                "pos": [
+                  300.0,
+                  160.0
+                ],
+                "title": "Zig-zag Hz",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                }
+              },
+              {
+                "id": 5,
+                "pos": [
+                  300.0,
+                  300.0
+                ],
+                "title": "Chop Hz",
+                "kind": {
+                  "type": "Math",
+                  "op": "Multiply"
+                },
+                "defaults": {
+                  "b": 0.45
+                }
+              },
+              {
+                "id": 6,
+                "pos": [
+                  560.0,
+                  0.0
+                ],
+                "title": "F1 · square +0.70",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Square",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.7,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 7,
+                "pos": [
+                  560.0,
+                  310.0
+                ],
+                "title": "F2 · square -0.60",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Square",
+                  "phase": 0.19,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": -0.6,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 8,
+                "pos": [
+                  560.0,
+                  620.0
+                ],
+                "title": "F3 · square +0.25",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Square",
+                  "phase": 0.47,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": 0.25,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 9,
+                "pos": [
+                  560.0,
+                  930.0
+                ],
+                "title": "F4 · samplehold -0.90",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 97
+                },
+                "defaults": {
+                  "bias": -0.9,
+                  "amp": 0.3
+                }
+              },
+              {
+                "id": 10,
+                "pos": [
+                  820.0,
+                  0.0
+                ],
+                "title": "I1 · pulse +0.80",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Pulse",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 1
+                },
+                "defaults": {
+                  "bias": 0.8,
+                  "amp": 0.25,
+                  "width": 0.8
+                }
+              },
+              {
+                "id": 11,
+                "pos": [
+                  820.0,
+                  310.0
+                ],
+                "title": "I2 · pulse +0.70",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Pulse",
+                  "phase": 0.29,
+                  "one_shot": false,
+                  "seed": 2
+                },
+                "defaults": {
+                  "bias": 0.7,
+                  "amp": 0.25,
+                  "width": 0.8
+                }
+              },
+              {
+                "id": 12,
+                "pos": [
+                  820.0,
+                  620.0
+                ],
+                "title": "I3 · pulse +0.90",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "Pulse",
+                  "phase": 0.53,
+                  "one_shot": false,
+                  "seed": 3
+                },
+                "defaults": {
+                  "bias": 0.9,
+                  "amp": 0.2,
+                  "width": 0.8
+                }
+              },
+              {
+                "id": 13,
+                "pos": [
+                  820.0,
+                  930.0
+                ],
+                "title": "I4 · samplehold +0.75",
+                "kind": {
+                  "type": "Lfo",
+                  "shape": "SampleHold",
+                  "phase": 0.0,
+                  "one_shot": false,
+                  "seed": 101
+                },
+                "defaults": {
+                  "bias": 0.75,
+                  "amp": 0.25
+                }
+              },
+              {
+                "id": 14,
+                "pos": [
+                  1080.0,
+                  0.0
+                ],
+                "title": "Full",
+                "kind": {
+                  "type": "Constant",
+                  "value": 1.0
+                }
+              },
+              {
+                "id": 15,
+                "pos": [
+                  1340.0,
+                  40.0
+                ],
+                "kind": {
+                  "type": "GroupOutput",
+                  "ports": [
+                    {
+                      "key": "f1",
+                      "label": "Freq 1"
+                    },
+                    {
+                      "key": "f2",
+                      "label": "Freq 2"
+                    },
+                    {
+                      "key": "f3",
+                      "label": "Freq 3"
+                    },
+                    {
+                      "key": "f4",
+                      "label": "Freq 4"
+                    },
+                    {
+                      "key": "i1",
+                      "label": "Int 1"
+                    },
+                    {
+                      "key": "i2",
+                      "label": "Int 2"
+                    },
+                    {
+                      "key": "i3",
+                      "label": "Int 3"
+                    },
+                    {
+                      "key": "i4",
+                      "label": "Int 4"
+                    },
+                    {
+                      "key": "p",
+                      "label": "Power texture"
+                    }
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": {
+                  "node": 2,
+                  "pin": "uni"
+                },
+                "to": {
+                  "node": 3,
+                  "pin": "in1"
+                }
+              },
+              {
+                "from": {
+                  "node": 3,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 1,
+                  "pin": "k"
+                },
+                "to": {
+                  "node": 4,
+                  "pin": "b"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 5,
+                  "pin": "a"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 6,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 7,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 8,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 4,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 9,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 10,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 11,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 12,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 5,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 13,
+                  "pin": "hz"
+                }
+              },
+              {
+                "from": {
+                  "node": 6,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "f1"
+                }
+              },
+              {
+                "from": {
+                  "node": 7,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "f2"
+                }
+              },
+              {
+                "from": {
+                  "node": 8,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "f3"
+                }
+              },
+              {
+                "from": {
+                  "node": 9,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "f4"
+                }
+              },
+              {
+                "from": {
+                  "node": 10,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "i1"
+                }
+              },
+              {
+                "from": {
+                  "node": 11,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "i2"
+                }
+              },
+              {
+                "from": {
+                  "node": 12,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "i3"
+                }
+              },
+              {
+                "from": {
+                  "node": 13,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "i4"
+                }
+              },
+              {
+                "from": {
+                  "node": 14,
+                  "pin": "out"
+                },
+                "to": {
+                  "node": 15,
+                  "pin": "p"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 52,
+        "pos": [
+          3160.0,
+          0.0
+        ],
+        "title": "Select freq 1",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 53,
+        "pos": [
+          3160.0,
+          220.0
+        ],
+        "title": "Select freq 2",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 54,
+        "pos": [
+          3160.0,
+          440.0
+        ],
+        "title": "Select freq 3",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 55,
+        "pos": [
+          3160.0,
+          660.0
+        ],
+        "title": "Select freq 4",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 56,
+        "pos": [
+          3420.0,
+          0.0
+        ],
+        "title": "Select int 1",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 57,
+        "pos": [
+          3420.0,
+          220.0
+        ],
+        "title": "Select int 2",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 58,
+        "pos": [
+          3420.0,
+          440.0
+        ],
+        "title": "Select int 3",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 59,
+        "pos": [
+          3420.0,
+          660.0
+        ],
+        "title": "Select int 4",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 60,
+        "pos": [
+          3160.0,
+          880.0
+        ],
+        "title": "Select power texture",
+        "kind": {
+          "type": "Switch",
+          "count": 5
+        }
+      },
+      {
+        "id": 61,
+        "pos": [
+          3680.0,
+          0.0
+        ],
+        "title": "Carrier − dev",
+        "kind": {
+          "type": "Math",
+          "op": "Subtract"
+        }
+      },
+      {
+        "id": 62,
+        "pos": [
+          3680.0,
+          140.0
+        ],
+        "title": "Carrier + dev",
+        "kind": {
+          "type": "Math",
+          "op": "Add"
+        }
+      },
+      {
+        "id": 63,
+        "pos": [
+          3680.0,
+          280.0
+        ],
+        "title": "Base − dev",
+        "kind": {
+          "type": "Math",
+          "op": "Subtract"
+        }
+      },
+      {
+        "id": 64,
+        "pos": [
+          3680.0,
+          420.0
+        ],
+        "title": "Base + dev",
+        "kind": {
+          "type": "Math",
+          "op": "Add"
+        }
+      },
+      {
+        "id": 65,
+        "pos": [
+          3680.0,
+          560.0
+        ],
+        "title": "Power ← depth (per-zone slope)",
+        "kind": {
+          "type": "Curve",
+          "curve": {
+            "interp": "Linear",
+            "points": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.01,
+                0.06
+              ],
+              [
+                0.05,
+                0.13
+              ],
+              [
+                0.12,
+                0.19
+              ],
+              [
+                0.2,
+                0.22
+              ],
+              [
+                0.3,
+                0.26
+              ],
+              [
+                0.4,
+                0.38
+              ],
+              [
+                0.5,
+                0.45
+              ],
+              [
+                0.6,
+                0.53
+              ],
+              [
+                0.7,
+                0.63
+              ],
+              [
+                0.8,
+                0.78
+              ],
+              [
+                0.9,
+                0.91
+              ],
+              [
+                1.0,
+                1.0
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "id": 66,
+        "pos": [
+          3940.0,
+          0.0
+        ],
+        "title": "Hz 1",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 67,
+        "pos": [
+          3940.0,
+          200.0
+        ],
+        "title": "Hz 2",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 68,
+        "pos": [
+          3940.0,
+          400.0
+        ],
+        "title": "Hz 3",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 69,
+        "pos": [
+          3940.0,
+          600.0
+        ],
+        "title": "Hz 4",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 70,
+        "pos": [
+          4200.0,
+          0.0
+        ],
+        "title": "Intensity 1",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 71,
+        "pos": [
+          4200.0,
+          200.0
+        ],
+        "title": "Intensity 2",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 72,
+        "pos": [
+          4200.0,
+          400.0
+        ],
+        "title": "Intensity 3",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 73,
+        "pos": [
+          4200.0,
+          600.0
+        ],
+        "title": "Intensity 4",
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0
+        }
+      },
+      {
+        "id": 74,
+        "pos": [
+          4460.0,
+          0.0
+        ],
+        "title": "Texture by depth slider",
+        "kind": {
+          "type": "Mix"
+        },
+        "defaults": {
+          "a": 1.0
+        }
+      },
+      {
+        "id": 75,
+        "pos": [
+          4460.0,
+          160.0
+        ],
+        "title": "Zone power",
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 76,
+        "pos": [
+          4460.0,
+          300.0
+        ],
+        "title": "Aggressive power (only while touched)",
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 77,
+        "pos": [
+          4460.0,
+          440.0
+        ],
+        "title": "Power",
+        "kind": {
+          "type": "Combine",
+          "mode": "Max",
+          "count": 2,
+          "weights": []
+        }
+      },
+      {
+        "id": 78,
+        "pos": [
+          4460.0,
+          600.0
+        ],
+        "title": "Extra while aggressive",
+        "kind": {
+          "type": "Math",
+          "op": "Multiply"
+        }
+      },
+      {
+        "id": 79,
+        "pos": [
+          4460.0,
+          740.0
+        ],
+        "title": "Limit Max A",
+        "kind": {
+          "type": "Math",
+          "op": "Add"
+        }
+      },
+      {
+        "id": 80,
+        "pos": [
+          4720.0,
+          0.0
+        ],
+        "title": "Device 1",
+        "kind": {
+          "type": "Device",
+          "profile": "coyote-v3",
+          "binding": {
+            "Slot": 1
+          },
+          "channels": [
+            {
+              "expanded": [
+                "freq",
+                "int"
+              ],
+              "freq_mode": "Hz"
+            },
+            {}
+          ]
+        },
+        "defaults": {
+          "b.limit_max": 0.0
+        }
+      },
+      {
+        "id": 81,
+        "pos": [
+          560.0,
+          520.0
+        ],
+        "title": "Zone ÷ 3",
+        "kind": {
+          "type": "Math",
+          "op": "Divide"
+        },
+        "defaults": {
+          "b": 3.0
+        }
+      },
+      {
+        "id": 82,
+        "pos": [
+          1600.0,
+          620.0
+        ],
+        "title": "Scope · depth, zone, |velocity|, threshold",
+        "kind": {
+          "type": "Scope",
+          "count": 4,
+          "window_s": 10.0
+        }
+      },
+      {
+        "id": 83,
+        "pos": [
+          2120.0,
+          460.0
+        ],
+        "title": "Scope · aggressive, dwell, power, texture",
+        "kind": {
+          "type": "Scope",
+          "count": 4,
+          "window_s": 10.0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 25,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 25,
+          "pin": "velocity"
+        },
+        "to": {
+          "node": 26,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 27,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 28,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 29,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 27,
+          "pin": "out"
+        },
+        "to": {
+          "node": 30,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 28,
+          "pin": "out"
+        },
+        "to": {
+          "node": 30,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 29,
+          "pin": "out"
+        },
+        "to": {
+          "node": 30,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 31,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 32,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 33,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 34,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 26,
+          "pin": "out"
+        },
+        "to": {
+          "node": 35,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 20,
+          "pin": "out"
+        },
+        "to": {
+          "node": 35,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 29,
+          "pin": "out"
+        },
+        "to": {
+          "node": 36,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 35,
+          "pin": "out"
+        },
+        "to": {
+          "node": 36,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 36,
+          "pin": "out"
+        },
+        "to": {
+          "node": 37,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 17,
+          "pin": "out"
+        },
+        "to": {
+          "node": 37,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 37,
+          "pin": "out"
+        },
+        "to": {
+          "node": 38,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 19,
+          "pin": "out"
+        },
+        "to": {
+          "node": 38,
+          "pin": "hold"
+        }
+      },
+      {
+        "from": {
+          "node": 37,
+          "pin": "out"
+        },
+        "to": {
+          "node": 40,
+          "pin": "gate"
+        }
+      },
+      {
+        "from": {
+          "node": 40,
+          "pin": "out"
+        },
+        "to": {
+          "node": 41,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 39,
+          "pin": "out"
+        },
+        "to": {
+          "node": 41,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 38,
+          "pin": "out"
+        },
+        "to": {
+          "node": 42,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 41,
+          "pin": "out"
+        },
+        "to": {
+          "node": 42,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 42,
+          "pin": "out"
+        },
+        "to": {
+          "node": 43,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 18,
+          "pin": "out"
+        },
+        "to": {
+          "node": 43,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 43,
+          "pin": "out"
+        },
+        "to": {
+          "node": 44,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 21,
+          "pin": "out"
+        },
+        "to": {
+          "node": 44,
+          "pin": "hold"
+        }
+      },
+      {
+        "from": {
+          "node": 44,
+          "pin": "out"
+        },
+        "to": {
+          "node": 39,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 44,
+          "pin": "out"
+        },
+        "to": {
+          "node": 45,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 30,
+          "pin": "out"
+        },
+        "to": {
+          "node": 45,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 38,
+          "pin": "elapsed"
+        },
+        "to": {
+          "node": 46,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 19,
+          "pin": "out"
+        },
+        "to": {
+          "node": 46,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 31,
+          "pin": "out"
+        },
+        "to": {
+          "node": 47,
+          "pin": "u"
+        }
+      },
+      {
+        "from": {
+          "node": 13,
+          "pin": "out"
+        },
+        "to": {
+          "node": 47,
+          "pin": "k"
+        }
+      },
+      {
+        "from": {
+          "node": 25,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 47,
+          "pin": "s"
+        }
+      },
+      {
+        "from": {
+          "node": 32,
+          "pin": "out"
+        },
+        "to": {
+          "node": 48,
+          "pin": "u"
+        }
+      },
+      {
+        "from": {
+          "node": 14,
+          "pin": "out"
+        },
+        "to": {
+          "node": 48,
+          "pin": "k"
+        }
+      },
+      {
+        "from": {
+          "node": 25,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 48,
+          "pin": "s"
+        }
+      },
+      {
+        "from": {
+          "node": 33,
+          "pin": "out"
+        },
+        "to": {
+          "node": 49,
+          "pin": "u"
+        }
+      },
+      {
+        "from": {
+          "node": 15,
+          "pin": "out"
+        },
+        "to": {
+          "node": 49,
+          "pin": "k"
+        }
+      },
+      {
+        "from": {
+          "node": 25,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 49,
+          "pin": "s"
+        }
+      },
+      {
+        "from": {
+          "node": 34,
+          "pin": "out"
+        },
+        "to": {
+          "node": 50,
+          "pin": "u"
+        }
+      },
+      {
+        "from": {
+          "node": 16,
+          "pin": "out"
+        },
+        "to": {
+          "node": 50,
+          "pin": "k"
+        }
+      },
+      {
+        "from": {
+          "node": 25,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 50,
+          "pin": "s"
+        }
+      },
+      {
+        "from": {
+          "node": 34,
+          "pin": "out"
+        },
+        "to": {
+          "node": 51,
+          "pin": "u"
+        }
+      },
+      {
+        "from": {
+          "node": 23,
+          "pin": "out"
+        },
+        "to": {
+          "node": 51,
+          "pin": "k"
+        }
+      },
+      {
+        "from": {
+          "node": 25,
+          "pin": "speed_n"
+        },
+        "to": {
+          "node": 51,
+          "pin": "s"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 52,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "f1"
+        },
+        "to": {
+          "node": 52,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "f1"
+        },
+        "to": {
+          "node": 52,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "f1"
+        },
+        "to": {
+          "node": 52,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "f1"
+        },
+        "to": {
+          "node": 52,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "f1"
+        },
+        "to": {
+          "node": 52,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 53,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "f2"
+        },
+        "to": {
+          "node": 53,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "f2"
+        },
+        "to": {
+          "node": 53,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "f2"
+        },
+        "to": {
+          "node": 53,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "f2"
+        },
+        "to": {
+          "node": 53,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "f2"
+        },
+        "to": {
+          "node": 53,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 54,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "f3"
+        },
+        "to": {
+          "node": 54,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "f3"
+        },
+        "to": {
+          "node": 54,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "f3"
+        },
+        "to": {
+          "node": 54,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "f3"
+        },
+        "to": {
+          "node": 54,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "f3"
+        },
+        "to": {
+          "node": 54,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 55,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "f4"
+        },
+        "to": {
+          "node": 55,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "f4"
+        },
+        "to": {
+          "node": 55,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "f4"
+        },
+        "to": {
+          "node": 55,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "f4"
+        },
+        "to": {
+          "node": 55,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "f4"
+        },
+        "to": {
+          "node": 55,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 56,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "i1"
+        },
+        "to": {
+          "node": 56,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "i1"
+        },
+        "to": {
+          "node": 56,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "i1"
+        },
+        "to": {
+          "node": 56,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "i1"
+        },
+        "to": {
+          "node": 56,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "i1"
+        },
+        "to": {
+          "node": 56,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 57,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "i2"
+        },
+        "to": {
+          "node": 57,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "i2"
+        },
+        "to": {
+          "node": 57,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "i2"
+        },
+        "to": {
+          "node": 57,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "i2"
+        },
+        "to": {
+          "node": 57,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "i2"
+        },
+        "to": {
+          "node": 57,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 58,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "i3"
+        },
+        "to": {
+          "node": 58,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "i3"
+        },
+        "to": {
+          "node": 58,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "i3"
+        },
+        "to": {
+          "node": 58,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "i3"
+        },
+        "to": {
+          "node": 58,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "i3"
+        },
+        "to": {
+          "node": 58,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 59,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "i4"
+        },
+        "to": {
+          "node": 59,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "i4"
+        },
+        "to": {
+          "node": 59,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "i4"
+        },
+        "to": {
+          "node": 59,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "i4"
+        },
+        "to": {
+          "node": 59,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "i4"
+        },
+        "to": {
+          "node": 59,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 45,
+          "pin": "out"
+        },
+        "to": {
+          "node": 60,
+          "pin": "index"
+        }
+      },
+      {
+        "from": {
+          "node": 47,
+          "pin": "p"
+        },
+        "to": {
+          "node": 60,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 48,
+          "pin": "p"
+        },
+        "to": {
+          "node": 60,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 49,
+          "pin": "p"
+        },
+        "to": {
+          "node": 60,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 50,
+          "pin": "p"
+        },
+        "to": {
+          "node": 60,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 51,
+          "pin": "p"
+        },
+        "to": {
+          "node": 60,
+          "pin": "in5"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 61,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out"
+        },
+        "to": {
+          "node": 61,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 9,
+          "pin": "out"
+        },
+        "to": {
+          "node": 62,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 10,
+          "pin": "out"
+        },
+        "to": {
+          "node": 62,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 63,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 63,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 11,
+          "pin": "out"
+        },
+        "to": {
+          "node": 64,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 12,
+          "pin": "out"
+        },
+        "to": {
+          "node": 64,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 65,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 52,
+          "pin": "out"
+        },
+        "to": {
+          "node": 66,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 61,
+          "pin": "out"
+        },
+        "to": {
+          "node": 66,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 62,
+          "pin": "out"
+        },
+        "to": {
+          "node": 66,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 53,
+          "pin": "out"
+        },
+        "to": {
+          "node": 67,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 61,
+          "pin": "out"
+        },
+        "to": {
+          "node": 67,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 62,
+          "pin": "out"
+        },
+        "to": {
+          "node": 67,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 54,
+          "pin": "out"
+        },
+        "to": {
+          "node": 68,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 61,
+          "pin": "out"
+        },
+        "to": {
+          "node": 68,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 62,
+          "pin": "out"
+        },
+        "to": {
+          "node": 68,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 55,
+          "pin": "out"
+        },
+        "to": {
+          "node": 69,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 61,
+          "pin": "out"
+        },
+        "to": {
+          "node": 69,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 62,
+          "pin": "out"
+        },
+        "to": {
+          "node": 69,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 56,
+          "pin": "out"
+        },
+        "to": {
+          "node": 70,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 63,
+          "pin": "out"
+        },
+        "to": {
+          "node": 70,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 64,
+          "pin": "out"
+        },
+        "to": {
+          "node": 70,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 57,
+          "pin": "out"
+        },
+        "to": {
+          "node": 71,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 63,
+          "pin": "out"
+        },
+        "to": {
+          "node": 71,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 64,
+          "pin": "out"
+        },
+        "to": {
+          "node": 71,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 58,
+          "pin": "out"
+        },
+        "to": {
+          "node": 72,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 63,
+          "pin": "out"
+        },
+        "to": {
+          "node": 72,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 64,
+          "pin": "out"
+        },
+        "to": {
+          "node": 72,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 59,
+          "pin": "out"
+        },
+        "to": {
+          "node": 73,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 63,
+          "pin": "out"
+        },
+        "to": {
+          "node": 73,
+          "pin": "out_min"
+        }
+      },
+      {
+        "from": {
+          "node": 64,
+          "pin": "out"
+        },
+        "to": {
+          "node": 73,
+          "pin": "out_max"
+        }
+      },
+      {
+        "from": {
+          "node": 60,
+          "pin": "out"
+        },
+        "to": {
+          "node": 74,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 8,
+          "pin": "out"
+        },
+        "to": {
+          "node": 74,
+          "pin": "t"
+        }
+      },
+      {
+        "from": {
+          "node": 65,
+          "pin": "out"
+        },
+        "to": {
+          "node": 75,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 74,
+          "pin": "out"
+        },
+        "to": {
+          "node": 75,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 44,
+          "pin": "out"
+        },
+        "to": {
+          "node": 76,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "active"
+        },
+        "to": {
+          "node": 76,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 75,
+          "pin": "out"
+        },
+        "to": {
+          "node": 77,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 76,
+          "pin": "out"
+        },
+        "to": {
+          "node": 77,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 44,
+          "pin": "out"
+        },
+        "to": {
+          "node": 78,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 22,
+          "pin": "out"
+        },
+        "to": {
+          "node": 78,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 7,
+          "pin": "out"
+        },
+        "to": {
+          "node": 79,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 78,
+          "pin": "out"
+        },
+        "to": {
+          "node": 79,
+          "pin": "b"
+        }
+      },
+      {
+        "from": {
+          "node": 77,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 79,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.limit_max"
+        }
+      },
+      {
+        "from": {
+          "node": 66,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.freq1"
+        }
+      },
+      {
+        "from": {
+          "node": 70,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.int1"
+        }
+      },
+      {
+        "from": {
+          "node": 67,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.freq2"
+        }
+      },
+      {
+        "from": {
+          "node": 71,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.int2"
+        }
+      },
+      {
+        "from": {
+          "node": 68,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.freq3"
+        }
+      },
+      {
+        "from": {
+          "node": 72,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.int3"
+        }
+      },
+      {
+        "from": {
+          "node": 69,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.freq4"
+        }
+      },
+      {
+        "from": {
+          "node": 73,
+          "pin": "out"
+        },
+        "to": {
+          "node": 80,
+          "pin": "a.int4"
+        }
+      },
+      {
+        "from": {
+          "node": 30,
+          "pin": "out"
+        },
+        "to": {
+          "node": 81,
+          "pin": "a"
+        }
+      },
+      {
+        "from": {
+          "node": 24,
+          "pin": "level"
+        },
+        "to": {
+          "node": 82,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 81,
+          "pin": "out"
+        },
+        "to": {
+          "node": 82,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 26,
+          "pin": "out"
+        },
+        "to": {
+          "node": 82,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 20,
+          "pin": "out"
+        },
+        "to": {
+          "node": 82,
+          "pin": "in4"
+        }
+      },
+      {
+        "from": {
+          "node": 44,
+          "pin": "out"
+        },
+        "to": {
+          "node": 83,
+          "pin": "in1"
+        }
+      },
+      {
+        "from": {
+          "node": 46,
+          "pin": "out"
+        },
+        "to": {
+          "node": 83,
+          "pin": "in2"
+        }
+      },
+      {
+        "from": {
+          "node": 77,
+          "pin": "out"
+        },
+        "to": {
+          "node": 83,
+          "pin": "in3"
+        }
+      },
+      {
+        "from": {
+          "node": 60,
+          "pin": "out"
+        },
+        "to": {
+          "node": 83,
+          "pin": "in4"
+        }
+      }
+    ]
+  }
+}
