@@ -282,8 +282,12 @@ del /f /q "%~f0" >nul 2>&1
     );
     std::fs::write(&batch_path, script).map_err(|e| format!("write updater script: {e}"))?;
 
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     std::process::Command::new("cmd")
-        .args(["/C", "start", "/MIN", "", &batch_path.to_string_lossy()])
+        .arg("/C")
+        .arg(&batch_path)
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("launch updater: {e}"))?;
 

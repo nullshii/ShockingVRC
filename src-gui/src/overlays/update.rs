@@ -10,12 +10,15 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
     let Some(release) = state.available.clone() else {
         return;
     };
-    if state.dismissed && !state.downloading && state.error.is_none() {
+    if state.dismissed && !state.downloading && state.pending.is_none() && state.error.is_none() {
         return;
     }
 
     let pal = cx.pal;
-    let title = if state.downloading {
+    let installing = state.pending.is_some();
+    let title = if installing {
+        "Installing update"
+    } else if state.downloading {
         "Downloading update"
     } else if state.error.is_some() {
         "Download failed"
@@ -35,6 +38,13 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
         });
         ui.add_space(space::ROW_GAP);
 
+        if installing {
+            w::gauge(ui, pal, 1.0, pal.accent, 12.0);
+            ui.add_space(4.0);
+            w::dim(ui, pal, "Download complete. Restarting with the new version…");
+            return;
+        }
+
         if state.downloading {
             let progress = state.progress.unwrap_or(shocking_vrc_core::DownloadProgress {
                 downloaded: 0,
@@ -44,7 +54,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
             ui.add_space(4.0);
             w::dim(ui, pal, progress.label());
             ui.add_space(4.0);
-            w::dim(ui, pal, "The app will close and restart once this finishes.");
+            w::dim(ui, pal, "The app restarts by itself once this finishes.");
             return;
         }
 
@@ -90,7 +100,7 @@ pub fn show(ctx: &Context, cx: &mut Ctx) {
         });
     });
 
-    if dismissed && !state.downloading {
+    if dismissed && !state.downloading && !installing {
         cx.bridge.send(Command::DismissUpdate);
     }
 }

@@ -350,6 +350,13 @@ impl eframe::App for GuiApp {
             self.quit = true;
             self.save_prefs();
         }
+
+        if !self.quit && self.bridge.shared.update.read().is_ok_and(|u| u.pending.is_some()) {
+            log::info!("[update] Closing to install the update");
+            self.quit = true;
+            self.save_prefs();
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 }
 
