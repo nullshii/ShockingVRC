@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- ShockingVRC app icon: a miniature of the Graph view.
+       Avatar contact node -> live wire -> Coyote device node, under the
+       hatched section header, with the Channel A input/power meters below. -->
+  <defs>
+    <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill="#14171d"/>
+      <rect width="2.4" height="7" fill="#4a505c"/>
+    </pattern>
+    <pattern id="grid" width="16" height="16" patternUnits="userSpaceOnUse" x="20" y="72">
+      <rect width="16" height="16" fill="#101318"/>
+      <path d="M16 0V16H0" fill="none" stroke="#1b1f27" stroke-width="1.5"/>
+    </pattern>
+    <clipPath id="tile"><rect x="12" y="12" width="232" height="232" rx="44"/></clipPath>
+  </defs>
+
+  <!-- window tile -->
+  <rect x="12" y="12" width="232" height="232" rx="44" fill="#0d0f15"/>
+  <g clip-path="url(#tile)">
+    <!-- canvas grid -->
+    <rect x="12" y="70" width="232" height="104" fill="url(#grid)"/>
+
+    <!-- section header: inverted chip + hatched rule -->
+    <rect x="32" y="34" width="48" height="22" fill="#ccd1db"/>
+    <rect x="38" y="42" width="36" height="6" fill="#0d0f15"/>
+    <rect x="84" y="34" width="140" height="22" fill="url(#hatch)" stroke="#ccd1db" stroke-width="2"/>
+
+    <!-- wires (drawn under nodes) -->
+    <path d="M100 112 C 128 112, 124 98, 156 98" fill="none" stroke="#4bdc95" stroke-width="6" stroke-linecap="round"/>
+    <path d="M100 138 C 130 138, 122 150, 156 150" fill="none" stroke="#ee9f3f" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- contact node (input) -->
+    <rect x="34" y="88" width="66" height="64" fill="#14171d" stroke="#3a3f4a" stroke-width="2"/>
+    <rect x="34" y="88" width="66" height="14" fill="#ccd1db"/>
+    <rect x="42" y="109" width="26" height="6" fill="#4bdc95"/>
+    <rect x="42" y="135" width="18" height="6" fill="#ee9f3f"/>
+    <rect x="94" y="106" width="12" height="12" fill="#4bdc95"/>
+    <rect x="94" y="132" width="12" height="12" fill="#ee9f3f"/>
+
+    <!-- device node (Coyote, output) -->
+    <rect x="156" y="78" width="70" height="88" fill="#14171d" stroke="#3a3f4a" stroke-width="2"/>
+    <rect x="156" y="78" width="70" height="14" fill="#4bdc95"/>
+    <rect x="150" y="92" width="12" height="12" fill="#4bdc95"/>
+    <rect x="150" y="144" width="12" height="12" fill="#ee9f3f"/>
+    <rect x="168" y="95" width="30" height="6" fill="#ccd1db"/>
+    <rect x="168" y="121" width="44" height="6" fill="#4a505c"/>
+    <rect x="168" y="147" width="30" height="6" fill="#ccd1db"/>
+
+    <!-- channel meters: input (green) and power (orange) -->
+    <rect x="32" y="190" width="192" height="12" fill="#14171d" stroke="#3a3f4a" stroke-width="2"/>
+    <rect x="32" y="190" width="124" height="12" fill="#5fd37f"/>
+    <rect x="32" y="212" width="192" height="12" fill="#14171d" stroke="#3a3f4a" stroke-width="2"/>
+    <rect x="32" y="212" width="152" height="12" fill="#ee9f3f"/>
+  </g>
+  <rect x="13" y="13" width="230" height="230" rx="43" fill="none" stroke="#2a2f39" stroke-width="2"/>
+</svg>

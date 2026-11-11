@@ -28,7 +28,11 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([1280.0, 860.0])
             .with_min_inner_size([900.0, 620.0])
             .with_title(format!("ShockingVRC {}", shocking_vrc_core::VERSION))
-            .with_app_id("shockingvrc"),
+            .with_app_id("shockingvrc")
+            .with_icon(
+                eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+                    .expect("bundled icon is a valid PNG"),
+            ),
         ..Default::default()
     };
 
