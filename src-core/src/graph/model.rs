@@ -302,7 +302,7 @@ impl Graph {
     fn retarget_device_pins(&mut self) {
         let mut moves: Vec<(NodeId, String, String)> = Vec::new();
         for n in &self.nodes {
-            if !n.kind.is_device() {
+            if !n.kind.is_device() && !n.kind.is_partner_device() {
                 continue;
             }
             let keys: HashSet<String> = n.inputs().into_iter().map(|p| p.key.into_owned()).collect();
@@ -670,6 +670,32 @@ impl Graph {
         if !self.view.pan[0].is_finite() || !self.view.pan[1].is_finite() {
             self.view.pan = [0.0, 0.0];
         }
+    }
+
+    pub fn revive_remote(&mut self) -> usize {
+        let mut revived = 0;
+        for n in &mut self.nodes {
+            match &mut n.kind {
+                NodeKind::Missing(m) => {
+                    let kind = kind::kind_from_value(m.raw.clone(), true);
+                    if !kind.is_missing() {
+                        n.kind = kind;
+                        n.kind.sanitize();
+                        revived += 1;
+                    }
+                }
+                NodeKind::Group(g) => revived += g.graph.revive_remote(),
+                _ => {}
+            }
+        }
+        revived
+    }
+
+    pub fn has_remote_nodes(&self) -> bool {
+        self.nodes.iter().any(|n| match &n.kind {
+            NodeKind::Group(g) => g.graph.has_remote_nodes(),
+            k => k.is_remote(),
+        })
     }
 
     pub fn missing_types(&self) -> Vec<String> {

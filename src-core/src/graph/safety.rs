@@ -1,7 +1,11 @@
+use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
+
 use crate::cli::config::PowerLimits;
 use crate::protocol::waveform::{MAX_PULSE_FREQUENCY, WaveformV3};
 
-use super::device::{ChannelFrame, SEGMENTS};
+use super::device::{CEILING_OFF, ChannelFrame, MAX_CHANNELS, SEGMENTS};
 
 pub const DEFAULT_POWER_CAP: u8 = 50;
 pub const RAMP_SECS: f32 = 2.0;
@@ -95,6 +99,274 @@ pub fn build_wave(a: &SafeChannel, b: &SafeChannel) -> WaveformV3 {
     }
 }
 
+pub const REMOTE_FRAME_TIMEOUT: Duration = Duration::from_millis(1000);
+pub const DEFAULT_REMOTE_CAP: u8 = 30;
+
+pub const NO_ALARM: AlarmOverlay = AlarmOverlay {
+    drives: false,
+    strength: 0,
+    peak: 0,
+    active: false,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MergeMode {
+    RemoteOnly,
+    LocalOnly,
+    #[default]
+    Max,
+    SumCapped,
+}
+
+impl MergeMode {
+    pub const ALL: [MergeMode; 4] = [
+        MergeMode::RemoteOnly,
+        MergeMode::LocalOnly,
+        MergeMode::Max,
+        MergeMode::SumCapped,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            MergeMode::RemoteOnly => "Remote only",
+            MergeMode::LocalOnly => "Local only",
+            MergeMode::Max => "Max",
+            MergeMode::SumCapped => "Sum, capped",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RemoteChannelPolicy {
+    pub allowed: bool,
+    pub cap: u8,
+    pub freq_bounds: [u8; 2],
+    pub int_bounds: [u8; 2],
+    pub ramp_per_s: f32,
+    pub merge: MergeMode,
+}
+
+impl Default for RemoteChannelPolicy {
+    fn default() -> Self {
+        Self {
+            allowed: true,
+            cap: DEFAULT_REMOTE_CAP,
+            freq_bounds: [10, MAX_PULSE_FREQUENCY],
+            int_bounds: [0, 100],
+            ramp_per_s: 40.0,
+            merge: MergeMode::Max,
+        }
+    }
+}
+
+impl RemoteChannelPolicy {
+    pub fn sanitized(mut self) -> Self {
+        self.cap = self.cap.min(200);
+        let f = self.freq_bounds.map(|v| v.clamp(10, MAX_PULSE_FREQUENCY));
+        self.freq_bounds = [f[0].min(f[1]), f[0].max(f[1])];
+        let i = self.int_bounds.map(|v| v.min(100));
+        self.int_bounds = [i[0].min(i[1]), i[0].max(i[1])];
+        self.ramp_per_s = if self.ramp_per_s.is_finite() {
+            self.ramp_per_s.clamp(0.0, 1000.0)
+        } else {
+            0.0
+        };
+        self
+    }
+}
+
+pub fn remote_channel(f: &ChannelFrame, policy: &RemoteChannelPolicy, ramp: f32) -> SafeChannel {
+    let p = policy.sanitized();
+    if !p.allowed || p.cap == 0 {
+        return SafeChannel::default();
+    }
+    let requested = if f.limit_max.is_finite() { f.limit_max } else { 0.0 };
+    let frame = ChannelFrame {
+        limit_min: 0.0,
+        limit_max: requested.min(p.cap as f32),
+        ceiling: CEILING_OFF,
+        ..*f
+    };
+    let mut s = safe_channel(&frame, p.cap, NO_ALARM, ramp);
+    s.freq = s.freq.map(|v| v.clamp(p.freq_bounds[0], p.freq_bounds[1]));
+    s.intensity = s.intensity.map(|v| v.clamp(p.int_bounds[0], p.int_bounds[1]));
+    s.limit_max = s.limit_max.min(p.cap);
+    s.limit_min = s.limit_min.min(s.limit_max);
+    s.ceiling = s.ceiling.min(p.cap);
+    s.strength = s.strength.min(s.ceiling);
+    s
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RemoteInput {
+    Inactive,
+    Stale,
+    Live(SafeChannel),
+}
+
+fn with_ceiling(mut s: SafeChannel, ceiling: u8) -> SafeChannel {
+    s.ceiling = s.ceiling.max(ceiling);
+    s
+}
+
+pub fn merge_remote(
+    local: SafeChannel,
+    remote: RemoteInput,
+    policy: &RemoteChannelPolicy,
+    alarm_takeover: bool,
+    panic: bool,
+) -> SafeChannel {
+    if panic {
+        return SafeChannel { strength: 0, ..local };
+    }
+    let remote = match remote {
+        RemoteInput::Inactive => return local,
+        RemoteInput::Stale => SafeChannel::default(),
+        RemoteInput::Live(r) => r,
+    };
+    if alarm_takeover || !policy.allowed {
+        return local;
+    }
+    match policy.merge {
+        MergeMode::LocalOnly => local,
+        MergeMode::RemoteOnly => {
+            if remote.strength == 0 {
+                SafeChannel { strength: 0, ..local }
+            } else {
+                remote
+            }
+        }
+        MergeMode::Max => {
+            if remote.strength > local.strength {
+                with_ceiling(remote, local.ceiling)
+            } else {
+                with_ceiling(local, remote.ceiling)
+            }
+        }
+        MergeMode::SumCapped => {
+            let ceiling = local.ceiling.max(remote.ceiling);
+            let mut base = if remote.strength > local.strength {
+                remote
+            } else {
+                local
+            };
+            base.strength = (local.strength as u16 + remote.strength as u16).min(ceiling as u16) as u8;
+            base.ceiling = ceiling;
+            base
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RemoteOverlay {
+    active: bool,
+    policy: [RemoteChannelPolicy; MAX_CHANNELS],
+    frame: [Option<ChannelFrame>; MAX_CHANNELS],
+    frame_at: Option<Instant>,
+    live_since: Option<Instant>,
+    level: [f32; MAX_CHANNELS],
+    tick_at: Option<Instant>,
+    output: [SafeChannel; MAX_CHANNELS],
+}
+
+impl RemoteOverlay {
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    pub fn set_active(&mut self, on: bool) {
+        if self.active != on {
+            *self = Self {
+                active: on,
+                policy: self.policy,
+                ..Self::default()
+            };
+        }
+    }
+
+    pub fn set_policy(&mut self, policy: [RemoteChannelPolicy; MAX_CHANNELS]) {
+        self.policy = policy.map(RemoteChannelPolicy::sanitized);
+    }
+
+    pub fn policy(&self) -> [RemoteChannelPolicy; MAX_CHANNELS] {
+        self.policy
+    }
+
+    pub fn submit(&mut self, frame: [Option<ChannelFrame>; MAX_CHANNELS], now: Instant) {
+        if !self.active {
+            return;
+        }
+        self.frame = frame;
+        self.frame_at = Some(now);
+    }
+
+    pub fn output(&self) -> [SafeChannel; MAX_CHANNELS] {
+        self.output
+    }
+
+    pub fn is_stale(&self, now: Instant) -> bool {
+        self.frame_at
+            .is_none_or(|t| now.saturating_duration_since(t) > REMOTE_FRAME_TIMEOUT)
+    }
+
+    pub fn mix(
+        &mut self,
+        local: [SafeChannel; MAX_CHANNELS],
+        alarm_takeover: [bool; MAX_CHANNELS],
+        panic: bool,
+        now: Instant,
+    ) -> [SafeChannel; MAX_CHANNELS] {
+        if !self.active {
+            self.output = Default::default();
+            return local;
+        }
+        let dt = self
+            .tick_at
+            .map(|t| now.saturating_duration_since(t).as_secs_f32().min(0.5))
+            .unwrap_or(0.0);
+        self.tick_at = Some(now);
+        let stale = self.is_stale(now);
+        if stale {
+            self.live_since = None;
+        } else if self.live_since.is_none() {
+            self.live_since = Some(now);
+        }
+        let ramp = self
+            .live_since
+            .map(|t| ramp_factor(now.saturating_duration_since(t).as_secs_f32()))
+            .unwrap_or(0.0);
+        let mut out = local;
+        for ch in 0..MAX_CHANNELS {
+            let policy = self.policy[ch];
+            let input = match (stale || panic, &self.frame[ch]) {
+                (false, Some(f)) => {
+                    let mut r = remote_channel(f, &policy, ramp);
+                    let target = r.strength as f32;
+                    let level = &mut self.level[ch];
+                    *level = if policy.ramp_per_s > 0.0 && target > *level {
+                        (*level + policy.ramp_per_s * dt).min(target)
+                    } else {
+                        target
+                    };
+                    r.strength = (level.round() as u8).min(r.strength);
+                    RemoteInput::Live(r)
+                }
+                _ => {
+                    self.level[ch] = 0.0;
+                    RemoteInput::Stale
+                }
+            };
+            self.output[ch] = match input {
+                RemoteInput::Live(r) => r,
+                _ => SafeChannel::default(),
+            };
+            out[ch] = merge_remote(local[ch], input, &policy, alarm_takeover[ch], panic);
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,13 +382,6 @@ mod tests {
             ceiling: -1.0,
         }
     }
-
-    const NO_ALARM: AlarmOverlay = AlarmOverlay {
-        drives: false,
-        strength: 0,
-        peak: 0,
-        active: false,
-    };
 
     #[test]
     fn generated_graph_waveforms_limit_legacy_frequencies_to_valid_wire_values() {

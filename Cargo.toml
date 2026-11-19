@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["src-app", "src-cli", "src-core", "src-gui"]
+members = ["src-app", "src-cli", "src-core", "src-gui", "src-remote"]
 
 [workspace.package]
 version = "2.2.1"

@@ -8,7 +8,7 @@ use tokio::sync::{Mutex, RwLock, broadcast, watch};
 
 use crate::ble::device::CoyoteDevice;
 use crate::graph::device::{ChannelFrame, MAX_CHANNELS};
-use crate::graph::safety::{self, AlarmOverlay, SafeChannel};
+use crate::graph::safety::{self, AlarmOverlay, RemoteChannelPolicy, RemoteOverlay, SafeChannel};
 use crate::modulation::evaluator::{KinematicsInput, advance_and_evaluate_segments};
 use crate::osc::scanner::AvatarScanner;
 use crate::osc::types::ZoneEvent;
@@ -140,6 +140,7 @@ struct EngineState {
     bf_sender_running: std::sync::atomic::AtomicBool,
     mode: std::sync::atomic::AtomicU8,
     graph: std::sync::Mutex<GraphOutput>,
+    remote: std::sync::Mutex<RemoteOverlay>,
 }
 
 #[derive(Clone)]
@@ -170,8 +171,49 @@ impl CliEngine {
                     caps: [safety::DEFAULT_POWER_CAP; MAX_CHANNELS],
                     ..GraphOutput::default()
                 }),
+                remote: std::sync::Mutex::new(RemoteOverlay::default()),
             }),
         }
+    }
+
+    pub fn set_remote_active(&self, on: bool) {
+        if let Ok(mut r) = self.state.remote.lock() {
+            if r.is_active() != on {
+                info!("[cli] Remote input {}", if on { "enabled" } else { "stopped" });
+            }
+            r.set_active(on);
+        }
+    }
+
+    pub fn remote_active(&self) -> bool {
+        self.state.remote.lock().map(|r| r.is_active()).unwrap_or(false)
+    }
+
+    pub fn set_remote_policy(&self, policy: [RemoteChannelPolicy; MAX_CHANNELS]) {
+        if let Ok(mut r) = self.state.remote.lock() {
+            r.set_policy(policy);
+        }
+    }
+
+    pub fn submit_remote_frame(&self, frame: [Option<ChannelFrame>; MAX_CHANNELS]) {
+        if let Ok(mut r) = self.state.remote.lock() {
+            r.submit(frame, Instant::now());
+        }
+    }
+
+    pub fn remote_output(&self) -> [SafeChannel; MAX_CHANNELS] {
+        self.state.remote.lock().map(|r| r.output()).unwrap_or_default()
+    }
+
+    fn mix_remote(
+        &self,
+        local: [SafeChannel; MAX_CHANNELS],
+        alarm_takeover: [bool; MAX_CHANNELS],
+        panic: bool,
+        now: Instant,
+    ) -> Option<[SafeChannel; MAX_CHANNELS]> {
+        let mut r = self.state.remote.lock().ok()?;
+        r.is_active().then(|| r.mix(local, alarm_takeover, panic, now))
     }
 
     pub fn mode(&self) -> EngineMode {
@@ -285,6 +327,12 @@ impl CliEngine {
                 power: if panic { 0.0 } else { src.power },
                 safe: safety::safe_channel(src, caps[ch], overlays[ch], ramp),
             };
+        }
+        let takeover = overlays.map(|o| o.drives && o.strength > 0);
+        if let Some(mixed) = self.mix_remote(out.map(|o| o.safe), takeover, panic, now) {
+            for (o, m) in out.iter_mut().zip(mixed) {
+                o.safe = m;
+            }
         }
 
         let wave = safety::build_wave(&out[0].safe, &out[1].safe);
@@ -713,8 +761,7 @@ impl CliEngine {
 
         let alarm_cfg = self.state.alarm.config();
         apply_alarm_to_channels(&alarm_cfg, self.state.alarm.strength(), &mut status);
-        let (bf_a, bf_b) = bf_targets(&cfg, &alarm_cfg, self.state.alarm.is_active());
-        self.push_bf(bf_a, bf_b).await;
+        let (mut bf_a, mut bf_b) = bf_targets(&cfg, &alarm_cfg, self.state.alarm.is_active());
 
         let mut accums = self.state.mod_accums.lock().await;
         let ModAccumulators {
@@ -741,6 +788,31 @@ impl CliEngine {
             int_b,
             dt,
         );
+        let (mut freq_a_out, mut int_a, mut freq_b_out, mut int_b) = (freq_a_out, int_a, freq_b_out, int_b);
+        let local = |s: &ChannelStatus, freq, intensity, limits: &PowerLimits, ceiling| SafeChannel {
+            strength: s.strength,
+            freq,
+            intensity,
+            limit_min: limits.min,
+            limit_max: limits.max,
+            ceiling,
+        };
+        let commanded = self.state.alarm.strength();
+        let takeover = [
+            alarm_cfg.channels.drives_a() && commanded > 0,
+            alarm_cfg.channels.drives_b() && commanded > 0,
+        ];
+        let locals = [
+            local(&status.channel_a, freq_a_out, int_a, &cfg.channel_a.limits, bf_a),
+            local(&status.channel_b, freq_b_out, int_b, &cfg.channel_b.limits, bf_b),
+        ];
+        if let Some([a, b]) = self.mix_remote(locals, takeover, false, now) {
+            (status.channel_a.strength, freq_a_out, int_a) = (a.strength, a.freq, a.intensity);
+            (status.channel_b.strength, freq_b_out, int_b) = (b.strength, b.freq, b.intensity);
+            bf_a = bf_a.max(a.ceiling);
+            bf_b = bf_b.max(b.ceiling);
+        }
+        self.push_bf(bf_a, bf_b).await;
         status.channel_a.frequency = freq_a_out;
         status.channel_b.frequency = freq_b_out;
 

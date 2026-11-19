@@ -1,6 +1,7 @@
 pub mod compile;
 pub mod curve;
 pub mod device;
+pub mod draw;
 pub mod eval;
 pub mod kind;
 pub mod model;

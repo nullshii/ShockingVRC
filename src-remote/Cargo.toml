@@ -1,0 +1,39 @@
+[package]
+name = "shocking_vrc_remote"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+shocking_vrc_core.workspace = true
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+thiserror = { workspace = true }
+futures-util = { workspace = true }
+mdns-sd = { workspace = true }
+
+ed25519-dalek = "2.2"
+sha2 = "0.10"
+hmac = "0.12"
+aes-gcm = "0.10"
+argon2 = "0.5"
+subtle = "2.6"
+
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake", "stream", "__rustls-tls"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+webpki-roots = "1"
+if-addrs = "0.15"
+
+webrtc = "0.21.1"
+async-trait = "0.1"
+bytes = "1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

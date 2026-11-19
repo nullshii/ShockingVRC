@@ -412,3 +412,6 @@ fn a_gate_faster_than_a_packet_keeps_its_rhythm_inside_the_packet() {
         assert_eq!((loud, silent), (2, 2), "tick {k}: {:?} should be on-on-off-off", s.intensity);
     }
 }
+
+#[path = "remote_tests.rs"]
+mod remote;

@@ -61,6 +61,7 @@ pub enum Extra {
     External(usize),
     Modulation(Box<ModulationConfig>),
     Device(usize),
+    Partner(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +90,7 @@ pub struct Plan {
     pub delays: Vec<usize>,
     pub external: Vec<ExternalRequest>,
     pub devices: Vec<(NodeId, DeviceBinding, Option<u8>)>,
+    pub partners: Vec<(NodeId, u8)>,
     pub issues: Vec<GraphIssue>,
     pub valid: bool,
     pub signature: u64,
@@ -169,7 +171,7 @@ fn flatten(
                 }
             }
             NodeKind::Frame(_) => {}
-            NodeKind::Device(_) if root.is_some() => issues.push(GraphIssue::new(
+            NodeKind::Device(_) | NodeKind::PartnerDevice(_) if root.is_some() => issues.push(GraphIssue::new(
                 Severity::Warning,
                 Some(owner),
                 "A Device node inside a group is ignored — keep devices at the top level",
@@ -348,6 +350,7 @@ pub fn compile(graph: &Graph) -> Plan {
         ..Plan::default()
     };
     let mut seen_macs: HashSet<String> = HashSet::new();
+    let mut seen_slots: HashSet<u8> = HashSet::new();
     let mut wired_devices = 0usize;
     let top_level: HashSet<NodeId> = graph.nodes.iter().map(|n| n.id).collect();
 
@@ -409,6 +412,22 @@ pub fn compile(graph: &Graph) -> Plan {
                     Extra::Device(plan.devices.len() - 1)
                 }
             }
+            NodeKind::PartnerDevice(p) if top_level.contains(&f.root) => {
+                if any_wired {
+                    wired_devices += 1;
+                }
+                if seen_slots.insert(p.slot) {
+                    plan.partners.push((f.root, p.slot));
+                    Extra::Partner(plan.partners.len() - 1)
+                } else {
+                    issues.push(GraphIssue::new(
+                        Severity::Warning,
+                        Some(f.root),
+                        "Another Partner Device node already drives this partner device — this one is ignored",
+                    ));
+                    Extra::None
+                }
+            }
             _ => Extra::None,
         };
         if f.kind.is_delay() {
@@ -426,7 +445,7 @@ pub fn compile(graph: &Graph) -> Plan {
         });
     }
 
-    if plan.devices.is_empty() {
+    if plan.devices.is_empty() && plan.partners.is_empty() {
         issues.push(GraphIssue::new(
             Severity::Info,
             None,

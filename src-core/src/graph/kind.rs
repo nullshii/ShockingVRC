@@ -6,9 +6,22 @@ use crate::OldZoneType;
 use crate::cli::config::{MotionNorms, UkfConfig, ZoneId};
 use crate::modulation::config::ModulationFunction;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::curve::Curve;
 use super::device::{self, ChannelParams, DeviceBinding};
+use super::draw::{DrawZoneParams, FaderParams, SegmentPainterParams, ShapeFillParams, StampParams, XyPadParams};
 use super::model::Graph;
+
+static REMOTE_NODES: AtomicBool = AtomicBool::new(false);
+
+pub fn set_remote_nodes_enabled(on: bool) {
+    REMOTE_NODES.store(on, Ordering::Release);
+}
+
+pub fn remote_nodes_enabled() -> bool {
+    REMOTE_NODES.load(Ordering::Acquire)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PinType {
@@ -76,11 +89,12 @@ pub enum Category {
     Logic,
     Safety,
     Output,
+    Remote,
     Layout,
 }
 
 impl Category {
-    pub const ALL: [Category; 8] = [
+    pub const ALL: [Category; 9] = [
         Category::Input,
         Category::Conditioning,
         Category::Math,
@@ -88,6 +102,7 @@ impl Category {
         Category::Logic,
         Category::Safety,
         Category::Output,
+        Category::Remote,
         Category::Layout,
     ];
 
@@ -100,6 +115,7 @@ impl Category {
             Category::Logic => "Logic & routing",
             Category::Safety => "Safety",
             Category::Output => "Output",
+            Category::Remote => "Remote & drawing",
             Category::Layout => "Layout",
         }
     }
@@ -891,15 +907,20 @@ impl DeviceParams {
     }
 
     pub fn pins(&self) -> Vec<PinSpec> {
-        let p = self.profile();
+        profile_pins(self.profile(), |i| self.channel(i))
+    }
+}
+
+fn profile_pins(p: &device::DeviceProfile, channel: impl Fn(usize) -> ChannelParams) -> Vec<PinSpec> {
+    {
         let mut out = Vec::new();
         for (ci, ch) in p.channels.iter().enumerate() {
-            let params = self.channel(ci);
+            let params = channel(ci);
             for g in ch.groups {
                 if g.expandable && params.is_expanded(g.key) {
                     for s in 0..device::SEGMENTS {
                         out.push(owned(
-                            Self::pin_key(ch.key, g.key, Some(s)),
+                            DeviceParams::pin_key(ch.key, g.key, Some(s)),
                             format!("{} {}", g.label, s + 1),
                             g.default,
                             g.range,
@@ -907,7 +928,7 @@ impl DeviceParams {
                     }
                 } else {
                     out.push(owned(
-                        Self::pin_key(ch.key, g.key, None),
+                        DeviceParams::pin_key(ch.key, g.key, None),
                         g.label.to_string(),
                         g.default,
                         g.range,
@@ -916,6 +937,36 @@ impl DeviceParams {
             }
         }
         out
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PartnerDeviceParams {
+    pub slot: u8,
+    pub channels: Vec<ChannelParams>,
+}
+
+impl Default for PartnerDeviceParams {
+    fn default() -> Self {
+        Self {
+            slot: 0,
+            channels: vec![ChannelParams::default(); device::PARTNER_COYOTE.channels.len()],
+        }
+    }
+}
+
+impl PartnerDeviceParams {
+    pub fn profile(&self) -> &'static device::DeviceProfile {
+        &device::PARTNER_COYOTE
+    }
+
+    pub fn channel(&self, i: usize) -> ChannelParams {
+        self.channels.get(i).cloned().unwrap_or_default()
+    }
+
+    pub fn pins(&self) -> Vec<PinSpec> {
+        profile_pins(self.profile(), |i| self.channel(i))
     }
 }
 
@@ -977,6 +1028,13 @@ pub enum NodeKind {
     Panic(PanicParams),
     Scope(ScopeParams),
     Device(DeviceParams),
+    PartnerDevice(PartnerDeviceParams),
+    DrawZone(DrawZoneParams),
+    ShapeFill(ShapeFillParams),
+    StampPattern(StampParams),
+    XyPad(XyPadParams),
+    SegmentPainter(SegmentPainterParams),
+    Fader(FaderParams),
     #[serde(skip)]
     Missing(MissingParams),
 }
@@ -990,11 +1048,15 @@ pub fn serialize_kind<S: Serializer>(kind: &NodeKind, s: S) -> Result<S::Ok, S::
 
 pub fn deserialize_kind<'de, D: Deserializer<'de>>(d: D) -> Result<NodeKind, D::Error> {
     let raw = serde_json::Value::deserialize(d)?;
+    Ok(kind_from_value(raw, remote_nodes_enabled()))
+}
+
+pub fn kind_from_value(raw: serde_json::Value, remote: bool) -> NodeKind {
     match NodeKind::deserialize(&raw) {
-        Ok(k) => Ok(k),
-        Err(_) => {
+        Ok(k) if remote || !k.is_remote() => k,
+        _ => {
             let type_name = raw.get("type").and_then(|t| t.as_str()).unwrap_or("?").to_string();
-            Ok(NodeKind::Missing(MissingParams { type_name, raw }))
+            NodeKind::Missing(MissingParams { type_name, raw })
         }
     }
 }
@@ -1051,6 +1113,13 @@ impl NodeKind {
             NodeKind::Panic(_) => "Panic",
             NodeKind::Scope(_) => "Scope",
             NodeKind::Device(_) => "Device",
+            NodeKind::PartnerDevice(_) => "PartnerDevice",
+            NodeKind::DrawZone(_) => "DrawZone",
+            NodeKind::ShapeFill(_) => "ShapeFill",
+            NodeKind::StampPattern(_) => "StampPattern",
+            NodeKind::XyPad(_) => "XyPad",
+            NodeKind::SegmentPainter(_) => "SegmentPainter",
+            NodeKind::Fader(_) => "Fader",
             NodeKind::Missing(m) => &m.type_name,
         }
     }
@@ -1116,6 +1185,13 @@ impl NodeKind {
             NodeKind::Panic(_) => "Panic".into(),
             NodeKind::Scope(_) => "Scope".into(),
             NodeKind::Device(_) => "Device".into(),
+            NodeKind::PartnerDevice(p) => format!("Partner Device {}", p.slot as u32 + 1),
+            NodeKind::DrawZone(_) => "Draw Zone".into(),
+            NodeKind::ShapeFill(p) => format!("Shape Fill {}", p.shape.label()),
+            NodeKind::StampPattern(_) => "Stamp Pattern".into(),
+            NodeKind::XyPad(_) => "XY Pad".into(),
+            NodeKind::SegmentPainter(_) => "Segment Painter".into(),
+            NodeKind::Fader(_) => "Envelope / Fader".into(),
             NodeKind::Missing(m) => format!("Missing: {}", m.type_name),
         }
     }
@@ -1168,8 +1244,23 @@ impl NodeKind {
                 Category::Safety
             }
             NodeKind::Scope(_) | NodeKind::Device(_) => Category::Output,
+            NodeKind::PartnerDevice(_)
+            | NodeKind::DrawZone(_)
+            | NodeKind::ShapeFill(_)
+            | NodeKind::StampPattern(_)
+            | NodeKind::XyPad(_)
+            | NodeKind::SegmentPainter(_)
+            | NodeKind::Fader(_) => Category::Remote,
             NodeKind::Frame(_) | NodeKind::Missing(_) => Category::Layout,
         }
+    }
+
+    pub fn is_remote(&self) -> bool {
+        self.category() == Category::Remote
+    }
+
+    pub fn is_partner_device(&self) -> bool {
+        matches!(self, NodeKind::PartnerDevice(_))
     }
 
     pub fn is_delay(&self) -> bool {
@@ -1197,7 +1288,20 @@ impl NodeKind {
             | NodeKind::Frame(_)
             | NodeKind::GroupInput(_)
             | NodeKind::Panic(_)
+            | NodeKind::XyPad(_)
+            | NodeKind::SegmentPainter(_)
             | NodeKind::Missing(_) => Vec::new(),
+            NodeKind::DrawZone(_) | NodeKind::StampPattern(_) => {
+                vec![fl("rate", "Speed", 1.0, (0.0, 4.0)), bl("reset", "Reset", 0.0)]
+            }
+            NodeKind::ShapeFill(_) => vec![
+                fl("rate", "Rate Hz", 2.0, (0.0, 20.0)),
+                fl("duty", "Duty", 0.5, (0.0, 1.0)),
+                fl("jitter", "Jitter", 0.0, (0.0, 1.0)),
+                bl("reset", "Reset", 0.0),
+            ],
+            NodeKind::Fader(_) => vec![bl("gate", "Trigger", 0.0), fl("level", "Level x", 1.0, (0.0, 1.0))],
+            NodeKind::PartnerDevice(p) => p.pins(),
             NodeKind::Ukf(_)
             | NodeKind::Derivative(_)
             | NodeKind::Smooth(_)
@@ -1367,10 +1471,33 @@ impl NodeKind {
                 .iter()
                 .map(|port| owned(port.key.clone(), port.label.clone(), 0.0, (0.0, 1.0)))
                 .collect(),
+            NodeKind::DrawZone(_) | NodeKind::ShapeFill(_) => {
+                vec![out(), unit("phase", "Phase"), bl("active", "In zone", 0.0)]
+            }
+            NodeKind::StampPattern(_) => vec![out(), unit("phase", "Phase")],
+            NodeKind::XyPad(_) => vec![unit("x", "X / Freq"), unit("y", "Y / Int"), bl("touch", "Touch", 0.0)],
+            NodeKind::SegmentPainter(_) => {
+                let mut v = Vec::with_capacity(16);
+                for ch in ["a", "b"] {
+                    for group in ["freq", "int"] {
+                        for s in 0..device::SEGMENTS {
+                            v.push(owned(
+                                DeviceParams::pin_key(ch, group, Some(s)),
+                                format!("{} {} {}", ch.to_uppercase(), group, s + 1),
+                                0.0,
+                                (0.0, 1.0),
+                            ));
+                        }
+                    }
+                }
+                v
+            }
+            NodeKind::Fader(_) => vec![out(), unit("env", "Envelope")],
             NodeKind::Frame(_)
             | NodeKind::GroupOutput(_)
             | NodeKind::Scope(_)
             | NodeKind::Device(_)
+            | NodeKind::PartnerDevice(_)
             | NodeKind::Missing(_) => Vec::new(),
             _ => vec![out()],
         }
@@ -1496,6 +1623,20 @@ impl NodeKind {
                     *m = m.to_uppercase();
                 }
             }
+            NodeKind::PartnerDevice(p) => {
+                p.slot = p.slot.min(7);
+                let n = p.profile().channels.len();
+                p.channels.resize(n, ChannelParams::default());
+                for c in &mut p.channels {
+                    c.sanitize();
+                }
+            }
+            NodeKind::DrawZone(p) => p.sanitize(),
+            NodeKind::ShapeFill(p) => p.sanitize(),
+            NodeKind::StampPattern(p) => p.sanitize(),
+            NodeKind::XyPad(p) => p.sanitize(),
+            NodeKind::SegmentPainter(p) => p.sanitize(),
+            NodeKind::Fader(p) => p.sanitize(),
             _ => {}
         }
     }
@@ -1521,6 +1662,48 @@ macro_rules! entry {
 }
 
 pub fn catalog() -> Vec<CatalogEntry> {
+    catalog_with(remote_nodes_enabled())
+}
+
+pub fn catalog_with(remote: bool) -> Vec<CatalogEntry> {
+    let mut v = base_catalog();
+    if remote {
+        let at = v.iter().position(|e| e.category == Category::Layout).unwrap_or(v.len());
+        v.splice(at..at, remote_catalog());
+    }
+    v
+}
+
+fn remote_catalog() -> Vec<CatalogEntry> {
+    vec![
+        entry!("Partner Device", Remote, "partner remote device coyote output", || {
+            NodeKind::PartnerDevice(PartnerDeviceParams::default())
+        }),
+        entry!("Draw Zone", Remote, "draw pen freehand zone canvas loop", || {
+            NodeKind::DrawZone(DrawZoneParams::default())
+        }),
+        entry!(
+            "Shape Fill",
+            Remote,
+            "shape fill sine triangle saw square pulse ramp random",
+            || { NodeKind::ShapeFill(ShapeFillParams::default()) }
+        ),
+        entry!("Stamp Pattern", Remote, "stamp pattern timeline lane copy paste", || {
+            NodeKind::StampPattern(StampParams::default())
+        }),
+        entry!("XY Pad", Remote, "xy pad live drag frequency intensity", || {
+            NodeKind::XyPad(XyPadParams::default())
+        }),
+        entry!("Segment Painter", Remote, "segment painter bars frequency intensity", || {
+            NodeKind::SegmentPainter(SegmentPainterParams::default())
+        }),
+        entry!("Envelope / Fader", Remote, "fader master adsr envelope button", || {
+            NodeKind::Fader(FaderParams::default())
+        }),
+    ]
+}
+
+fn base_catalog() -> Vec<CatalogEntry> {
     let mut v = vec![
         entry!("OSC Float", Input, "osc parameter avatar slider float int bool", || {
             NodeKind::OscFloat(OscFloatParams::default())
@@ -1689,17 +1872,17 @@ mod tests {
 
     #[test]
     fn every_catalog_entry_round_trips_through_json() {
-        for e in catalog() {
+        for e in catalog_with(true) {
             let kind = (e.make)();
             let json = serde_json::to_value(&kind).expect("serialize");
-            let back: NodeKind = serde_json::from_value(json).expect("deserialize");
+            let back = kind_from_value(json, true);
             assert_eq!(back, kind, "{}", e.label);
         }
     }
 
     #[test]
     fn pin_keys_are_unique_per_node() {
-        for e in catalog() {
+        for e in catalog_with(true) {
             let kind = (e.make)();
             for pins in [kind.inputs(), kind.outputs()] {
                 let mut keys: Vec<_> = pins.iter().map(|p| p.key.to_string()).collect();

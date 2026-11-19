@@ -6,7 +6,11 @@ use crate::modulation::evaluator::evaluate_with_accumulator;
 use crate::modulation::noise;
 
 use super::compile::{self, ExternalRequest, Extra, GraphIssue, Plan, Src};
-use super::device::{ChannelFrame, DEFAULT_CHANNEL, DeviceFrame, MAX_CHANNELS, PinRole, SEGMENTS};
+use super::device::{
+    ChannelFrame, ChannelParams, DEFAULT_CHANNEL, DeviceFrame, DeviceProfile, MAX_CHANNELS, PartnerFrame, PinRole,
+    SEGMENTS,
+};
+use super::draw::FillShape;
 use super::kind::{
     CombineMode, CompareOp, EnvMode, LfoShape, LogicOp, NodeKind, NoiseKind, as_bool, from_bool, sanitised_ukf,
 };
@@ -108,6 +112,18 @@ enum NodeState {
         idx: usize,
         filled: usize,
     },
+    Play {
+        t: f32,
+        last_reset: bool,
+    },
+    Fill {
+        t: f32,
+        osc: f32,
+        walk: f32,
+        jitter: f32,
+        rng: u32,
+        last_reset: bool,
+    },
 }
 
 impl NodeState {
@@ -141,7 +157,7 @@ impl NodeState {
                 rng: p.seed.max(1).wrapping_mul(2_654_435_761).max(1),
             },
             NodeKind::Noise(_) => NodeState::Noise { pos: 0.0 },
-            NodeKind::Envelope(_) => NodeState::Env {
+            NodeKind::Envelope(_) | NodeKind::Fader(_) => NodeState::Env {
                 level: 0.0,
                 stage: 0,
                 gate: false,
@@ -170,7 +186,19 @@ impl NodeState {
                 stale: 0.0,
                 init: false,
             },
-            NodeKind::Device(_) => NodeState::Device {
+            NodeKind::DrawZone(_) | NodeKind::StampPattern(_) => NodeState::Play {
+                t: 0.0,
+                last_reset: false,
+            },
+            NodeKind::ShapeFill(p) => NodeState::Fill {
+                t: 0.0,
+                osc: 0.0,
+                walk: 0.5,
+                jitter: 0.0,
+                rng: p.seed.max(1).wrapping_mul(2_654_435_761).max(1),
+                last_reset: false,
+            },
+            NodeKind::Device(_) | NodeKind::PartnerDevice(_) => NodeState::Device {
                 power: [[0.0; SEGMENTS]; MAX_CHANNELS],
                 freq: [[0.0; SEGMENTS]; MAX_CHANNELS],
                 int: [[0.0; SEGMENTS]; MAX_CHANNELS],
@@ -234,6 +262,7 @@ pub struct GraphEvaluator {
     in_values: Vec<f32>,
     states: Vec<NodeState>,
     frames: Vec<DeviceFrame>,
+    partners: Vec<PartnerFrame>,
     external: Vec<ExternalSample>,
     alarm: AlarmSample,
     time: f64,
@@ -255,6 +284,7 @@ impl GraphEvaluator {
             in_values: Vec::new(),
             states: Vec::new(),
             frames: Vec::new(),
+            partners: Vec::new(),
             external: Vec::new(),
             alarm: AlarmSample::default(),
             time: 0.0,
@@ -318,6 +348,15 @@ impl GraphEvaluator {
                 channels: [ChannelFrame::default(); MAX_CHANNELS],
             })
             .collect();
+        self.partners = plan
+            .partners
+            .iter()
+            .map(|(node, slot)| PartnerFrame {
+                node: *node,
+                slot: *slot,
+                channels: [ChannelFrame::default(); MAX_CHANNELS],
+            })
+            .collect();
         self.values = vec![0.0; plan.value_count];
         self.in_values = vec![0.0; plan.inputs.len()];
         self.states = states;
@@ -364,6 +403,10 @@ impl GraphEvaluator {
         &self.frames
     }
 
+    pub fn partner_frames(&self) -> &[PartnerFrame] {
+        &self.partners
+    }
+
     pub fn panic_requested(&self) -> bool {
         self.panic
     }
@@ -397,6 +440,9 @@ impl GraphEvaluator {
             for f in &mut self.frames {
                 f.zeroed();
             }
+            for f in &mut self.partners {
+                f.zeroed();
+            }
             return &self.frames;
         }
 
@@ -411,10 +457,12 @@ impl GraphEvaluator {
             in_values,
             states,
             frames,
+            partners,
             external,
             panic,
             ..
         } = self;
+        let mut sinks = Sinks { frames, partners };
 
         for (ni, node) in plan.nodes.iter().enumerate() {
             let is = node.in_start as usize;
@@ -429,7 +477,7 @@ impl GraphEvaluator {
             let ol = node.out_len as usize;
             let ins = &in_values[is..is + il];
             let outs = &mut values[os..os + ol];
-            eval_node(node, ins, outs, &mut states[ni], external, frames, panic, &ctx);
+            eval_node(node, ins, outs, &mut states[ni], external, &mut sinks, panic, &ctx);
             for v in outs.iter_mut() {
                 if !v.is_finite() {
                     *v = 0.0;
@@ -496,6 +544,144 @@ struct Ctx {
     alarm: AlarmSample,
 }
 
+struct Sinks<'a> {
+    frames: &'a mut [DeviceFrame],
+    partners: &'a mut [PartnerFrame],
+}
+
+#[allow(clippy::too_many_arguments)]
+fn envelope_step(
+    level: &mut f32,
+    stage: &mut u8,
+    gate: &mut bool,
+    rel_rate: &mut f32,
+    g: bool,
+    (a, d, s, r): (f32, f32, f32, f32),
+    adsr: bool,
+    dt: f32,
+) -> f32 {
+    if g && !*gate {
+        *stage = 1;
+    }
+    if !g && *gate {
+        *stage = 4;
+        *rel_rate = *level / r.max(1e-3);
+    }
+    *gate = g;
+    match *stage {
+        1 => {
+            *level = if a <= 0.0 { 1.0 } else { *level + dt / a };
+            if *level >= 1.0 {
+                *level = 1.0;
+                *stage = if adsr { 2 } else { 3 };
+            }
+        }
+        2 => {
+            *level -= dt * (1.0 - s) / d.max(1e-3);
+            if *level <= s {
+                *level = s;
+                *stage = 3;
+            }
+        }
+        3 => *level = if adsr { s } else { 1.0 },
+        4 => {
+            *level -= *rel_rate * dt;
+            if *level <= 0.0 || r <= 0.0 {
+                *level = 0.0;
+                *stage = 0;
+            }
+        }
+        _ => *level = 0.0,
+    }
+    *level
+}
+
+fn advance_loop(t: &mut f32, last_reset: &mut bool, reset: bool, speed: f32, length_s: f32, dt: f32) -> f32 {
+    if reset && !*last_reset {
+        *t = 0.0;
+    }
+    *last_reset = reset;
+    *t += speed.max(0.0) * dt / length_s.max(0.01);
+    if *t >= 1.0 {
+        *t = t.rem_euclid(1.0);
+    }
+    *t
+}
+
+fn drive_channels(
+    profile: &DeviceProfile,
+    channels: &[ChannelParams],
+    ins: &[f32],
+    out: &mut [ChannelFrame; MAX_CHANNELS],
+    history: (
+        &mut [[f32; SEGMENTS]; MAX_CHANNELS],
+        &mut [[f32; SEGMENTS]; MAX_CHANNELS],
+        &mut [[f32; SEGMENTS]; MAX_CHANNELS],
+    ),
+    init: &mut bool,
+) {
+    let (power, freq, int) = history;
+    let i = |k: usize| ins.get(k).copied().unwrap_or(0.0);
+    let mut k = 0usize;
+    for (ci, ch) in profile.channels.iter().enumerate().take(MAX_CHANNELS) {
+        let cp = channels.get(ci).unwrap_or(&DEFAULT_CHANNEL);
+        let cf = &mut out[ci];
+        for g in ch.groups {
+            let expanded = g.expandable && cp.is_expanded(g.key);
+            let width = if expanded { SEGMENTS } else { 1 };
+            let v0 = i(k);
+            match g.role {
+                PinRole::Power => {
+                    let v = v0.clamp(0.0, 1.0);
+                    let hist = &mut power[ci];
+                    if *init {
+                        hist.copy_within(1.., 0);
+                        hist[SEGMENTS - 1] = v;
+                    } else {
+                        *hist = [v; SEGMENTS];
+                    }
+                    cf.power_seg = *hist;
+                    cf.power = hist.iter().copied().fold(0.0, f32::max);
+                }
+                PinRole::LimitMin => cf.limit_min = v0,
+                PinRole::LimitMax => cf.limit_max = v0,
+                PinRole::Ceiling => cf.ceiling = v0,
+                PinRole::Frequency | PinRole::Intensity => {
+                    let is_freq = g.role == PinRole::Frequency;
+                    let map = |v: f32| {
+                        if is_freq {
+                            cp.map_frequency(v)
+                        } else {
+                            cp.map_intensity(v)
+                        }
+                    };
+                    let hist = if is_freq { &mut freq[ci] } else { &mut int[ci] };
+                    if expanded {
+                        for (s, h) in hist.iter_mut().enumerate() {
+                            *h = map(i(k + s));
+                        }
+                    } else {
+                        let v = map(v0);
+                        if *init {
+                            hist.copy_within(1.., 0);
+                            hist[SEGMENTS - 1] = v;
+                        } else {
+                            *hist = [v; SEGMENTS];
+                        }
+                    }
+                    if is_freq {
+                        cf.freq = *hist;
+                    } else {
+                        cf.intensity = *hist;
+                    }
+                }
+            }
+            k += width;
+        }
+    }
+    *init = true;
+}
+
 fn xorshift(state: &mut u32) -> f32 {
     let mut x = *state;
     x ^= x << 13;
@@ -539,7 +725,7 @@ fn eval_node(
     outs: &mut [f32],
     state: &mut NodeState,
     external: &[ExternalSample],
-    frames: &mut [DeviceFrame],
+    sinks: &mut Sinks<'_>,
     panic: &mut bool,
     ctx: &Ctx,
 ) {
@@ -789,41 +975,102 @@ fn eval_node(
             } = state
             {
                 let g = as_bool(i(0));
-                let (a, d, s, r) = (i(1).max(0.0), i(2).max(0.0), i(3).clamp(0.0, 1.0), i(4).max(0.0));
-                if g && !*gate {
-                    *stage = 1;
+                let adsr = (i(1).max(0.0), i(2).max(0.0), i(3).clamp(0.0, 1.0), i(4).max(0.0));
+                outs[0] = envelope_step(level, stage, gate, rel_rate, g, adsr, p.mode == EnvMode::Adsr, dt);
+            }
+        }
+        NodeKind::Fader(p) => {
+            if let NodeState::Env {
+                level,
+                stage,
+                gate,
+                rel_rate,
+            } = state
+            {
+                let g = p.pressed || as_bool(i(0));
+                let adsr = (p.attack, p.decay, p.sustain, p.release);
+                let env = envelope_step(level, stage, gate, rel_rate, g, adsr, true, dt);
+                outs[0] = (env * p.level * i(1).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+                outs[1] = env;
+            }
+        }
+        NodeKind::DrawZone(p) => {
+            if let NodeState::Play { t, last_reset } = state {
+                let at = advance_loop(t, last_reset, as_bool(i(1)), i(0), p.length_s, dt);
+                let (v, inside) = p.sample(at);
+                outs[0] = v;
+                outs[1] = at;
+                outs[2] = from_bool(inside);
+            }
+        }
+        NodeKind::StampPattern(p) => {
+            if let NodeState::Play { t, last_reset } = state {
+                let at = advance_loop(t, last_reset, as_bool(i(1)), i(0), p.length_s, dt);
+                outs[0] = p.sample(at);
+                outs[1] = at;
+            }
+        }
+        NodeKind::ShapeFill(p) => {
+            if let NodeState::Fill {
+                t,
+                osc,
+                walk,
+                jitter,
+                rng,
+                last_reset,
+            } = state
+            {
+                let reset = as_bool(i(3));
+                if reset && !*last_reset {
+                    *osc = 0.0;
+                    *walk = 0.5;
                 }
-                if !g && *gate {
-                    *stage = 4;
-                    *rel_rate = *level / r.max(1e-3);
+                let at = advance_loop(t, last_reset, reset, 1.0, p.length_s, dt);
+                let hz = i(0).max(0.0);
+                *osc += hz * dt;
+                let wrapped = *osc >= 1.0;
+                if wrapped {
+                    *osc -= osc.floor();
                 }
-                *gate = g;
-                match *stage {
-                    1 => {
-                        *level = if a <= 0.0 { 1.0 } else { *level + dt / a };
-                        if *level >= 1.0 {
-                            *level = 1.0;
-                            *stage = if p.mode == EnvMode::Adsr { 2 } else { 3 };
-                        }
-                    }
-                    2 => {
-                        *level -= dt * (1.0 - s) / d.max(1e-3);
-                        if *level <= s {
-                            *level = s;
-                            *stage = 3;
-                        }
-                    }
-                    3 => *level = if p.mode == EnvMode::Adsr { s } else { 1.0 },
-                    4 => {
-                        *level -= *rel_rate * dt;
-                        if *level <= 0.0 || r <= 0.0 {
-                            *level = 0.0;
-                            *stage = 0;
-                        }
-                    }
-                    _ => *level = 0.0,
+                if p.shape == FillShape::RandomWalk {
+                    *walk = (*walk + xorshift(rng) * (hz * dt * 2.0).min(0.5)).clamp(0.0, 1.0);
                 }
-                outs[0] = *level;
+                let amount = i(2).clamp(0.0, 1.0);
+                if amount > 0.0 && (wrapped || *jitter == 0.0) {
+                    *jitter = xorshift(rng) * 0.5 * amount;
+                } else if amount <= 0.0 {
+                    *jitter = 0.0;
+                }
+                match p.zone.local_t(at) {
+                    Some(_) => {
+                        let v = (p.shape.value(*osc, i(1), *walk) + *jitter).clamp(0.0, 1.0);
+                        outs[0] = p.zone.level(v);
+                        outs[2] = 1.0;
+                    }
+                    None => {
+                        outs[0] = 0.0;
+                        outs[2] = 0.0;
+                    }
+                }
+                outs[1] = at;
+            }
+        }
+        NodeKind::XyPad(p) => {
+            outs[0] = p.x;
+            outs[1] = p.y;
+            outs[2] = from_bool(p.touching);
+        }
+        NodeKind::SegmentPainter(p) => {
+            let mut k = 0;
+            for ch in 0..2 {
+                for row in [&p.freq[ch], &p.int[ch]] {
+                    for v in row {
+                        if let Some(o) = outs.get_mut(k) {
+                            *o = v.clamp(0.0, 1.0);
+                        }
+                        k += 1;
+                    }
+                }
             }
         }
         NodeKind::SampleHold(_) => {
@@ -1041,68 +1288,19 @@ fn eval_node(
             let (Extra::Device(fi), NodeState::Device { power, freq, int, init }) = (&node.extra, state) else {
                 return;
             };
-            let Some(frame) = frames.get_mut(*fi) else {
+            let Some(frame) = sinks.frames.get_mut(*fi) else {
                 return;
             };
-            let profile = p.profile();
-            let mut k = 0usize;
-            for (ci, ch) in profile.channels.iter().enumerate().take(MAX_CHANNELS) {
-                let cp = p.channels.get(ci).unwrap_or(&DEFAULT_CHANNEL);
-                let cf = &mut frame.channels[ci];
-                for g in ch.groups {
-                    let expanded = g.expandable && cp.is_expanded(g.key);
-                    let width = if expanded { SEGMENTS } else { 1 };
-                    let v0 = i(k);
-                    match g.role {
-                        PinRole::Power => {
-                            let v = v0.clamp(0.0, 1.0);
-                            let hist = &mut power[ci];
-                            if *init {
-                                hist.copy_within(1.., 0);
-                                hist[SEGMENTS - 1] = v;
-                            } else {
-                                *hist = [v; SEGMENTS];
-                            }
-                            cf.power_seg = *hist;
-                            cf.power = hist.iter().copied().fold(0.0, f32::max);
-                        }
-                        PinRole::LimitMin => cf.limit_min = v0,
-                        PinRole::LimitMax => cf.limit_max = v0,
-                        PinRole::Ceiling => cf.ceiling = v0,
-                        PinRole::Frequency | PinRole::Intensity => {
-                            let is_freq = g.role == PinRole::Frequency;
-                            let map = |v: f32| {
-                                if is_freq {
-                                    cp.map_frequency(v)
-                                } else {
-                                    cp.map_intensity(v)
-                                }
-                            };
-                            let hist = if is_freq { &mut freq[ci] } else { &mut int[ci] };
-                            if expanded {
-                                for (s, h) in hist.iter_mut().enumerate() {
-                                    *h = map(i(k + s));
-                                }
-                            } else {
-                                let v = map(v0);
-                                if *init {
-                                    hist.copy_within(1.., 0);
-                                    hist[SEGMENTS - 1] = v;
-                                } else {
-                                    *hist = [v; SEGMENTS];
-                                }
-                            }
-                            if is_freq {
-                                cf.freq = *hist;
-                            } else {
-                                cf.intensity = *hist;
-                            }
-                        }
-                    }
-                    k += width;
-                }
-            }
-            *init = true;
+            drive_channels(p.profile(), &p.channels, ins, &mut frame.channels, (power, freq, int), init);
+        }
+        NodeKind::PartnerDevice(p) => {
+            let (Extra::Partner(fi), NodeState::Device { power, freq, int, init }) = (&node.extra, state) else {
+                return;
+            };
+            let Some(frame) = sinks.partners.get_mut(*fi) else {
+                return;
+            };
+            drive_channels(p.profile(), &p.channels, ins, &mut frame.channels, (power, freq, int), init);
         }
         NodeKind::Frame(_) | NodeKind::Group(_) | NodeKind::Missing(_) => {}
     }

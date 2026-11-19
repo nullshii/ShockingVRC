@@ -131,9 +131,45 @@ pub const COYOTE_V3: DeviceProfile = DeviceProfile {
     ],
 };
 
-pub fn profile(_id: &str) -> &'static DeviceProfile {
-    &COYOTE_V3
+pub fn profile(id: &str) -> &'static DeviceProfile {
+    if id == PARTNER_COYOTE.id {
+        &PARTNER_COYOTE
+    } else {
+        &COYOTE_V3
+    }
 }
+
+const PARTNER_GROUPS: &[PinGroupSpec] = &[
+    COYOTE_GROUPS[0],
+    COYOTE_GROUPS[1],
+    COYOTE_GROUPS[2],
+    PinGroupSpec {
+        key: "limit_max",
+        label: "Max",
+        role: PinRole::LimitMax,
+        unit: "0–200",
+        default: 200.0,
+        range: (0.0, 200.0),
+        expandable: false,
+    },
+];
+
+pub const PARTNER_COYOTE: DeviceProfile = DeviceProfile {
+    id: "partner-coyote",
+    name: "Partner Coyote",
+    channels: &[
+        ChannelSpec {
+            key: "a",
+            label: "Channel A",
+            groups: PARTNER_GROUPS,
+        },
+        ChannelSpec {
+            key: "b",
+            label: "Channel B",
+            groups: PARTNER_GROUPS,
+        },
+    ],
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FreqMode {
@@ -285,6 +321,19 @@ pub struct DeviceFrame {
 }
 
 impl DeviceFrame {
+    pub fn zeroed(&mut self) {
+        self.channels = [ChannelFrame::default(); MAX_CHANNELS];
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartnerFrame {
+    pub node: super::model::NodeId,
+    pub slot: u8,
+    pub channels: [ChannelFrame; MAX_CHANNELS],
+}
+
+impl PartnerFrame {
     pub fn zeroed(&mut self) {
         self.channels = [ChannelFrame::default(); MAX_CHANNELS];
     }
