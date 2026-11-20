@@ -618,6 +618,7 @@ mod tests {
             device_slots: Arc::new(RwLock::new(slots)),
             alarm,
             graph: rt.clone(),
+            remote: Default::default(),
         });
         let task = rt.spawn(Arc::clone(&state));
         tokio::time::sleep(Duration::from_millis(700)).await;

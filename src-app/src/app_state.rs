@@ -6,6 +6,7 @@ use shocking_vrc_core::AvatarScanner;
 use shocking_vrc_core::cli::{AlarmController, CliConfig, CliEngine, CliStopHandle};
 
 use crate::graph_runtime::GraphRuntime;
+use crate::remote_runtime::RemoteRuntime;
 
 #[derive(Debug, Clone)]
 pub struct DeviceSlotInfo {
@@ -45,6 +46,7 @@ pub struct AppState {
     pub device_slots: Arc<RwLock<Vec<DeviceSlot>>>,
     pub alarm: AlarmController,
     pub graph: GraphRuntime,
+    pub remote: RemoteRuntime,
 }
 
 impl AppState {

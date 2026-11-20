@@ -15,6 +15,7 @@ use crate::device_config;
 use crate::graph_runtime::GraphRuntime;
 use crate::graph_store;
 use crate::prefs::{CONFIG_FILE, load_config_from_file, load_ui_prefs};
+use crate::remote_runtime::RemoteRuntime;
 
 #[derive(Debug, Clone)]
 pub struct SessionOptions {
@@ -22,6 +23,7 @@ pub struct SessionOptions {
     pub scan_timeout: u64,
     pub skip_update_check: bool,
     pub mode: Option<EngineMode>,
+    pub allow_remote: bool,
 }
 
 impl Default for SessionOptions {
@@ -31,6 +33,7 @@ impl Default for SessionOptions {
             scan_timeout: 8,
             skip_update_check: false,
             mode: None,
+            allow_remote: false,
         }
     }
 }
@@ -163,6 +166,7 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
 
     let prefs = load_ui_prefs();
     let mode = opts.mode.unwrap_or(prefs.mode);
+    shocking_vrc_core::graph::kind::set_remote_nodes_enabled(prefs.remote_enabled && opts.allow_remote);
     let loaded = graph_store::load_graph();
     for note in &loaded.notes {
         log::warn!("[graph] {note}");
@@ -183,8 +187,17 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
         device_slots: Arc::new(RwLock::new(Vec::new())),
         alarm,
         graph,
+        remote: RemoteRuntime::new(
+            crate::remote_runtime::load_settings(),
+            shocking_vrc_core::graph::Graph::default(),
+            prefs.auto_save,
+        ),
     });
     state.graph.spawn(Arc::clone(&state));
+    if prefs.remote_enabled && opts.allow_remote {
+        state.remote.set_pending_link(crate::remote_runtime::link_from_args());
+        state.remote.enable(&state);
+    }
 
     log::info!("[ble] Searching for DGLab Coyote V3 in background...");
     spawn_ble_coordinator(Arc::clone(&state), scanner, opts.scan_timeout);
@@ -194,6 +207,7 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
 
 pub async fn shutdown_session(state: &Arc<AppState>) {
     state.graph.flush_on_exit();
+    state.remote.shutdown();
     state.disconnect_all();
     state.scanner.stop().await;
     tokio::time::sleep(Duration::from_millis(600)).await;

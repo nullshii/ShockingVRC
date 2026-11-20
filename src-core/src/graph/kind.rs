@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::curve::Curve;
 use super::device::{self, ChannelParams, DeviceBinding};
-use super::draw::{DrawZoneParams, FaderParams, SegmentPainterParams, ShapeFillParams, StampParams, XyPadParams};
+pub use super::draw::{DrawZoneParams, FaderParams, SegmentPainterParams, ShapeFillParams, StampParams, XyPadParams};
 use super::model::Graph;
 
 static REMOTE_NODES: AtomicBool = AtomicBool::new(false);

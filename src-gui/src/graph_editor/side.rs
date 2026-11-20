@@ -245,7 +245,7 @@ fn inspector(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<G
         .filter(|e| e.to.node == id)
         .map(|e| e.to.pin.clone())
         .collect();
-    let probe = super::node_probe(&env.snap.graph.probe, &ed.path, &original);
+    let probe = super::node_probe(&env.graph.probe, &ed.path, &original);
     let mut enter = false;
     let mut ungroup = false;
 
@@ -357,7 +357,7 @@ fn inspector(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<G
                 });
             }
         }
-        for issue in env.snap.graph.issues.iter().filter(|i| i.node == Some(id)) {
+        for issue in env.graph.issues.iter().filter(|i| i.node == Some(id)) {
             ui.add_space(4.0);
             let c = match issue.severity {
                 Severity::Error => pal.error,
@@ -394,7 +394,7 @@ fn summary(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
             "Graph",
             Some(&format!("{} node(s) · {} wire(s)", scope.nodes.len(), scope.edges.len())),
         );
-        let g = &env.snap.graph;
+        let g = env.graph;
         if g.panic {
             ui.label(
                 egui::RichText::new("PANIC — every device is held at 0")
@@ -449,7 +449,7 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
                 .max_height(160.0)
                 .id_salt("osc_params")
                 .show(ui, |ui| {
-                    let params = env.snap.graph.seen_params.clone();
+                    let params = env.graph.seen_params.clone();
                     if params.is_empty() {
                         empty_note(ui, pal, "nothing yet — VRChat sends parameters once connected");
                     }
@@ -772,6 +772,73 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
             num_row(ui, pal, "Window s", &mut p.window_s, 0.25, 10.0);
         }
         NodeKind::Device(d) => device_params(ui, ed, env, d),
+        NodeKind::PartnerDevice(p) => {
+            let mut slot = p.slot as u32 + 1;
+            if int_row(ui, pal, "Partner device", &mut slot, 1, 8) {
+                p.slot = (slot.max(1) - 1) as u8;
+            }
+            let caps = env.graph.caps;
+            w::dim(
+                ui,
+                pal,
+                format!("Partner caps now: A {} · B {} — their limits always win.", caps[0], caps[1]),
+            );
+            w::dim(ui, pal, "Power 0–1 scales up to Max; values above the cap are shaded.");
+        }
+        NodeKind::DrawZone(p) => {
+            num_row(ui, pal, "Loop length s", &mut p.length_s, 0.25, 30.0);
+            if w::button(ui, pal, "Clear drawing").clicked() {
+                p.points.clear();
+            }
+            w::dim(ui, pal, "Switch zone / pen in the canvas corner. Speed and reset are inputs.");
+        }
+        NodeKind::ShapeFill(p) => {
+            pick_enum(ui, pal, &shocking_vrc_core::graph::draw::FillShape::ALL, &mut p.shape, |s| {
+                s.label().to_string()
+            });
+            num_row(ui, pal, "Loop length s", &mut p.length_s, 0.25, 30.0);
+            int_row(ui, pal, "Seed", &mut p.seed, 1, 9999);
+            w::dim(ui, pal, "Drag in the canvas to set the zone. Rate, duty and jitter are inputs.");
+        }
+        NodeKind::StampPattern(p) => {
+            num_row(ui, pal, "Loop length s", &mut p.length_s, 0.25, 30.0);
+            let snaps = [0.0, 0.125, 0.0625, 0.03125];
+            let sel = snaps.iter().position(|s| (s - p.snap).abs() < 1e-4).unwrap_or(2);
+            if let Some(i) = seg_row(ui, pal, "Snap", &["off", "1/8", "1/16", "1/32"], sel) {
+                p.snap = snaps[i];
+            }
+            for s in &mut p.stamps {
+                text_row(ui, pal, "Stamp", &mut s.name, "name");
+            }
+            ui.horizontal(|ui| {
+                if w::button(ui, pal, "Clear lane").clicked() {
+                    p.lane.clear();
+                }
+                w::dim(ui, pal, format!("{} placed", p.lane.len()));
+            });
+            w::dim(ui, pal, "Ctrl+C over a stamp copies it; Ctrl+V over the lane pastes.");
+        }
+        NodeKind::XyPad(p) => {
+            num_row(ui, pal, "X (freq)", &mut p.x, 0.0, 1.0);
+            num_row(ui, pal, "Y (intensity)", &mut p.y, 0.0, 1.0);
+            toggle_row(ui, pal, "Spring", &mut p.spring, "Y drops to 0 on release");
+        }
+        NodeKind::SegmentPainter(_) => {
+            w::dim(
+                ui,
+                pal,
+                "Paint the bars in the node. Wire A/B freq 1–4 and int 1–4 into a Partner Device \
+                 with F×4 / I×4 expanded.",
+            );
+        }
+        NodeKind::Fader(p) => {
+            num_row(ui, pal, "Level", &mut p.level, 0.0, 1.0);
+            num_row(ui, pal, "Attack s", &mut p.attack, 0.0, 10.0);
+            num_row(ui, pal, "Decay s", &mut p.decay, 0.0, 10.0);
+            num_row(ui, pal, "Sustain", &mut p.sustain, 0.0, 1.0);
+            num_row(ui, pal, "Release s", &mut p.release, 0.0, 10.0);
+            w::dim(ui, pal, "Hold the button in the node, or wire a bool into Trigger.");
+        }
         NodeKind::Missing(m) => {
             ui.label(
                 egui::RichText::new(format!("Unknown type '{}' — saved back exactly as loaded.", m.type_name))
@@ -911,7 +978,7 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
         }
     }
     ui.add_space(space::ITEM_GAP);
-    let caps = env.snap.graph.caps;
+    let caps = env.graph.caps;
     ui.label(
         egui::RichText::new(format!(
             "Limit pins are requests: the effective max is never above the Graph cap ({} / {}) set in Setup.",
@@ -950,6 +1017,10 @@ fn presets(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
     let needle = ed.preset_filter.to_lowercase();
     let visible: Vec<&GraphPresetEntry> = entries
         .iter()
+        .filter(|e| {
+            let partner = e.preset.graph.nodes.iter().any(|n| n.kind.is_partner_device());
+            partner == env.remote
+        })
         .filter(|e| !ed.preset_mine_only || e.user)
         .filter(|e| {
             needle.is_empty()
@@ -1179,7 +1250,7 @@ fn devices(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
                 ed.path.clear();
                 ed.focus_request = Some(id);
             }
-            let out = env.snap.graph.outputs.iter().find(|o| o.mac.eq_ignore_ascii_case(mac));
+            let out = env.graph.outputs.iter().find(|o| o.mac.eq_ignore_ascii_case(mac));
             for (ci, label) in ["A", "B"].iter().enumerate() {
                 let s = out.map(|o| o.channels[ci].safe).unwrap_or_default();
                 let hz = raw_to_hz(s.freq[3].max(10));
@@ -1200,7 +1271,7 @@ fn devices(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
             ui.add_space(2.0);
         }
         ui.add_space(space::ITEM_GAP);
-        let caps = env.snap.graph.caps;
+        let caps = env.graph.caps;
         w::dim(
             ui,
             pal,

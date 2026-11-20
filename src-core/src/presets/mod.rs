@@ -20,6 +20,8 @@ pub struct PresetRef {
     #[serde(default)]
     pub description: String,
     pub file: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub category: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

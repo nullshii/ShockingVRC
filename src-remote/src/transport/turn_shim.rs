@@ -50,7 +50,7 @@ pub fn stream_frame_len(buf: &[u8]) -> Option<usize> {
 pub fn pad_for_stream(datagram: &[u8]) -> Vec<u8> {
     let mut out = datagram.to_vec();
     if datagram.first().is_some_and(|b| b >> 6 == 1) {
-        while out.len() % 4 != 0 {
+        while !out.len().is_multiple_of(4) {
             out.push(0);
         }
     }
@@ -174,8 +174,7 @@ async fn relay(
     let down = async {
         let mut acc: Vec<u8> = Vec::with_capacity(4096);
         let mut chunk = vec![0u8; 16 * 1024];
-        loop {
-            let Ok(n) = rd.read(&mut chunk).await else { break };
+        while let Ok(n) = rd.read(&mut chunk).await {
             if n == 0 {
                 break;
             }

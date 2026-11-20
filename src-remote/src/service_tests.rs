@@ -51,6 +51,112 @@ fn frame(power: f32) -> Vec<SlotFrame> {
     }]
 }
 
+async fn timed_session(secs: u64) -> (RemoteService, RemoteService, u64) {
+    let receiver = reachable("Receiver").await;
+    let invite = receiver
+        .create_invite(InviteRequest {
+            role: OfferedRole::Receiver,
+            lifetime: Lifetime::Minutes10,
+            passphrase: None,
+            label: String::new(),
+        })
+        .unwrap();
+    let controller = RemoteService::start(config("Controller"), None);
+    controller.connect_link(&invite.link, None).unwrap();
+    until("the consent prompt", Duration::from_secs(15), || {
+        receiver.status().consent.is_some()
+    })
+    .await;
+    let expires = crate::store::now_unix() + secs;
+    receiver.set_invite_expiry(&invite.id, expires);
+    receiver.answer_consent(ConsentAnswer::AcceptOnce);
+    until("the session", Duration::from_secs(10), || {
+        receiver.status().receiving().is_some() && controller.status().controlling().is_some()
+    })
+    .await;
+    (receiver, controller, expires * 1000)
+}
+
+async fn assert_ends_on_time(receiver: &RemoteService, controller: &RemoteService, deadline_ms: u64) {
+    until("the time limit", Duration::from_secs(15), || {
+        receiver.status().sessions.is_empty() && controller.status().sessions.is_empty()
+    })
+    .await;
+    let ended = crate::store::now_unix_ms();
+    assert!(ended >= deadline_ms, "ended {} ms early", deadline_ms - ended);
+    assert!(ended < deadline_ms + 500, "ran {} ms past the limit", ended - deadline_ms);
+    assert!(receiver.export_log().contains("time is up"));
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert!(receiver.status().sessions.is_empty(), "nothing comes back after the limit");
+    assert!(controller.status().sessions.is_empty());
+    assert!(controller.status().connecting.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_timed_session_ends_when_its_invite_expires() {
+    let (receiver, controller, deadline_ms) = timed_session(3).await;
+    let s = controller.status();
+    assert_eq!(
+        s.controlling().unwrap().ends_at_ms,
+        Some(deadline_ms),
+        "the controller knows the limit"
+    );
+    assert_ends_on_time(&receiver, &controller, deadline_ms).await;
+    receiver.shutdown();
+    controller.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reconnecting_does_not_extend_a_timed_session() {
+    let (receiver, controller, deadline_ms) = timed_session(5).await;
+    let first = receiver.status().receiving().unwrap().id;
+    controller.drop_connections();
+    until("the resumed session", Duration::from_secs(10), || {
+        receiver.status().receiving().is_some_and(|s| s.id != first)
+    })
+    .await;
+    assert_eq!(
+        receiver.status().receiving().unwrap().ends_at_ms,
+        Some(deadline_ms),
+        "a resumed session keeps the original limit"
+    );
+    assert_ends_on_time(&receiver, &controller, deadline_ms).await;
+    receiver.shutdown();
+    controller.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_resume_after_the_limit_is_refused() {
+    let (receiver, controller, deadline_ms) = timed_session(4).await;
+    let port: u16 = receiver
+        .status()
+        .listening
+        .and_then(|a| a.rsplit(':').next().and_then(|p| p.parse().ok()))
+        .unwrap();
+    receiver.stop_network();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    controller.drop_connections();
+    let wait = deadline_ms.saturating_sub(crate::store::now_unix_ms()) + 300;
+    tokio::time::sleep(Duration::from_millis(wait)).await;
+    receiver.set_config(RemoteConfig {
+        lan_port: port,
+        public_addr: format!("127.0.0.1:{port}"),
+        ..config("Receiver")
+    });
+    until("the late resume to be refused", Duration::from_secs(10), || {
+        receiver.export_log().contains("session expired")
+    })
+    .await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(
+        receiver.status().sessions.is_empty(),
+        "a late resume does not reopen the session"
+    );
+    assert!(controller.status().sessions.is_empty());
+    receiver.shutdown();
+    controller.shutdown();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_controller_pairs_over_the_lan_and_drives_the_receiver() {
     let receiver = reachable("Receiver").await;
@@ -213,4 +319,99 @@ async fn indefinite_pairing_needs_a_passphrase_and_then_trusts() {
     .await;
     receiver.shutdown();
     controller.shutdown();
+}
+
+fn vds() -> Option<String> {
+    std::env::var("SVRC_VDS").ok().filter(|v| !v.is_empty())
+}
+
+fn internet(name: &str, vds: &str) -> RemoteConfig {
+    RemoteConfig {
+        mode: ConnectionMode::Internet,
+        name: name.into(),
+        vds_url: vds.into(),
+        lan_port: 0,
+        jitter_ms: 0,
+        ..RemoteConfig::default()
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore]
+async fn two_apps_pair_through_the_rendezvous_server() {
+    let Some(vds) = vds() else { return };
+    let receiver = RemoteService::start(internet("Receiver", &vds), None);
+    until("the receiver to be online", Duration::from_secs(10), || {
+        matches!(receiver.status().vds, crate::service::VdsState::Online)
+    })
+    .await;
+    let invite = receiver
+        .create_invite(InviteRequest {
+            role: OfferedRole::Receiver,
+            lifetime: Lifetime::Minutes10,
+            passphrase: None,
+            label: String::new(),
+        })
+        .unwrap();
+    let controller = RemoteService::start(internet("Controller", &vds), None);
+    controller.connect_link(&invite.link, None).unwrap();
+    until("the consent prompt", Duration::from_secs(30), || {
+        receiver.status().consent.is_some()
+    })
+    .await;
+    receiver.answer_consent(ConsentAnswer::AcceptOnce);
+    until("the session", Duration::from_secs(15), || {
+        controller.status().controlling().is_some()
+    })
+    .await;
+    assert_eq!(controller.status().controlling().unwrap().path, crate::transport::PathKind::P2p);
+    let mut got = None;
+    let start = Instant::now();
+    while got.is_none() && start.elapsed() < Duration::from_secs(5) {
+        controller.send_frame(frame(0.7));
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        got = receiver.take_inbound();
+    }
+    assert_eq!(got.expect("frames over WebRTC").slots[0].a.unwrap().p, [0.7; 4]);
+    controller.stop_all("done");
+    until("the end", Duration::from_secs(5), || receiver.status().sessions.is_empty()).await;
+    receiver.shutdown();
+    controller.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore]
+async fn web_panel_host() {
+    let Some(vds) = vds() else { return };
+    let receiver = RemoteService::start(internet("Web test receiver", &vds), None);
+    receiver.set_policy(PolicySnapshot {
+        slots: vec![SlotInfo {
+            slot: 0,
+            name: "Coyote".into(),
+        }],
+        ..PolicySnapshot::default()
+    });
+    until("online", Duration::from_secs(10), || {
+        matches!(receiver.status().vds, crate::service::VdsState::Online)
+    })
+    .await;
+    let code = receiver.create_web_code(Lifetime::Minutes10).await.unwrap();
+    println!("WEB CODE {code}");
+    let start = Instant::now();
+    let mut frames = 0u32;
+    while start.elapsed() < Duration::from_secs(240) {
+        if receiver.status().consent.is_some() {
+            println!("CONSENT {:?}", receiver.status().consent);
+            receiver.answer_consent(ConsentAnswer::AcceptOnce);
+        }
+        if let Some(f) = receiver.take_inbound() {
+            frames += 1;
+            if frames % 40 == 1 {
+                println!("FRAME #{frames} {:?}", f.slots.first().and_then(|s| s.a));
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    println!("LOG {}", receiver.export_log());
+    receiver.shutdown();
 }

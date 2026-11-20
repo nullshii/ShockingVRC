@@ -18,6 +18,10 @@ target/
 cli_config.json
 alarm.json
 shockingvrc_prefs.json
+remote_settings.json
+remote_graph.json
+remote_trust.json
+remote_session_log.txt
 devices/
 presets/zones/
 

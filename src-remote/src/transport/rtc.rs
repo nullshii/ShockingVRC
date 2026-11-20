@@ -59,6 +59,7 @@ pub struct IceServer {
 pub struct IceConfig {
     pub servers: Vec<IceServer>,
     pub relay_only: bool,
+    pub tls_pin: Option<String>,
 }
 
 impl IceConfig {
@@ -85,6 +86,7 @@ impl IceConfig {
                 .filter(|s| !s.urls.is_empty())
                 .collect(),
             relay_only: false,
+            tls_pin: self.tls_pin.clone(),
         }
     }
 }
@@ -99,7 +101,7 @@ async fn prepare_servers(cfg: &IceConfig) -> (Vec<RTCIceServer>, Vec<TurnShim>) 
             let tcp = lower.contains("transport=tcp");
             let secure = lower.starts_with("turns:");
             if lower.starts_with("turn") && (tcp || secure) {
-                match TurnShim::start(url).await {
+                match TurnShim::start_pinned(url, cfg.tls_pin.clone()).await {
                     Ok(shim) => {
                         urls.push(shim.local_url());
                         shims.push(shim);
@@ -451,6 +453,7 @@ mod tests {
                 credential: "c".into(),
             }],
             relay_only: false,
+            tls_pin: None,
         };
         assert!(cfg.has_turn());
         let p2p = cfg.without_turn();

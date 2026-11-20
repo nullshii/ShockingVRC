@@ -73,13 +73,19 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> Stream for T {}
 
 type Ws = tokio_tungstenite::WebSocketStream<Box<dyn Stream>>;
 
+fn http_client(pin: Option<&str>) -> io::Result<std::sync::Arc<rustls::ClientConfig>> {
+    let mut cfg = (*crate::tls::client_for(pin).map_err(io_err)?).clone();
+    cfg.alpn_protocols = vec![b"http/1.1".to_vec()];
+    Ok(std::sync::Arc::new(cfg))
+}
+
 async fn open(addr: &VdsAddr, pin: Option<&str>) -> io::Result<Ws> {
     let tcp = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((addr.host.as_str(), addr.port)))
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "rendezvous server timed out"))??;
     let _ = tcp.set_nodelay(true);
     let stream: Box<dyn Stream> = if addr.secure {
-        let cfg = crate::tls::client_for(pin).map_err(io_err)?;
+        let cfg = http_client(pin)?;
         let name = match addr.host.parse::<IpAddr>() {
             Ok(ip) => rustls::pki_types::ServerName::IpAddress(ip.into()),
             Err(_) => rustls::pki_types::ServerName::try_from(addr.host.clone()).map_err(io_err)?,
@@ -98,7 +104,7 @@ async fn open(addr: &VdsAddr, pin: Option<&str>) -> io::Result<Ws> {
     Ok(ws)
 }
 
-fn parse_ice(v: &Value) -> IceConfig {
+fn parse_ice(v: &Value, pin: Option<&str>) -> IceConfig {
     let servers = v
         .get("servers")
         .and_then(|s| serde_json::from_value::<Vec<IceServer>>(s.clone()).ok())
@@ -106,6 +112,7 @@ fn parse_ice(v: &Value) -> IceConfig {
     IceConfig {
         servers,
         relay_only: false,
+        tls_pin: pin.map(str::to_string),
     }
 }
 
@@ -210,7 +217,7 @@ impl Signaler for PeerSignaler {
         if self.ip.is_empty() {
             format!("vds:{}", self.peer)
         } else {
-            self.ip.clone()
+            format!("{}|vds:{}", self.ip, self.peer)
         }
     }
 }
@@ -228,7 +235,7 @@ pub async fn join(addr: &VdsAddr, pin: Option<&str>, room: &str) -> io::Result<(
         .and_then(|p| p.as_str())
         .unwrap_or_default()
         .to_string();
-    let ice = joined.get("ice").map(parse_ice).unwrap_or_default();
+    let ice = joined.get("ice").map(|i| parse_ice(i, pin)).unwrap_or_default();
     let (sig_tx, sig_rx) = mpsc::channel(64);
     let out = conn.tx.clone();
     let mut rx = std::mem::replace(&mut conn.rx, mpsc::channel(1).1);
@@ -301,8 +308,9 @@ impl VdsHost {
     }
 
     pub async fn report_failure(&self, peer: &str) {
-        let id = peer.strip_prefix("vds:").unwrap_or(peer);
-        let _ = self.out.send(json!({"op": "fail", "peer": id})).await;
+        if let Some((_, id)) = peer.rsplit_once("vds:") {
+            let _ = self.out.send(json!({"op": "fail", "peer": id})).await;
+        }
     }
 }
 
@@ -330,7 +338,8 @@ pub async fn host(
         .await
         .map_err(io_err)?;
     let hosting = expect(&mut conn, "hosting").await?;
-    let ice = Arc::new(Mutex::new(hosting.get("ice").map(parse_ice).unwrap_or_default()));
+    let ice = Arc::new(Mutex::new(hosting.get("ice").map(|i| parse_ice(i, pin)).unwrap_or_default()));
+    let owned_pin = pin.map(str::to_string);
 
     let (ev_tx, ev_rx) = mpsc::channel(16);
     let (closed_tx, closed_rx) = mpsc::channel(1);
@@ -400,7 +409,7 @@ pub async fn host(
                 }
                 "ice" => {
                     if let (Some(i), Ok(mut store)) = (v.get("ice"), ice_store.lock()) {
-                        *store = parse_ice(i);
+                        *store = parse_ice(i, owned_pin.as_deref());
                     }
                 }
                 _ => {}

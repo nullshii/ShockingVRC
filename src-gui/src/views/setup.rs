@@ -176,6 +176,20 @@ fn preferences(ui: &mut Ui, cx: &mut Ctx) {
 
         ui.add_space(space::ROW_GAP);
         ui.horizontal(|ui| {
+            w::field_label(ui, pal, "Partner remote", 120.0, true);
+            if let Some(v) = w::toggle(ui, pal, cx.snap.remote_enabled) {
+                cx.send(Command::SetRemoteEnabled(v));
+            }
+            ui.add_space(6.0);
+            w::dim(
+                ui,
+                pal,
+                "Let a partner drive your device, or drive theirs. Off: nothing listens or is sent",
+            );
+        });
+
+        ui.add_space(space::ROW_GAP);
+        ui.horizontal(|ui| {
             w::field_label(ui, pal, "Nickname", 120.0, true);
             let resp = w::text_field(ui, pal, &mut cx.ui_state.nickname, "(no author)", 220.0);
             if resp.lost_focus() {

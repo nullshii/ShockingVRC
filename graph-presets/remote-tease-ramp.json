@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Tease ramp",
+  "description": "Remote: a slow climb over ten seconds that cuts out just before the top",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [40.0, -130.0],
+        "title": "Remote · tease ramp",
+        "kind": {
+          "type": "Frame",
+          "size": [560.0, 96.0],
+          "text": "A hand-drawn ramp in a Draw Zone: it builds for most of the loop and drops to nothing before the peak. Redraw it with the pen to change the shape."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [40.0, 0.0],
+        "kind": {
+          "type": "DrawZone",
+          "length_s": 12.0,
+          "zone": { "t0": 0.0, "t1": 1.0, "lo": 0.0, "hi": 0.8 },
+          "points": [[0.0, 0.05], [0.4, 0.35], [0.7, 0.7], [0.84, 0.95], [0.86, 0.0], [1.0, 0.0]]
+        }
+      },
+      {
+        "id": 3,
+        "pos": [40.0, 260.0],
+        "kind": {
+          "type": "ShapeFill",
+          "length_s": 12.0,
+          "zone": { "t0": 0.0, "t1": 1.0, "lo": 0.2, "hi": 0.6 },
+          "shape": "RampUp",
+          "seed": 1
+        },
+        "title": "Rising pitch",
+        "defaults": { "rate": 0.0833 }
+      },
+      {
+        "id": 4,
+        "pos": [400.0, 0.0],
+        "kind": { "type": "PartnerDevice", "slot": 0 }
+      }
+    ],
+    "edges": [
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 4, "pin": "a.power" } },
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 4, "pin": "b.power" } },
+      { "from": { "node": 3, "pin": "out" }, "to": { "node": 4, "pin": "a.freq" } },
+      { "from": { "node": 3, "pin": "out" }, "to": { "node": 4, "pin": "b.freq" } }
+    ]
+  }
+}

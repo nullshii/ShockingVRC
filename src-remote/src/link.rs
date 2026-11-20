@@ -383,3 +383,58 @@ mod tests {
         assert_eq!(code_room(&n).len(), 6);
     }
 }
+
+#[cfg(test)]
+mod interop {
+    use super::*;
+    use crate::crypto::{TranscriptInput, transcript};
+
+    #[test]
+    #[ignore]
+    fn print_web_fixtures() {
+        let id = Identity::from_secret([9u8; 32]);
+        let body = LinkBody {
+            v: LINK_VERSION,
+            pk: b64(&id.public()),
+            fp: id.fingerprint(),
+            name: "Fixture".into(),
+            routes: RouteHints {
+                room: id.room(),
+                ..RouteHints::default()
+            },
+            invite: "inv-fixture".into(),
+            secret: b64(&[5u8; 32]),
+            role: OfferedRole::Receiver,
+            exp: 0,
+            uses: 1,
+        };
+        let fast = KdfParams { m_kib: 64, t: 2, p: 1 };
+        let t = transcript(&TranscriptInput {
+            binding: b"bind",
+            joiner_nonce: &[1u8; 32],
+            listener_nonce: &[2u8; 32],
+            listener_key: &id.public(),
+            joiner_key: &[],
+            grant: b"invite:inv-fixture",
+        });
+        let key = crate::crypto::secret_key(&[5u8; 32]);
+        let mac = crate::crypto::hmac(&key, &[b"D", &t]);
+        let binding = crate::transport::rtc::dtls_binding(
+            "v=0\r\na=fingerprint:sha-256 aa:bb:cc\r\n",
+            "v=0\r\na=fingerprint:sha-256 11:22\r\n",
+        );
+        let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        println!(
+            "FIXTURE {}",
+            serde_json::json!({
+                "plain": encode_link_with(&body, &id, None, fast),
+                "locked": encode_link_with(&body, &id, Some("open sesame"), fast),
+                "fp": id.fingerprint(),
+                "transcript": hex(&t),
+                "mac": hex(&mac),
+                "binding": hex(&binding),
+                "frame": hex(&crate::protocol::encode(&crate::protocol::Message::Ping { seq: 3, ts: 4 })),
+            })
+        );
+    }
+}

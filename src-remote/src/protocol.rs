@@ -75,6 +75,12 @@ pub struct Welcome {
     pub trusted: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy: Option<PolicySnapshot>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ends_at_ms: u64,
+}
+
+fn is_zero(v: &u64) -> bool {
+    *v == 0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]

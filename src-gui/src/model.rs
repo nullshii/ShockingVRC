@@ -58,10 +58,11 @@ pub enum Section {
     Setup,
     Alarm,
     Graph,
+    Remote,
 }
 
 impl Section {
-    pub const ALL: [Section; 10] = [
+    pub const ALL: [Section; 11] = [
         Section::Status,
         Section::Graph,
         Section::Zones,
@@ -72,6 +73,7 @@ impl Section {
         Section::Presets,
         Section::Setup,
         Section::Alarm,
+        Section::Remote,
     ];
 
     pub fn title(self) -> &'static str {
@@ -86,6 +88,7 @@ impl Section {
             Section::Setup => "Setup",
             Section::Alarm => "Alarm",
             Section::Graph => "Graph",
+            Section::Remote => "Remote",
         }
     }
 
@@ -120,6 +123,7 @@ impl Section {
             Section::Setup => '8',
             Section::Alarm => '9',
             Section::Graph => '2',
+            Section::Remote => '0',
         }
     }
 
@@ -135,6 +139,7 @@ impl Section {
             Section::Setup => "Connection, preferences and the guided tour.",
             Section::Alarm => "Wake-up alarm — drives every connected device.",
             Section::Graph => "Wire avatar inputs through nodes into each device.",
+            Section::Remote => "Pair with a partner: drive their device, let them drive yours, or both.",
         }
     }
 }
@@ -882,7 +887,9 @@ mod tests {
 
     #[test]
     fn each_mode_shows_its_own_sections() {
-        let classic: Vec<Section> = Section::for_mode(EngineMode::Classic).collect();
+        let classic: Vec<Section> = Section::for_mode(EngineMode::Classic)
+            .filter(|s| *s != Section::Remote)
+            .collect();
         let graph: Vec<Section> = Section::for_mode(EngineMode::Graph).collect();
         assert_eq!(classic.len(), 9, "Classic navigation is unchanged");
         assert!(!classic.contains(&Section::Graph));
@@ -891,6 +898,21 @@ mod tests {
             assert!(classic.contains(&s) && graph.contains(&s), "{s:?} is shared");
         }
         assert!(graph.iter().all(|s| !s.classic_only()));
+    }
+
+    #[test]
+    fn the_remote_section_exists_only_while_remote_is_on() {
+        let mut ui = crate::app::UiState::for_test();
+        let shown = |ui: &crate::app::UiState| Section::ALL.iter().filter(|s| ui.section_visible(**s)).count();
+        let before = shown(&ui);
+        assert!(!ui.section_visible(Section::Remote), "no new navigation while remote is off");
+        ui.follow_remote(true);
+        assert!(ui.section_visible(Section::Remote));
+        assert_eq!(shown(&ui), before + 1);
+        ui.section = Section::Remote;
+        ui.follow_remote(false);
+        assert!(!ui.section_visible(Section::Remote));
+        assert_eq!(ui.section, Section::Setup, "leaving the section when remote turns off");
     }
 
     #[test]

@@ -80,6 +80,7 @@ impl Scene {
                     }
                     Section::Alarm => views::alarm::show(ui, &mut cx),
                     Section::Graph => views::graph::show(ui, &mut cx),
+                    Section::Remote => views::remote::show(ui, &mut cx),
                 });
         });
 
@@ -225,6 +226,79 @@ fn every_built_in_graph_preset_renders() {
         let img = scene.render_section_with(Section::Graph, "terminal", |s| s.graph.frame_request = true);
         assert_not_blank(&img, &e.id);
         save(&img, &format!("preset-{}", e.id));
+    }
+}
+
+fn remote_snapshot() -> Snapshot {
+    use shocking_vrc_remote::link::OfferedRole;
+    use shocking_vrc_remote::protocol::{ClientKind, OutputReport, PolicySnapshot, SlotInfo};
+    use shocking_vrc_remote::service::{ConsentRequest, SessionStatus, VdsState};
+    use shocking_vrc_remote::transport::PathKind;
+    let mut snap = fixtures::graph_snapshot();
+    snap.remote_enabled = true;
+    let st = &mut snap.remote.service;
+    st.fingerprint = "9ED5-D7AD-6CBE-F99C".into();
+    st.listening = Some("0.0.0.0:47390".into());
+    st.vds = VdsState::Online;
+    st.sessions = vec![SessionStatus {
+        id: 1,
+        partner: "Partner".into(),
+        fingerprint: "1234-5678-9ABC-DEF0".into(),
+        client: ClientKind::App,
+        path: PathKind::P2p,
+        latency_ms: Some(42),
+        secs: 95,
+        i_control: true,
+        i_receive: true,
+        live: true,
+        partner_policy: Some(PolicySnapshot {
+            slots: vec![SlotInfo {
+                slot: 0,
+                name: "Coyote".into(),
+            }],
+            ..PolicySnapshot::default()
+        }),
+        partner_output: OutputReport {
+            slots: vec![(0, [12, 0])],
+        },
+        ends_at_ms: Some(shocking_vrc_remote::store::now_unix_ms() + 600_000),
+    }];
+    st.consent = Some(ConsentRequest {
+        id: 2,
+        partner: "Someone".into(),
+        fingerprint: "AAAA-BBBB-CCCC-DDDD".into(),
+        client: ClientKind::App,
+        role: OfferedRole::Receiver,
+        known: false,
+    });
+    snap.remote.my_remote_output = vec![(0, [8, 0])];
+    snap.remote_graph.caps = [30, 30];
+    snap
+}
+
+#[test]
+fn the_remote_section_and_tab_render() {
+    let scene = Scene::new(remote_snapshot());
+    let img = scene.render_section(Section::Remote, "terminal");
+    assert_not_blank(&img, "remote section");
+    save(&img, "section-remote");
+
+    for e in shocking_vrc_app::graph_presets::builtin_presets_with(true)
+        .into_iter()
+        .filter(|e| e.id.starts_with("remote-"))
+    {
+        if let Ok(mut d) = scene.bridge.shared.remote_graph_doc.write() {
+            d.graph = std::sync::Arc::new(e.preset.instantiate(&[]));
+            d.rev += 1;
+            d.replaced += 1;
+        }
+        let img = scene.render_section_with(Section::Graph, "terminal", |s| {
+            s.remote_enabled = true;
+            s.graph_tab = shocking_vrc_gui::app::GraphTab::Remote;
+            s.remote_graph.frame_request = true;
+        });
+        assert_not_blank(&img, &e.id);
+        save(&img, &format!("remote-{}", e.id));
     }
 }
 

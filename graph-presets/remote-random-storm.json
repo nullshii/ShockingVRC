@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Random storm",
+  "description": "Remote: a jittery random walk on power with a wandering pitch",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [40.0, -130.0],
+        "title": "Remote · random storm",
+        "kind": {
+          "type": "Frame",
+          "size": [560.0, 96.0],
+          "text": "A random walk between 10 and 80 % with jitter on top, and a slow noise moving the pitch. Lower Jitter for a calmer storm."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [40.0, 0.0],
+        "kind": {
+          "type": "ShapeFill",
+          "length_s": 6.0,
+          "zone": { "t0": 0.0, "t1": 1.0, "lo": 0.1, "hi": 0.8 },
+          "shape": "RandomWalk",
+          "seed": 7
+        },
+        "defaults": { "rate": 3.0, "jitter": 0.3 }
+      },
+      {
+        "id": 3,
+        "pos": [40.0, 300.0],
+        "kind": { "type": "Noise", "kind": "Fractal", "seed": 3 },
+        "defaults": { "rate": 0.6 }
+      },
+      {
+        "id": 4,
+        "pos": [400.0, 0.0],
+        "kind": { "type": "PartnerDevice", "slot": 0 }
+      }
+    ],
+    "edges": [
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 4, "pin": "a.power" } },
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 4, "pin": "b.power" } },
+      { "from": { "node": 3, "pin": "uni" }, "to": { "node": 4, "pin": "a.freq" } },
+      { "from": { "node": 3, "pin": "uni" }, "to": { "node": 4, "pin": "b.freq" } }
+    ]
+  }
+}

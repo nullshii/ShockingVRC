@@ -120,7 +120,30 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
         "fragment-soft-start.json",
         include_str!("../../graph-presets/fragment-soft-start.json"),
     ),
+    (
+        "remote-gentle-wave.json",
+        include_str!("../../graph-presets/remote-gentle-wave.json"),
+    ),
+    (
+        "remote-pulse-ladder.json",
+        include_str!("../../graph-presets/remote-pulse-ladder.json"),
+    ),
+    (
+        "remote-tease-ramp.json",
+        include_str!("../../graph-presets/remote-tease-ramp.json"),
+    ),
+    (
+        "remote-random-storm.json",
+        include_str!("../../graph-presets/remote-random-storm.json"),
+    ),
+    (
+        "remote-heartbeat.json",
+        include_str!("../../graph-presets/remote-heartbeat.json"),
+    ),
+    ("remote-live-pad.json", include_str!("../../graph-presets/remote-live-pad.json")),
 ];
+
+pub const REMOTE_CATEGORY: &str = "remote";
 
 pub fn user_graph_preset_dir() -> PathBuf {
     PathBuf::from(USER_GRAPH_PRESETS_DIR)
@@ -134,6 +157,20 @@ pub fn load_graph_presets() -> Vec<GraphPresetEntry> {
 }
 
 pub fn builtin_presets() -> Vec<GraphPresetEntry> {
+    builtin_presets_with(shocking_vrc_core::graph::kind::remote_nodes_enabled())
+}
+
+pub fn builtin_presets_with(remote: bool) -> Vec<GraphPresetEntry> {
+    let mut entries = builtin_presets_inner(remote);
+    if remote {
+        for e in &mut entries {
+            e.preset.graph.revive_remote();
+        }
+    }
+    entries
+}
+
+fn builtin_presets_inner(remote: bool) -> Vec<GraphPresetEntry> {
     let manifest = match parse_manifest(BUILTIN_MANIFEST) {
         Ok(m) => m,
         Err(e) => {
@@ -144,6 +181,7 @@ pub fn builtin_presets() -> Vec<GraphPresetEntry> {
     manifest
         .presets
         .iter()
+        .filter(|r| remote || r.category != REMOTE_CATEGORY)
         .filter_map(|r| {
             let (_, text) = BUILTIN_FILES.iter().find(|(f, _)| *f == r.file)?;
             match parse_graph_preset(text) {
@@ -297,9 +335,65 @@ mod tests {
     }
 
     #[test]
+    fn remote_presets_are_listed_only_while_remote_is_on() {
+        let off = builtin_presets_with(false);
+        let on = builtin_presets_with(true);
+        assert_eq!(on.len(), BUILTIN_FILES.len(), "manifest and embedded files disagree");
+        let remote: Vec<&str> = on
+            .iter()
+            .filter(|e| e.id.starts_with("remote-"))
+            .map(|e| e.name())
+            .collect();
+        assert_eq!(
+            remote,
+            [
+                "Gentle wave",
+                "Pulse ladder",
+                "Tease ramp",
+                "Random storm",
+                "Heartbeat",
+                "Live pad"
+            ]
+        );
+        assert_eq!(off.len(), on.len() - 6);
+        assert!(off.iter().all(|e| !e.id.starts_with("remote-")));
+    }
+
+    #[test]
+    fn every_remote_preset_drives_a_partner_device() {
+        for e in builtin_presets_with(true)
+            .iter()
+            .filter(|e| e.id.starts_with("remote-"))
+        {
+            assert!(e.preset.graph.missing_types().is_empty(), "{} uses unknown nodes", e.id);
+            let mut g = e.preset.instantiate(&[]);
+            assert_eq!(g.prune_dangling_edges(), 0, "{} has wires to missing pins", e.id);
+            let mut ev = shocking_vrc_core::graph::GraphEvaluator::new(&g);
+            assert!(ev.is_valid(), "{} does not compile", e.id);
+            let errors: Vec<_> = ev.issues().iter().filter(|i| i.severity != Severity::Info).collect();
+            assert!(errors.is_empty(), "{}: {errors:?}", e.id);
+            let mut peak = 0.0f32;
+            for _ in 0..400 {
+                ev.step(0.025);
+                for f in ev.partner_frames() {
+                    peak = peak.max(f.channels[0].power).max(f.channels[1].power);
+                }
+            }
+            assert_eq!(ev.partner_frames().len(), 1, "{}", e.id);
+            if e.id != "remote-live-pad" {
+                assert!(peak > 0.05, "{} never drives the partner ({peak})", e.id);
+            }
+        }
+    }
+
+    #[test]
     fn every_built_in_preset_parses_and_is_listed() {
-        let builtins = builtin_presets();
-        assert_eq!(builtins.len(), BUILTIN_FILES.len(), "manifest and embedded files disagree");
+        let builtins = builtin_presets_with(false);
+        assert_eq!(
+            builtins.len(),
+            BUILTIN_FILES.iter().filter(|(f, _)| !f.starts_with("remote-")).count(),
+            "manifest and embedded files disagree"
+        );
         for e in &builtins {
             assert!(!e.user);
             assert!(e.preset.node_count() > 0, "{} is empty", e.id);

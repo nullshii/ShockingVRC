@@ -58,6 +58,48 @@ pub struct UiState {
     pub graph_caps: [u8; 2],
     pub graph: crate::graph_editor::GraphEditor,
     pub graph_dialog: Option<crate::overlays::graph_dialogs::GraphDialog>,
+    pub remote_enabled: bool,
+    pub remote_graph: crate::graph_editor::GraphEditor,
+    pub graph_tab: GraphTab,
+    pub remote_form: RemoteForm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GraphTab {
+    #[default]
+    Local,
+    Remote,
+}
+
+#[derive(Clone)]
+pub struct RemoteForm {
+    pub role: shocking_vrc_remote::link::OfferedRole,
+    pub lifetime: shocking_vrc_remote::store::Lifetime,
+    pub passphrase: String,
+    pub label: String,
+    pub join_link: String,
+    pub join_pass: String,
+    pub web_lifetime: shocking_vrc_remote::store::Lifetime,
+    pub connection: Option<shocking_vrc_remote::service::RemoteConfig>,
+    pub stop_param: Option<String>,
+    pub show_log: bool,
+}
+
+impl Default for RemoteForm {
+    fn default() -> Self {
+        Self {
+            role: shocking_vrc_remote::link::OfferedRole::Receiver,
+            lifetime: shocking_vrc_remote::store::Lifetime::SingleUse,
+            passphrase: String::new(),
+            label: String::new(),
+            join_link: String::new(),
+            join_pass: String::new(),
+            web_lifetime: shocking_vrc_remote::store::Lifetime::Hour1,
+            connection: None,
+            stop_param: None,
+            show_log: false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -138,6 +180,10 @@ impl UiState {
             graph_caps: p.graph_power_cap,
             graph: crate::graph_editor::GraphEditor::default(),
             graph_dialog: None,
+            remote_enabled: false,
+            remote_graph: crate::graph_editor::GraphEditor::for_remote(),
+            graph_tab: GraphTab::Local,
+            remote_form: RemoteForm::default(),
         }
     }
 
@@ -192,8 +238,22 @@ impl UiState {
         s.in_mode(self.mode)
             && match s {
                 Section::Alarm => self.alarm_section_visible,
+                Section::Remote => self.remote_enabled,
                 _ => true,
             }
+    }
+
+    pub fn follow_remote(&mut self, on: bool) {
+        if self.remote_enabled == on {
+            return;
+        }
+        self.remote_enabled = on;
+        if !on {
+            self.graph_tab = GraphTab::Local;
+            if self.section == Section::Remote {
+                self.section = Section::Setup;
+            }
+        }
     }
 
     pub fn follow_mode(&mut self, mode: EngineMode) {
@@ -318,6 +378,7 @@ impl eframe::App for GuiApp {
         let pal = *self.theme.palette();
 
         let snap = self.bridge.snapshot();
+        self.state.follow_remote(snap.remote_enabled);
         self.state.follow_mode(snap.mode);
         self.state.sync_mod_editor(&snap);
         self.clamp_selections(&snap);
@@ -429,7 +490,7 @@ impl GuiApp {
         if s.mode_confirm.take().is_some() || s.graph_dialog.take().is_some() {
             return;
         }
-        if s.graph.dismiss() {
+        if s.graph.dismiss() || s.remote_graph.dismiss() {
             return;
         }
         if s.preset_delete_confirm.take().is_some() {
@@ -491,6 +552,12 @@ impl GuiApp {
         let (cur, _) = ui.allocate_exact_size(vec2(7.0, 13.0), Sense::hover());
         if blink {
             ui.painter().rect_filled(cur, w::SQUARE, pal.accent);
+        }
+        if snap.remote_enabled {
+            ui.add_space(16.0);
+            if crate::views::remote::topbar_badge(ui, pal, snap, &self.bridge) {
+                self.state.section = Section::Remote;
+            }
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -562,6 +629,7 @@ impl GuiApp {
                         }
                         Section::Alarm => views::alarm::show(ui, &mut cx),
                         Section::Graph => views::graph::show(ui, &mut cx),
+                        Section::Remote => views::remote::show(ui, &mut cx),
                     }
                     ui.add_space(28.0);
                 });
@@ -706,6 +774,9 @@ impl GuiApp {
 
             if snap.alarm_status.phase.is_ringing() {
                 crate::overlays::alarm_ring::show(&ctx, &mut cx);
+            }
+            if snap.remote_enabled {
+                crate::overlays::remote::show(&ctx, &mut cx);
             }
         }
 

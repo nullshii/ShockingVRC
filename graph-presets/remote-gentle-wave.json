@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Gentle wave",
+  "description": "Remote: a slow sine between 15 and 55 % on both of your partner's channels",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [40.0, -130.0],
+        "title": "Remote · gentle wave",
+        "kind": {
+          "type": "Frame",
+          "size": [560.0, 96.0],
+          "text": "Drives your partner, never your own device. One slow wave rises and falls every four seconds; their own cap still applies on top."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [40.0, 0.0],
+        "kind": {
+          "type": "ShapeFill",
+          "length_s": 8.0,
+          "zone": { "t0": 0.0, "t1": 1.0, "lo": 0.15, "hi": 0.55 },
+          "shape": "Sine",
+          "seed": 1
+        },
+        "defaults": { "rate": 0.25 }
+      },
+      {
+        "id": 3,
+        "pos": [40.0, 260.0],
+        "kind": { "type": "Constant", "value": 0.35 },
+        "title": "Pitch"
+      },
+      {
+        "id": 4,
+        "pos": [400.0, 0.0],
+        "kind": { "type": "PartnerDevice", "slot": 0 }
+      }
+    ],
+    "edges": [
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 4, "pin": "a.power" } },
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 4, "pin": "b.power" } },
+      { "from": { "node": 3, "pin": "out" }, "to": { "node": 4, "pin": "a.freq" } },
+      { "from": { "node": 3, "pin": "out" }, "to": { "node": 4, "pin": "b.freq" } }
+    ]
+  }
+}

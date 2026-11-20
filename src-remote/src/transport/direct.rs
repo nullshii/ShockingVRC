@@ -122,6 +122,7 @@ pub async fn listen(
                 };
                 let path = Arc::new(Mutex::new(String::new()));
                 let seen = Arc::clone(&path);
+                #[allow(clippy::result_large_err)]
                 let cb = move |req: &Request, resp: Response| {
                     if let Ok(mut p) = seen.lock() {
                         *p = req.uri().path().to_string();

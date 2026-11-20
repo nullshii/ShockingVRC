@@ -5536,6 +5536,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shocking_vrc_core",
+ "shocking_vrc_remote",
  "tokio",
 ]
 
@@ -5605,6 +5606,7 @@ dependencies = [
  "serde_json",
  "shocking_vrc_app",
  "shocking_vrc_core",
+ "shocking_vrc_remote",
  "tokio",
  "winresource",
 ]

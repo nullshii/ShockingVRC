@@ -28,6 +28,12 @@ pub struct UiPrefs {
     pub mode: EngineMode,
     #[serde(default = "default_graph_power_cap")]
     pub graph_power_cap: [u8; 2],
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub remote_enabled: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 fn default_graph_power_cap() -> [u8; 2] {
@@ -56,6 +62,7 @@ impl Default for UiPrefs {
             spoof_guard: default_spoof_guard(),
             mode: EngineMode::default(),
             graph_power_cap: default_graph_power_cap(),
+            remote_enabled: false,
         }
     }
 }
@@ -112,6 +119,38 @@ mod tests {
         assert_eq!(p.mode, EngineMode::Classic);
         assert_eq!(p.graph_power_cap, [DEFAULT_POWER_CAP; 2]);
         assert!(!p.auto_save);
+    }
+
+    #[test]
+    fn settings_are_unchanged_while_remote_is_off() {
+        let json = serde_json::to_value(UiPrefs::default()).unwrap();
+        let mut keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "alarm_tab",
+                "auto_save",
+                "backdrop_density",
+                "backdrop_speed",
+                "graph_power_cap",
+                "has_seen_tutorial",
+                "mode",
+                "nickname",
+                "skipped_update_version",
+                "spoof_guard",
+                "theme"
+            ],
+            "the prefs file has exactly the pre-remote keys"
+        );
+        let old: UiPrefs = serde_json::from_str(r#"{"auto_save":true}"#).unwrap();
+        assert!(!old.remote_enabled, "remote is off unless turned on");
+        let on = UiPrefs {
+            remote_enabled: true,
+            ..UiPrefs::default()
+        };
+        let back: UiPrefs = serde_json::from_str(&serde_json::to_string(&on).unwrap()).unwrap();
+        assert!(back.remote_enabled);
     }
 
     #[test]

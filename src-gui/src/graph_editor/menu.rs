@@ -41,9 +41,18 @@ pub fn show(ctx: &egui::Context, ed: &mut GraphEditor, env: &Env) {
             None => true,
         })
         .filter(|e| !(!ed.path.is_empty() && e.category == Category::Output && e.label.starts_with("Device")))
+        .filter(|e| {
+            let partner = e.label == "Partner Device";
+            let device = e.category == Category::Output && e.label.starts_with("Device");
+            if env.remote {
+                !device && (!partner || ed.path.is_empty())
+            } else {
+                !partner
+            }
+        })
         .collect();
 
-    let known: Vec<String> = if wire.as_ref().is_none_or(|w| w.output) && ed.path.is_empty() {
+    let known: Vec<String> = if !env.remote && wire.as_ref().is_none_or(|w| w.output) && ed.path.is_empty() {
         let in_graph = |m: &str| ed.doc.device_node_for(m).is_some();
         let mut macs: Vec<String> = env
             .bridge

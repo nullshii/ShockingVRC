@@ -2,7 +2,7 @@ use egui::{Rect, Ui, pos2, vec2};
 
 use shocking_vrc_core::graph::NodeKind;
 
-use crate::app::{Ctx, UiState};
+use crate::app::{Ctx, GraphTab, UiState};
 use crate::bridge::Command;
 use crate::graph_editor::{Env, GraphEditor, canvas, menu, side};
 use crate::overlays::graph_dialogs::GraphDialog;
@@ -11,24 +11,48 @@ use crate::theme::widgets::{self as w, font, space};
 const SIDE_W: f32 = 340.0;
 
 pub fn show(ui: &mut Ui, cx: &mut Ctx) {
+    let remote_on = cx.snap.remote_enabled;
+    if remote_on {
+        let sel = match cx.ui_state.graph_tab {
+            GraphTab::Local => 0,
+            GraphTab::Remote => 1,
+        };
+        if let Some(i) = w::segmented(ui, cx.pal, &["Graph", "Remote"], sel) {
+            cx.ui_state.graph_tab = if i == 0 { GraphTab::Local } else { GraphTab::Remote };
+        }
+        ui.add_space(space::ROW_GAP);
+    }
+    let remote = remote_on && cx.ui_state.graph_tab == GraphTab::Remote;
     let env = Env {
         pal: cx.pal,
         snap: cx.snap,
         bridge: cx.bridge,
+        graph: if remote { &cx.snap.remote_graph } else { &cx.snap.graph },
+        remote,
     };
     let UiState {
-        graph: ed,
+        graph: local_ed,
+        remote_graph: remote_ed,
         graph_dialog,
         nickname,
         ..
     } = &mut *cx.ui_state;
+    let ed = if remote { remote_ed } else { local_ed };
 
     ed.frame_begin(ui.ctx());
-    ed.sync(&env.bridge.shared.graph_doc());
-    ed.record_traces(env.snap);
+    if remote {
+        ed.sync(&env.bridge.shared.remote_graph_doc());
+    } else {
+        ed.sync(&env.bridge.shared.graph_doc());
+    }
+    ed.record_traces(env.graph);
     hotkeys(ui.ctx(), ed, &env);
 
-    toolbar(ui, ed, &env, graph_dialog);
+    if remote {
+        remote_toolbar(ui, ed, &env);
+    } else {
+        toolbar(ui, ed, &env, graph_dialog);
+    }
     ui.add_space(space::ROW_GAP);
 
     let top = ui.cursor().min;
@@ -54,9 +78,79 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
     ed.flush(env.bridge, ui.ctx());
 }
 
+fn add_button(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
+    if w::cta(ui, env.pal, "+ Add")
+        .on_hover_text("Shift+A or right-click on the canvas")
+        .clicked()
+    {
+        let centre = ed.view_centre();
+        let r = ed.canvas_rect;
+        ed.menu = Some(crate::graph_editor::AddMenu {
+            screen: if r.is_finite() {
+                r.left_top() + vec2(12.0, 12.0)
+            } else {
+                pos2(40.0, 140.0)
+            },
+            at: centre,
+            filter: String::new(),
+            from_wire: None,
+            focus: true,
+        });
+    }
+}
+
+fn remote_toolbar(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
+    let pal = env.pal;
+    let st = &env.snap.remote.service;
+    ui.horizontal(|ui| {
+        add_button(ui, ed, env);
+        if w::button_enabled(ui, pal, "Undo", ed.can_undo()).clicked() {
+            ed.undo();
+        }
+        if w::button_enabled(ui, pal, "Redo", ed.can_redo()).clicked() {
+            ed.redo();
+        }
+        ui.add_space(6.0);
+        if w::button(ui, pal, "Save")
+            .on_hover_text("Write remote_graph.json now")
+            .clicked()
+        {
+            ed.flush(env.bridge, ui.ctx());
+            env.bridge.send(Command::SaveRemoteGraph);
+        }
+        if w::button(ui, pal, "Load")
+            .on_hover_text("Reload remote_graph.json (undoable)")
+            .clicked()
+        {
+            env.bridge.send(Command::ReloadRemoteGraph);
+        }
+        ui.add_space(6.0);
+        if w::button(ui, pal, "Frame").on_hover_text("F").clicked() {
+            canvas::frame_all(ed);
+        }
+        let snap_on = ed.snap_grid;
+        if let Some(i) = w::segmented(ui, pal, &["Snap", "Free"], if snap_on { 0 } else { 1 }) {
+            ed.snap_grid = i == 0;
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let connected = !st.sessions.is_empty();
+            if w::danger_button(ui, pal, "STOP REMOTE", connected).clicked() {
+                env.bridge.send(Command::RemoteStop);
+            }
+            ui.add_space(8.0);
+            let (text, color) = match st.controlling() {
+                Some(s) => (format!("driving {} · {}", s.partner, s.path.label()), pal.success),
+                None if !env.graph.valid && env.graph.tick > 0 => ("graph invalid — sends 0".into(), pal.error),
+                None => ("not connected — preview only".to_string(), pal.dim),
+            };
+            ui.label(egui::RichText::new(text).font(font::small()).color(color));
+        });
+    });
+}
+
 fn toolbar(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<GraphDialog>) {
     let pal = env.pal;
-    let g = &env.snap.graph;
+    let g = env.graph;
     ui.horizontal(|ui| {
         if w::cta(ui, pal, "+ Add")
             .on_hover_text("Shift+A or right-click on the canvas")

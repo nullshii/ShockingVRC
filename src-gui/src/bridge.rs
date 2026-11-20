@@ -5,6 +5,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use shocking_vrc_app::app_state::{AppState, DeviceSlotInfo};
 use shocking_vrc_app::graph_runtime::GraphStatus;
+use shocking_vrc_app::remote_runtime::{self as remote_rt, RemoteRuntimeStatus, RemoteSettings};
 use shocking_vrc_app::{device_config, graph_presets, graph_store, prefs, presets as preset_store, zone_presets};
 use shocking_vrc_core::cli::{
     AggregationMode, AlarmChannels, AlarmConfig, AlarmStatus, ChannelConfig, CliConfig, CliStatus, ContactMode,
@@ -14,6 +15,9 @@ use shocking_vrc_core::graph::{Graph, GraphPreset, GraphPresetEntry};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 use shocking_vrc_core::presets::{ChannelPreset, PresetEntry, ZonePresetEntry};
 use shocking_vrc_core::{DownloadProgress, ReleaseInfo, ZoneEvent};
+use shocking_vrc_remote::link::OfferedRole;
+use shocking_vrc_remote::service::{ConsentAnswer, InviteRequest};
+use shocking_vrc_remote::store::Lifetime;
 
 use crate::model::{Channel, ModKind};
 
@@ -32,6 +36,10 @@ pub struct Snapshot {
     pub revision: u64,
     pub mode: EngineMode,
     pub graph: GraphStatus,
+    pub remote_enabled: bool,
+    pub remote: RemoteRuntimeStatus,
+    pub remote_graph: GraphStatus,
+    pub remote_settings: RemoteSettings,
 }
 
 impl Snapshot {
@@ -54,6 +62,10 @@ impl Snapshot {
             revision: 0,
             mode: EngineMode::Classic,
             graph: GraphStatus::default(),
+            remote_enabled: false,
+            remote: RemoteRuntimeStatus::default(),
+            remote_graph: GraphStatus::default(),
+            remote_settings: RemoteSettings::default(),
         }
     }
 
@@ -129,6 +141,13 @@ pub struct GraphPresetState {
 }
 
 #[derive(Clone, Default)]
+pub struct RemoteUiShared {
+    pub link: Option<String>,
+    pub code: Option<String>,
+    pub pending_link: Option<String>,
+}
+
+#[derive(Clone, Default)]
 pub struct UpdateState {
     pub available: Option<ReleaseInfo>,
     pub checking: bool,
@@ -149,6 +168,8 @@ pub struct Shared {
     pub graph_doc: RwLock<GraphDocShared>,
     pub graph_presets: RwLock<GraphPresetState>,
     pub known_devices: RwLock<Vec<String>>,
+    pub remote_graph_doc: RwLock<GraphDocShared>,
+    pub remote_ui: RwLock<RemoteUiShared>,
 }
 
 #[derive(Clone, Debug)]
@@ -176,11 +197,21 @@ impl Shared {
             graph_doc: RwLock::new(GraphDocShared::default()),
             graph_presets: RwLock::new(GraphPresetState::default()),
             known_devices: RwLock::new(Vec::new()),
+            remote_graph_doc: RwLock::new(GraphDocShared::default()),
+            remote_ui: RwLock::new(RemoteUiShared::default()),
         }
     }
 
     pub fn graph_doc(&self) -> GraphDocShared {
         self.graph_doc.read().map(|d| d.clone()).unwrap_or_default()
+    }
+
+    pub fn remote_graph_doc(&self) -> GraphDocShared {
+        self.remote_graph_doc.read().map(|d| d.clone()).unwrap_or_default()
+    }
+
+    pub fn remote_ui(&self) -> RemoteUiShared {
+        self.remote_ui.read().map(|d| d.clone()).unwrap_or_default()
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -273,6 +304,33 @@ pub enum Command {
     StartUpdateDownload,
     SkipUpdateVersion,
     DismissUpdate,
+
+    SetRemoteEnabled(bool),
+    SetRemoteSettings(Box<RemoteSettings>),
+    SetRemoteGraph(Box<Graph>),
+    SaveRemoteGraph,
+    ReloadRemoteGraph,
+    RemoteCreateInvite {
+        role: OfferedRole,
+        lifetime: Lifetime,
+        passphrase: String,
+        label: String,
+    },
+    RemoteCreateWebCode(Lifetime),
+    RemoteRevokeInvite(String),
+    RemoteRevokePartner(String),
+    RemoteAutoAccept(String, bool),
+    RemoteConnectLink {
+        link: String,
+        passphrase: String,
+    },
+    RemoteConnectPartner(String),
+    RemoteConsent(ConsentAnswer),
+    RemoteStop,
+    RemoteStopSession(u64),
+    RemoteExportLog,
+    RemoteRegisterScheme,
+    RemoteDismissResult,
 }
 
 impl Command {
@@ -375,6 +433,9 @@ impl Worker {
         self.reload_zone_presets();
         self.start_preset_refresh();
         self.reload_graph_presets();
+        if let Ok(mut r) = self.shared.remote_ui.write() {
+            r.pending_link = self.state.remote.take_pending_link();
+        }
         if let Ok(mut k) = self.shared.known_devices.write() {
             *k = shocking_vrc_core::ble::known_devices::KnownDeviceList::load()
                 .addresses()
@@ -439,6 +500,10 @@ impl Worker {
             active_device: self.active_device,
             mode: self.state.graph.mode(),
             graph: self.state.graph.status(),
+            remote_enabled: self.state.remote.is_enabled(),
+            remote_graph: GraphStatus::default(),
+            remote: self.state.remote.status(),
+            remote_settings: self.state.remote.settings(),
             revision: self
                 .shared
                 .snapshot
@@ -446,10 +511,48 @@ impl Worker {
                 .map(|s| s.revision.wrapping_add(1))
                 .unwrap_or(0),
         };
+        let mut snap = snap;
+        if snap.remote_enabled {
+            snap.remote_graph = remote_graph_status(&snap);
+        }
         if let Ok(mut slot) = self.shared.snapshot.write() {
             *slot = snap;
         }
         self.publish_graph_doc(false);
+        self.publish_remote_graph_doc(false);
+    }
+
+    fn publish_remote_graph_doc(&self, replaced: bool) {
+        if !self.state.remote.is_enabled() {
+            return;
+        }
+        let rev = self.state.remote.doc_rev();
+        let current = self.shared.remote_graph_doc.read().map(|d| d.rev).unwrap_or(0);
+        if rev == current && !replaced {
+            return;
+        }
+        let (graph, rev) = self.state.remote.graph();
+        if let Ok(mut d) = self.shared.remote_graph_doc.write() {
+            d.graph = Arc::new(graph);
+            d.rev = rev;
+            if replaced {
+                d.replaced = d.replaced.wrapping_add(1);
+            }
+        }
+    }
+
+    fn remote_service(&self) -> Option<shocking_vrc_remote::service::RemoteService> {
+        let svc = self.state.remote.service();
+        if svc.is_none() {
+            self.notify(ToastKind::Error, "Turn on partner remote first");
+        }
+        svc
+    }
+
+    fn remote_ui(&self, f: impl FnOnce(&mut RemoteUiShared)) {
+        if let Ok(mut r) = self.shared.remote_ui.write() {
+            f(&mut r);
+        }
     }
 
     fn publish_graph_doc(&self, replaced: bool) {
@@ -932,6 +1035,127 @@ impl Worker {
             Command::SetGraph(graph) => {
                 self.state.graph.set_graph(*graph);
             }
+            Command::SetRemoteEnabled(on) => {
+                if on {
+                    self.state.remote.enable(&self.state);
+                    let link = self.state.remote.take_pending_link();
+                    self.remote_ui(|r| r.pending_link = r.pending_link.take().or(link));
+                    self.publish_remote_graph_doc(true);
+                } else {
+                    self.state.remote.disable(&self.state);
+                }
+                self.publish_graph_doc(true);
+                self.reload_graph_presets();
+                if let Err(e) = prefs::update_ui_prefs(|p| p.remote_enabled = on) {
+                    log::error!("[prefs] Failed to save: {e}");
+                }
+            }
+            Command::SetRemoteSettings(s) => self.state.remote.set_settings(*s),
+            Command::SetRemoteGraph(graph) => {
+                self.state.remote.set_graph(*graph);
+            }
+            Command::SaveRemoteGraph => match self.state.remote.save_now() {
+                Ok(()) => self.notify(ToastKind::Success, format!("Saved {}", remote_rt::REMOTE_GRAPH_FILE)),
+                Err(e) => self.notify(ToastKind::Error, format!("Save failed: {e}")),
+            },
+            Command::ReloadRemoteGraph => {
+                self.state.remote.load_graph_from_disk();
+                self.publish_remote_graph_doc(true);
+                self.notify(ToastKind::Success, "Remote graph reloaded from disk");
+            }
+            Command::RemoteCreateInvite {
+                role,
+                lifetime,
+                passphrase,
+                label,
+            } => {
+                if let Some(svc) = self.remote_service() {
+                    let req = InviteRequest {
+                        role,
+                        lifetime,
+                        passphrase: Some(passphrase).filter(|p| !p.trim().is_empty()),
+                        label,
+                    };
+                    match svc.create_invite(req) {
+                        Ok(created) => {
+                            self.remote_ui(|r| r.link = Some(created.link));
+                            self.notify(ToastKind::Success, "Invite link created");
+                        }
+                        Err(e) => self.notify(ToastKind::Error, e),
+                    }
+                }
+            }
+            Command::RemoteCreateWebCode(lifetime) => {
+                if let Some(svc) = self.remote_service() {
+                    match svc.create_web_code(lifetime).await {
+                        Ok(code) => self.remote_ui(|r| r.code = Some(code)),
+                        Err(e) => self.notify(ToastKind::Error, e),
+                    }
+                }
+            }
+            Command::RemoteRevokeInvite(id) => {
+                if let Some(svc) = self.remote_service() {
+                    svc.revoke_invite(&id);
+                }
+            }
+            Command::RemoteRevokePartner(pk) => {
+                if let Some(svc) = self.remote_service() {
+                    svc.revoke_partner(&pk);
+                }
+            }
+            Command::RemoteAutoAccept(pk, on) => {
+                if let Some(svc) = self.remote_service() {
+                    svc.set_auto_accept(&pk, on);
+                }
+            }
+            Command::RemoteConnectLink { link, passphrase } => {
+                if let Some(svc) = self.remote_service() {
+                    let pass = Some(passphrase).filter(|p| !p.is_empty());
+                    match svc.connect_link(&link, pass) {
+                        Ok(()) => self.remote_ui(|r| r.pending_link = None),
+                        Err(e) => self.notify(ToastKind::Error, e),
+                    }
+                }
+            }
+            Command::RemoteConnectPartner(pk) => {
+                if let Some(svc) = self.remote_service()
+                    && let Err(e) = svc.connect_partner(&pk)
+                {
+                    self.notify(ToastKind::Error, e);
+                }
+            }
+            Command::RemoteConsent(answer) => {
+                if let Some(svc) = self.state.remote.service() {
+                    svc.answer_consent(answer);
+                }
+            }
+            Command::RemoteStop => self.state.remote.stop_all(&self.state, "Stop remote button"),
+            Command::RemoteStopSession(id) => {
+                if let Some(svc) = self.state.remote.service() {
+                    svc.stop_session(id, "stopped");
+                }
+            }
+            Command::RemoteExportLog => {
+                if let Some(svc) = self.remote_service() {
+                    match std::fs::write(remote_rt::REMOTE_LOG_FILE, svc.export_log()) {
+                        Ok(()) => self.notify(ToastKind::Success, format!("Saved {}", remote_rt::REMOTE_LOG_FILE)),
+                        Err(e) => self.notify(ToastKind::Error, format!("Export failed: {e}")),
+                    }
+                }
+            }
+            Command::RemoteRegisterScheme => {
+                let mut s = self.state.remote.settings();
+                s.scheme_asked = true;
+                self.state.remote.set_settings(s);
+                match remote_rt::register_url_scheme() {
+                    Ok(()) => self.notify(ToastKind::Success, "shockingvrc:// links now open this app"),
+                    Err(e) => self.notify(ToastKind::Error, e),
+                }
+            }
+            Command::RemoteDismissResult => self.remote_ui(|r| {
+                r.link = None;
+                r.code = None;
+            }),
             Command::GraphPanic(on) => self.state.graph.set_ui_panic(on),
             Command::SetGraphCaps(caps) => {
                 let caps = caps.map(|c| c.min(200));
@@ -1244,6 +1468,30 @@ impl Worker {
     }
 }
 
+fn remote_graph_status(snap: &Snapshot) -> GraphStatus {
+    let r = &snap.remote;
+    let caps = r
+        .service
+        .controlling()
+        .and_then(|s| s.partner_policy.as_ref())
+        .map(|p| p.channels.map(|c| if c.allowed { c.cap } else { 0 }))
+        .unwrap_or([0; 2]);
+    GraphStatus {
+        mode: EngineMode::Graph,
+        tick: r.probe.tick,
+        probe: Arc::clone(&r.probe),
+        issues: r.issues.clone(),
+        valid: r.valid,
+        outputs: Vec::new(),
+        panic: false,
+        ui_panic: false,
+        caps,
+        seen_params: Arc::clone(&snap.graph.seen_params),
+        doc_rev: r.doc_rev,
+        notes: Vec::new(),
+    }
+}
+
 pub fn preview_preset(name: &str, author: &str, ch: &ChannelConfig) -> ChannelPreset {
     ChannelPreset::from_channel(name, author, ch)
 }
@@ -1289,6 +1537,7 @@ mod tests {
             }])),
             alarm,
             graph: Default::default(),
+            remote: Default::default(),
         });
 
         Worker {

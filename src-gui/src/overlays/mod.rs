@@ -4,6 +4,7 @@ pub mod confirm;
 pub mod function_picker;
 pub mod graph_dialogs;
 pub mod preset_save;
+pub mod remote;
 pub mod update;
 pub mod zone_presets;
 

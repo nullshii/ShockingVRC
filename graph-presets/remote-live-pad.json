@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Live pad",
+  "description": "Remote: play your partner live — fader for power, XY pad on A, painted segments on B",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [40.0, -150.0],
+        "title": "Remote · live pad",
+        "kind": {
+          "type": "Frame",
+          "size": [640.0, 116.0],
+          "text": "Hold the fader's button to bring power in; release and it fades out. Drag the XY pad for channel A's pitch (X) and intensity (Y). Paint channel B's four segments directly."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [40.0, 0.0],
+        "kind": {
+          "type": "Fader",
+          "level": 0.6,
+          "attack": 0.4,
+          "decay": 0.3,
+          "sustain": 0.8,
+          "release": 1.0,
+          "pressed": false
+        }
+      },
+      {
+        "id": 3,
+        "pos": [40.0, 300.0],
+        "kind": { "type": "XyPad", "x": 0.4, "y": 0.0, "touching": false, "spring": true }
+      },
+      {
+        "id": 4,
+        "pos": [40.0, 620.0],
+        "kind": {
+          "type": "SegmentPainter",
+          "freq": [[0.5, 0.5, 0.5, 0.5], [0.3, 0.5, 0.7, 0.5]],
+          "int": [[1.0, 1.0, 1.0, 1.0], [1.0, 0.5, 1.0, 0.25]]
+        }
+      },
+      {
+        "id": 5,
+        "pos": [460.0, 0.0],
+        "kind": {
+          "type": "PartnerDevice",
+          "slot": 0,
+          "channels": [
+            { "expanded": [] },
+            { "expanded": ["freq", "int"] }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 5, "pin": "a.power" } },
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 5, "pin": "b.power" } },
+      { "from": { "node": 3, "pin": "x" }, "to": { "node": 5, "pin": "a.freq" } },
+      { "from": { "node": 3, "pin": "y" }, "to": { "node": 5, "pin": "a.int" } },
+      { "from": { "node": 4, "pin": "b.freq1" }, "to": { "node": 5, "pin": "b.freq1" } },
+      { "from": { "node": 4, "pin": "b.freq2" }, "to": { "node": 5, "pin": "b.freq2" } },
+      { "from": { "node": 4, "pin": "b.freq3" }, "to": { "node": 5, "pin": "b.freq3" } },
+      { "from": { "node": 4, "pin": "b.freq4" }, "to": { "node": 5, "pin": "b.freq4" } },
+      { "from": { "node": 4, "pin": "b.int1" }, "to": { "node": 5, "pin": "b.int1" } },
+      { "from": { "node": 4, "pin": "b.int2" }, "to": { "node": 5, "pin": "b.int2" } },
+      { "from": { "node": 4, "pin": "b.int3" }, "to": { "node": 5, "pin": "b.int3" } },
+      { "from": { "node": 4, "pin": "b.int4" }, "to": { "node": 5, "pin": "b.int4" } }
+    ]
+  }
+}

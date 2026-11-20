@@ -10,8 +10,9 @@ fn main() -> eframe::Result<()> {
     shocking_vrc_core::update::cleanup_staging_files();
 
     let log_buffer = shocking_vrc_app::logger::init("info");
-    let opts =
+    let mut opts =
         SessionOptions::from_args("Usage: shockingvrc [--port <n>] [--scan-timeout <secs>] [--skip-update-check]");
+    opts.allow_remote = true;
 
     log::info!("ShockingVRC v{} — Hello DG-Lab Users", shocking_vrc_core::VERSION);
 

@@ -608,16 +608,14 @@ fn advance_loop(t: &mut f32, last_reset: &mut bool, reset: bool, speed: f32, len
     *t
 }
 
+type SegHistory = [[f32; SEGMENTS]; MAX_CHANNELS];
+
 fn drive_channels(
     profile: &DeviceProfile,
     channels: &[ChannelParams],
     ins: &[f32],
     out: &mut [ChannelFrame; MAX_CHANNELS],
-    history: (
-        &mut [[f32; SEGMENTS]; MAX_CHANNELS],
-        &mut [[f32; SEGMENTS]; MAX_CHANNELS],
-        &mut [[f32; SEGMENTS]; MAX_CHANNELS],
-    ),
+    history: (&mut SegHistory, &mut SegHistory, &mut SegHistory),
     init: &mut bool,
 ) {
     let (power, freq, int) = history;

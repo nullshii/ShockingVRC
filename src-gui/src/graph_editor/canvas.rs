@@ -211,7 +211,7 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
     for e in &scope.edges {
         connected.entry(e.to.node).or_default().insert(e.to.pin.clone());
     }
-    let probe = env.snap.graph.probe.clone();
+    let probe = env.graph.probe.clone();
     let group_probes: HashMap<NodeId, shocking_vrc_core::graph::NodeProbe> = scope
         .nodes
         .iter()
@@ -306,7 +306,7 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
             .map(|n| n.id),
     );
 
-    let issues = &env.snap.graph.issues;
+    let issues = &env.graph.issues;
     let empty = HashSet::new();
     let mut changed: Vec<shocking_vrc_core::graph::Node> = Vec::new();
     let mut header_events: Vec<(NodeId, egui::Response)> = Vec::new();
@@ -335,7 +335,6 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
                 Some(mac) => {
                     let info = env.snap.devices.iter().find(|x| x.mac.eq_ignore_ascii_case(mac));
                     let outputs = env
-                        .snap
                         .graph
                         .outputs
                         .iter()
@@ -345,16 +344,46 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
                         online: info.is_some_and(|i| i.connected),
                         battery: info.and_then(|i| i.battery),
                         outputs,
-                        caps: env.snap.graph.caps,
+                        caps: env.graph.caps,
                     }
                 }
                 None => DeviceView {
                     online: false,
                     battery: None,
                     outputs: None,
-                    caps: env.snap.graph.caps,
+                    caps: env.graph.caps,
                 },
             }),
+            NodeKind::PartnerDevice(p) => {
+                let session = env.snap.remote.service.controlling();
+                let allowed = session
+                    .and_then(|s| s.partner_policy.as_ref())
+                    .is_some_and(|pol| pol.slots.iter().any(|s| s.slot == p.slot));
+                let outputs = session
+                    .and_then(|s| s.partner_output.slots.iter().find(|(slot, _)| *slot == p.slot))
+                    .map(|(_, o)| {
+                        let mut out = [shocking_vrc_core::cli::GraphChannelOutput::default(); 2];
+                        for (ch, v) in o.iter().enumerate() {
+                            out[ch].safe.strength = *v;
+                            out[ch].safe.limit_max = env.graph.caps[ch];
+                        }
+                        out
+                    });
+                Some(DeviceView {
+                    online: allowed,
+                    battery: None,
+                    outputs: outputs.or_else(|| {
+                        session.map(|_| {
+                            let mut out = [shocking_vrc_core::cli::GraphChannelOutput::default(); 2];
+                            for (ch, o) in out.iter_mut().enumerate() {
+                                o.safe.limit_max = env.graph.caps[ch];
+                            }
+                            out
+                        })
+                    }),
+                    caps: env.graph.caps,
+                })
+            }
             _ => None,
         };
         let view = NodeView {

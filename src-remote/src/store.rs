@@ -15,6 +15,13 @@ pub fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
+pub fn now_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Lifetime {
@@ -266,6 +273,13 @@ impl TrustStore {
         }
         self.data.invites.retain(|i| i.uses_left != Some(0));
         self.save();
+    }
+
+    #[cfg(test)]
+    pub fn set_invite_expiry(&mut self, id: &str, expires: u64) {
+        if let Some(i) = self.data.invites.iter_mut().find(|i| i.id == id) {
+            i.expires = expires;
+        }
     }
 
     pub fn revoke_invite(&mut self, id: &str) -> bool {

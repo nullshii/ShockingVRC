@@ -1,0 +1,141 @@
+# =============================================================================================
+#  ShockingVRC partner remote — self-hosted rendezvous server ("VDS")
+# =============================================================================================
+#
+#  What it does
+#    Partners on different networks find each other here and open an encrypted WebRTC data
+#    channel straight between their apps (or between a browser and an app). Commands never
+#    pass through this server; only when no direct path exists does the TURN relay carry the
+#    already-encrypted (DTLS) traffic. The server stores nothing on disk except its own
+#    generated secret and, in IP-only mode, its certificate.
+#
+#  Services
+#    signal  Rust (axum) service: rooms, signaling relay, attempt limiting with exponential
+#            lockout, TURN REST credentials. Stateless, configured by environment variables,
+#            with a healthcheck. Generates the TURN shared secret on first start.
+#    web     The browser control panel (same image, `signal web`). Open https://<your server>,
+#            enter a control code from the app (or paste a shockingvrc:// link + passphrase)
+#            and drive your partner: power faders, segment sliders, XY pad, presets, STOP.
+#    coturn  STUN/TURN on 3478 (UDP and TCP) and TURN over TLS on 5349, sharing its secret
+#            with signal. Runs with host networking so its relay ports work.
+#    caddy   HTTPS for signal and web (Let's Encrypt with a domain, or a pinned self-signed
+#            certificate without one). Its layer4 app also accepts TURN over TLS on 443, for
+#            networks that only allow HTTPS out.
+#
+#  Install (a server with only Docker installed is enough)
+#    1. cp .env.example .env
+#    2. Set DOMAIN and EMAIL in .env (or, without a domain, PUBLIC_IP instead).
+#    3. docker compose up -d
+#    Open the firewall for 80/tcp, 443/tcp, 3478/tcp+udp, 5349/tcp and the relay range
+#    49160-49200/udp (TURN_MIN_PORT..TURN_MAX_PORT).
+#
+#  Use it from the app
+#    Remote → Connection → Server: https://<DOMAIN>  (IP-only: https://<PUBLIC_IP>, and paste
+#    the pin printed by `docker compose logs signal` into "Server pin"). Invite links you make
+#    afterwards carry the server, so your partner needs nothing but the link.
+#
+#  Check it
+#    docker compose ps            all four services up, signal and web healthy
+#    curl https://<DOMAIN>/api/info
+#
+#  Updating: git pull && docker compose up -d --build
+# =============================================================================================
+
+name: shockingvrc-vds
+
+x-signal-build: &signal-build
+  context: .
+  dockerfile: signal/Dockerfile
+
+services:
+  signal:
+    build: *signal-build
+    image: shockingvrc-signal:local
+    command: ["serve"]
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      PUBLIC_IP: ${PUBLIC_IP:-}
+      TURN_PORT: ${TURN_PORT:-3478}
+      TURNS_PORT: ${TURNS_PORT:-5349}
+      TURNS_443: "true"
+      TURN_TTL: ${TURN_TTL:-3600}
+      TRUST_PROXY: "true"
+      RUST_LOG: ${LOG_LEVEL:-info}
+    volumes:
+      - vds_data:/data
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/signal", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  web:
+    build: *signal-build
+    image: shockingvrc-signal:local
+    command: ["web"]
+    restart: unless-stopped
+    environment:
+      RUST_LOG: ${LOG_LEVEL:-info}
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/signal", "healthcheck", "web"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  coturn:
+    image: coturn/coturn:alpine
+    restart: unless-stopped
+    network_mode: host
+    user: "0:0"
+    entrypoint: ["/bin/sh", "/svrc-coturn/entrypoint.sh"]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      PUBLIC_IP: ${PUBLIC_IP:-}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      TURN_PORT: ${TURN_PORT:-3478}
+      TURNS_PORT: ${TURNS_PORT:-5349}
+      TURN_MIN_PORT: ${TURN_MIN_PORT:-49160}
+      TURN_MAX_PORT: ${TURN_MAX_PORT:-49200}
+    volumes:
+      - vds_data:/svrc:ro
+      - caddy_data:/caddy:ro
+      - ./coturn:/svrc-coturn:ro
+    depends_on:
+      signal:
+        condition: service_healthy
+
+  caddy:
+    build: ./caddy
+    image: shockingvrc-caddy:local
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      EMAIL: ${EMAIL:-}
+      PUBLIC_IP: ${PUBLIC_IP:-}
+      TURNS_PORT: ${TURNS_PORT:-5349}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - vds_data:/svrc:ro
+    depends_on:
+      signal:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+volumes:
+  vds_data:
+  caddy_data:
+  caddy_config:

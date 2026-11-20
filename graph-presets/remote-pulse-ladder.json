@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Pulse ladder",
+  "description": "Remote: four pulses that climb step by step, then start again",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [40.0, -130.0],
+        "title": "Remote · pulse ladder",
+        "kind": {
+          "type": "Frame",
+          "size": [560.0, 96.0],
+          "text": "A stamp lane with the same pulse at 25, 50, 75 and 100 %. Drag the stamps or change their length in the node; the partner's cap scales the top step."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [40.0, 0.0],
+        "kind": {
+          "type": "StampPattern",
+          "length_s": 4.0,
+          "snap": 0.0625,
+          "stamps": [
+            { "name": "Pulse", "levels": [0.0, 1.0, 1.0, 0.0] }
+          ],
+          "lane": [
+            { "stamp": 0, "start": 0.0, "len": 0.125, "gain": 0.25 },
+            { "stamp": 0, "start": 0.25, "len": 0.125, "gain": 0.5 },
+            { "stamp": 0, "start": 0.5, "len": 0.125, "gain": 0.75 },
+            { "stamp": 0, "start": 0.75, "len": 0.125, "gain": 1.0 }
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "pos": [400.0, 0.0],
+        "kind": { "type": "PartnerDevice", "slot": 0 }
+      }
+    ],
+    "edges": [
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 3, "pin": "a.power" } },
+      { "from": { "node": 2, "pin": "out" }, "to": { "node": 3, "pin": "b.power" } }
+    ]
+  }
+}

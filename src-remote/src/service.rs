@@ -129,6 +129,7 @@ pub struct SessionStatus {
     pub live: bool,
     pub partner_policy: Option<PolicySnapshot>,
     pub partner_output: OutputReport,
+    pub ends_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -234,6 +235,7 @@ struct SessionShared {
     policy_tx: watch::Sender<Option<PolicySnapshot>>,
     frames: watch::Sender<Option<RemoteFrame>>,
     stopped_by_us: AtomicBool,
+    deadline_ms: u64,
 }
 
 struct TokenGrant {
@@ -241,6 +243,14 @@ struct TokenGrant {
     partner_pk: Option<String>,
     role: OfferedRole,
     expires: Instant,
+    deadline_ms: u64,
+}
+
+#[cfg(test)]
+const DROP_FOR_TEST: &str = "\u{0}drop";
+
+fn past(deadline_ms: u64, now_ms: u64) -> bool {
+    deadline_ms != 0 && now_ms >= deadline_ms
 }
 
 struct Resume {
@@ -551,7 +561,7 @@ impl RemoteService {
         }
     }
 
-    fn stop_network(&self) {
+    pub(crate) fn stop_network(&self) {
         if let Ok(mut t) = self.inner.net_tasks.lock() {
             for h in t.drain(..) {
                 h.abort();
@@ -646,7 +656,7 @@ impl RemoteService {
                                     let host = Arc::clone(&host);
                                     tokio::spawn(async move {
                                         let peer = signaler.peer();
-                                        if me.locked_out(&peer) {
+                                        if me.locked_out(peer.split('|').next().unwrap_or_default()) {
                                             host.report_failure(&peer).await;
                                             return;
                                         }
@@ -868,7 +878,7 @@ impl RemoteService {
             let tokens = self.inner.tokens.lock().map_err(|_| "busy")?;
             let t = tokens
                 .get(rid)
-                .filter(|t| t.expires > Instant::now())
+                .filter(|t| t.expires > Instant::now() && !past(t.deadline_ms, store::now_unix_ms()))
                 .ok_or("session expired")?;
             if t.partner_pk.as_deref() != pk.map(|p| b64(p)).as_deref() {
                 return Err("session expired".into());
@@ -878,7 +888,10 @@ impl RemoteService {
                     key: Some(t.key),
                     needs_identity: t.partner_pk.is_some(),
                 },
-                Grant::Resume { role: t.role },
+                Grant::Resume {
+                    role: t.role,
+                    deadline_ms: t.deadline_ms,
+                },
             ));
         }
         let store = self.inner.store.lock().map_err(|_| "busy")?;
@@ -914,7 +927,8 @@ impl RemoteService {
     }
 
     async fn handle_incoming(self, mut ch: Channel, via: Option<Arc<VdsHost>>) {
-        let peer = ch.info.peer.clone();
+        let full_peer = ch.info.peer.clone();
+        let peer = full_peer.split('|').next().unwrap_or_default().to_string();
         let locked = self
             .inner
             .limiter
@@ -952,7 +966,7 @@ impl RemoteService {
                         .ok()
                         .and_then(|mut l| l.fail(&peer, Instant::now()));
                     if let Some(h) = &via {
-                        h.report_failure(&peer).await;
+                        h.report_failure(&full_peer).await;
                     }
                     self.log(format!(
                         "Refused a connection from {peer}: {e}{}",
@@ -1040,6 +1054,32 @@ impl RemoteService {
             }
         }
 
+        let deadline_ms = match &grant {
+            Grant::Invite { id, pairing, .. } => {
+                let current = self
+                    .inner
+                    .store
+                    .lock()
+                    .ok()
+                    .and_then(|s| s.invite(id, store::now_unix()).map(|r| r.expires));
+                match current {
+                    Some(_) if *pairing => 0,
+                    Some(expires) => expires.saturating_mul(1000),
+                    None => 1,
+                }
+            }
+            other => other.deadline_ms(),
+        };
+        if past(deadline_ms, store::now_unix_ms()) {
+            let _ = ch
+                .send(&Message::Reject {
+                    reason: "session expired".into(),
+                    retry_after_ms: None,
+                })
+                .await;
+            self.log(format!("Refused {partner}: the invite's time is up"));
+            return;
+        }
         let now = store::now_unix();
         if let Grant::Invite { id, .. } = &grant
             && let Ok(mut s) = self.inner.store.lock()
@@ -1064,6 +1104,11 @@ impl RemoteService {
         }
         let token_id = b64(&crypto::random_bytes::<12>());
         let token_secret: [u8; 32] = crypto::random_bytes();
+        let left = if deadline_ms == 0 {
+            TOKEN_TTL
+        } else {
+            Duration::from_millis(deadline_ms.saturating_sub(store::now_unix_ms())).min(TOKEN_TTL)
+        };
         if let Ok(mut t) = self.inner.tokens.lock() {
             t.insert(
                 token_id.clone(),
@@ -1071,7 +1116,8 @@ impl RemoteService {
                     key: crypto::secret_key(&token_secret),
                     partner_pk: joiner_pk.clone(),
                     role,
-                    expires: Instant::now() + TOKEN_TTL,
+                    expires: Instant::now() + left,
+                    deadline_ms,
                 },
             );
         }
@@ -1084,6 +1130,7 @@ impl RemoteService {
             you_receive: i_control,
             trusted,
             policy: i_receive.then(|| self.policy()),
+            ends_at_ms: deadline_ms,
         };
         if ch.send(&Message::Welcome(welcome)).await.is_err() {
             return;
@@ -1097,6 +1144,7 @@ impl RemoteService {
             i_control,
             i_receive,
             partner_policy: None,
+            deadline_ms,
         });
         self.run_session(ch, shared).await;
     }
@@ -1428,6 +1476,7 @@ impl RemoteService {
             i_control: welcome.you_control,
             i_receive: welcome.you_receive,
             partner_policy: welcome.policy.clone(),
+            deadline_ms: welcome.ends_at_ms,
         });
         self.log(format!("Connected to {partner} over {path}"));
         (shared, resume)
@@ -1459,6 +1508,7 @@ impl RemoteService {
             policy_tx,
             frames,
             stopped_by_us: AtomicBool::new(false),
+            deadline_ms: s.deadline_ms,
         });
         if s.i_receive
             && let Ok(mut j) = self.inner.inbound.lock()
@@ -1539,6 +1589,11 @@ impl RemoteService {
                 }
                 r = stop_rx.recv() => {
                     let r = r.unwrap_or_else(|| "stopped".into());
+                    #[cfg(test)]
+                    if r == DROP_FOR_TEST {
+                        reason = "connection lost".into();
+                        break;
+                    }
                     let _ = ch.send(&Message::Stop { reason: r.clone() }).await;
                     shared.stopped_by_us.store(true, Ordering::Relaxed);
                     reason = r;
@@ -1551,6 +1606,13 @@ impl RemoteService {
                     }
                 }
                 _ = tick.tick() => {
+                    if past(shared.deadline_ms, store::now_unix_ms()) {
+                        let r = "the invite's time is up".to_string();
+                        let _ = ch.send(&Message::Stop { reason: r.clone() }).await;
+                        shared.stopped_by_us.store(true, Ordering::Relaxed);
+                        reason = r;
+                        break;
+                    }
                     let now = Instant::now();
                     let fresh = if shared.i_control && frames_rx.has_changed().unwrap_or(false) {
                         frames_rx.borrow_and_update().clone()
@@ -1619,6 +1681,20 @@ impl RemoteService {
         None
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_invite_expiry(&self, id: &str, expires: u64) {
+        if let Ok(mut s) = self.inner.store.lock() {
+            s.set_invite_expiry(id, expires);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn drop_connections(&self) {
+        for s in self.sessions() {
+            let _ = s.stop.try_send(DROP_FOR_TEST.to_string());
+        }
+    }
+
     pub fn stop_session(&self, id: u64, reason: &str) {
         for s in self.sessions() {
             if s.id == id {
@@ -1681,6 +1757,7 @@ impl RemoteService {
                             <= FAILSAFE.as_millis() as u64,
                     partner_policy: s.partner_policy.lock().ok().and_then(|p| p.clone()),
                     partner_output: s.partner_output.lock().map(|o| o.clone()).unwrap_or_default(),
+                    ends_at_ms: (s.deadline_ms != 0).then_some(s.deadline_ms),
                 }
             })
             .collect();
@@ -1759,6 +1836,7 @@ struct SessionSetup {
     i_control: bool,
     i_receive: bool,
     partner_policy: Option<PolicySnapshot>,
+    deadline_ms: u64,
 }
 
 enum Grant {
@@ -1773,10 +1851,18 @@ enum Grant {
     },
     Resume {
         role: OfferedRole,
+        deadline_ms: u64,
     },
 }
 
 impl Grant {
+    fn deadline_ms(&self) -> u64 {
+        match self {
+            Grant::Resume { deadline_ms, .. } => *deadline_ms,
+            Grant::Invite { .. } | Grant::Trusted { .. } => 0,
+        }
+    }
+
     fn role(&self) -> OfferedRole {
         match self {
             Grant::Invite { role, .. } | Grant::Trusted { role, .. } | Grant::Resume { role, .. } => *role,

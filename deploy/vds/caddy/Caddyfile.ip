@@ -1,0 +1,37 @@
+{
+	auto_https off
+	servers :8443 {
+		listener_wrappers {
+			proxy_protocol {
+				allow 127.0.0.1/32
+			}
+			tls
+		}
+	}
+	layer4 {
+		:443 {
+			@web tls alpn h2 http/1.1
+			route @web {
+				proxy {
+					proxy_protocol v1
+					upstream 127.0.0.1:8443
+				}
+			}
+			route {
+				proxy host.docker.internal:{$TURNS_PORT:5349}
+			}
+		}
+	}
+}
+
+:80 {
+	redir https://{host}{uri} permanent
+}
+
+:8443 {
+	tls /svrc/certs/cert.pem /svrc/certs/key.pem
+	encode zstd gzip
+	@signal path /ws /api/* /healthz
+	reverse_proxy @signal signal:8080
+	reverse_proxy web:8081
+}

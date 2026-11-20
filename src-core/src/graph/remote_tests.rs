@@ -79,7 +79,7 @@ fn saved_remote_nodes_load_inert_while_off_and_revive_when_on() {
 
     let inert = kind_from_value(json.clone(), false);
     assert!(inert.is_missing(), "a remote node is a placeholder while remote is off");
-    let saved = serde_json::to_value(&Node::new(inert.clone(), [0.0, 0.0])).unwrap();
+    let saved = serde_json::to_value(Node::new(inert.clone(), [0.0, 0.0])).unwrap();
     assert_eq!(saved["kind"], json, "nothing is lost when saved again");
 
     let mut graph = Graph::default();

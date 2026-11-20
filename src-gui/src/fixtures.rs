@@ -176,6 +176,10 @@ pub fn demo_snapshot() -> Snapshot {
         revision: 1,
         mode: EngineMode::Classic,
         graph: demo_graph_status(),
+        remote_enabled: false,
+        remote: Default::default(),
+        remote_graph: Default::default(),
+        remote_settings: Default::default(),
     }
 }
 

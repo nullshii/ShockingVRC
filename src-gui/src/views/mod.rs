@@ -4,6 +4,7 @@ pub mod graph;
 pub mod log;
 pub mod modulation;
 pub mod presets;
+pub mod remote;
 pub mod setup;
 pub mod status;
 pub mod tuning;

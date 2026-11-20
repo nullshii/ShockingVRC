@@ -103,7 +103,11 @@ impl NodeLayout {
 
 pub fn width(kind: &NodeKind) -> f32 {
     match kind {
-        NodeKind::Device(_) => 236.0,
+        NodeKind::Device(_) | NodeKind::PartnerDevice(_) => 236.0,
+        NodeKind::DrawZone(_) | NodeKind::ShapeFill(_) | NodeKind::StampPattern(_) | NodeKind::SegmentPainter(_) => {
+            260.0
+        }
+        NodeKind::XyPad(_) | NodeKind::Fader(_) => 220.0,
         NodeKind::Curve(_) | NodeKind::Scope(_) | NodeKind::Ukf(_) => 220.0,
         NodeKind::Frame(p) => p.size[0],
         NodeKind::Reroute(_) => REROUTE,
@@ -139,8 +143,16 @@ fn body_rows(kind: &NodeKind) -> f32 {
         | NodeKind::Missing(_) => 1.0,
         NodeKind::Panic(_) => 1.6,
         NodeKind::Sequencer(_) => 2.5,
-        NodeKind::Device(_) => 1.0,
+        NodeKind::Device(_) | NodeKind::PartnerDevice(_) => 1.0,
         _ => 0.0,
+    }
+}
+
+fn device_profile(kind: &NodeKind) -> Option<&'static shocking_vrc_core::graph::device::DeviceProfile> {
+    match kind {
+        NodeKind::Device(d) => Some(d.profile()),
+        NodeKind::PartnerDevice(p) => Some(p.profile()),
+        _ => None,
     }
 }
 
@@ -148,6 +160,11 @@ fn preview_h(kind: &NodeKind) -> f32 {
     match kind {
         NodeKind::Curve(_) => 110.0,
         NodeKind::Scope(_) => 96.0,
+        NodeKind::DrawZone(_) | NodeKind::StampPattern(_) => 120.0,
+        NodeKind::ShapeFill(_) => 100.0,
+        NodeKind::XyPad(_) => 170.0,
+        NodeKind::SegmentPainter(_) => 120.0,
+        NodeKind::Fader(_) => 116.0,
         NodeKind::Lfo(_)
         | NodeKind::Smooth(_)
         | NodeKind::Envelope(_)
@@ -237,8 +254,7 @@ pub fn layout(node: &Node) -> NodeLayout {
     }
     let mut inputs = Vec::new();
     let mut captions = Vec::new();
-    if let NodeKind::Device(d) = &node.kind {
-        let profile = d.profile();
+    if let Some(profile) = device_profile(&node.kind) {
         let mut k = 0usize;
         for (ci, ch) in profile.channels.iter().enumerate() {
             captions.push((ci, row(y)));
@@ -687,7 +703,7 @@ pub fn draw(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView, typing
             Color32::from_rgb(r, g, b)
         }
         (_, Some(t)) => tint_color(pal, t),
-        (NodeKind::Device(_), None) => {
+        (NodeKind::Device(_) | NodeKind::PartnerDevice(_), None) => {
             if offline {
                 pal.dim
             } else {
@@ -766,8 +782,13 @@ fn inputs_rows(
 ) {
     let pal = v.pal;
     let z = Z(v.zoom);
-    if let NodeKind::Device(d) = &mut node.kind {
-        let profile = d.profile();
+    let partner = node.kind.is_partner_device();
+    let channels = match &mut node.kind {
+        NodeKind::Device(d) => Some((d.profile(), &mut d.channels)),
+        NodeKind::PartnerDevice(p) => Some((p.profile(), &mut p.channels)),
+        _ => None,
+    };
+    if let Some((profile, channels)) = channels {
         for (ci, r) in &lay.captions {
             let Some(ch) = profile.channels.get(*ci) else { continue };
             let r = r.shrink2(z.v(PAD, 2.0));
@@ -776,16 +797,21 @@ fn inputs_rows(
                 let cap = v.device.as_ref().map(|dv| dv.caps[*ci]).unwrap_or(0);
                 let mid =
                     Rect::from_min_max(pos2(r.left() + z.px(76.0), r.top()), pos2(r.right() - z.px(58.0), r.bottom()));
+                let text = if partner {
+                    format!("{} · cap {cap}", o.safe.strength)
+                } else {
+                    format!("{} / {}", o.safe.strength, o.safe.limit_max.min(cap))
+                };
                 small(
                     ui,
                     z,
                     mid,
-                    &format!("{} / {}", o.safe.strength, o.safe.limit_max.min(cap)),
+                    &text,
                     if o.safe.strength > 0 { pal.accent } else { pal.dim },
                     Align2::LEFT_CENTER,
                 );
             }
-            let params = d.channels.get_mut(*ci);
+            let params = channels.get_mut(*ci);
             if let Some(params) = params {
                 for (k, (group, label)) in [("freq", "F×4"), ("int", "I×4")].iter().enumerate() {
                     let b = Rect::from_min_size(
@@ -817,6 +843,15 @@ fn inputs_rows(
             pos2(split + z.px(4.0), r.top() + z.px(2.0)),
             pos2(r.right(), r.bottom() - z.px(2.0)),
         );
+        if partner
+            && p.key.ends_with(".limit_max")
+            && let Some(dv) = &v.device
+        {
+            let ch = if p.key.starts_with("b.") { 1 } else { 0 };
+            let ratio = (dv.caps[ch] as f32 / 200.0).clamp(0.0, 1.0);
+            let shade = Rect::from_min_max(pos2(cell.left() + cell.width() * ratio, cell.top()), cell.max);
+            ui.painter().rect_filled(shade, w::SQUARE, pal.faded(pal.dim, 0.75));
+        }
         let idx = lay.inputs.iter().position(|q| q.key == p.key).unwrap_or(0);
         if connected {
             if let Some(val) = v.probe.and_then(|pr| pr.inputs.get(idx)) {
@@ -1287,13 +1322,38 @@ fn body(
                 out.pick_device = true;
             }
         }
+        NodeKind::PartnerDevice(p) => {
+            let c = cells(z, rows[0], 2);
+            small(
+                ui,
+                z,
+                c[0],
+                &format!("partner device {}", p.slot as u32 + 1),
+                pal.dim,
+                Align2::LEFT_CENTER,
+            );
+            let state = match &v.device {
+                Some(dv) if dv.online => "allowed",
+                Some(dv) if dv.outputs.is_some() => "not allowed",
+                _ => "not connected",
+            };
+            small(ui, z, c[1], state, pal.dim, Align2::RIGHT_CENTER);
+        }
         NodeKind::Missing(m) => {
+            let remote = matches!(
+                m.type_name.as_str(),
+                "PartnerDevice" | "DrawZone" | "ShapeFill" | "StampPattern" | "XyPad" | "SegmentPainter" | "Fader"
+            );
             small(
                 ui,
                 z,
                 rows[0].shrink2(z.v(PAD, 0.0)),
-                &format!("'{}' kept as-is", m.type_name),
-                pal.error,
+                &if remote {
+                    "remote is off — inert".to_string()
+                } else {
+                    format!("'{}' kept as-is", m.type_name)
+                },
+                if remote { pal.dim } else { pal.error },
                 Align2::LEFT_CENTER,
             );
         }
@@ -1316,8 +1376,15 @@ fn count_row(ui: &mut Ui, pal: &Palette, z: Z, row: Rect, id: egui::Id, count: &
 fn preview(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView) {
     let Some(rect) = lay.preview else { return };
     let pal = v.pal;
+    let id = node.id;
     match &mut node.kind {
         NodeKind::Curve(p) => curve_editor(ui, pal, rect, &mut p.curve, v, node.id),
+        NodeKind::DrawZone(p) => super::draw_ui::draw_zone(ui, pal, rect, p, v.probe, id, v.zoom),
+        NodeKind::ShapeFill(p) => super::draw_ui::shape_fill(ui, pal, rect, p, v.probe, id, v.zoom),
+        NodeKind::StampPattern(p) => super::draw_ui::stamp_pattern(ui, pal, rect, p, v.probe, id, v.zoom),
+        NodeKind::XyPad(p) => super::draw_ui::xy_pad(ui, pal, rect, p, id, v.zoom),
+        NodeKind::SegmentPainter(p) => super::draw_ui::segment_painter(ui, pal, rect, p, id, v.zoom),
+        NodeKind::Fader(p) => super::draw_ui::fader(ui, pal, rect, p, v.probe, id),
         NodeKind::Scope(p) => {
             ui.painter().rect_filled(rect, w::SQUARE, pal.well);
             ui.painter()

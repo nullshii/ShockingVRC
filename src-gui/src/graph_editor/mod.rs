@@ -1,4 +1,5 @@
 pub mod canvas;
+pub mod draw_ui;
 pub mod menu;
 pub mod node_ui;
 pub mod side;
@@ -114,6 +115,7 @@ pub struct GraphEditor {
     pub pointer_canvas: Option<egui::Pos2>,
     pub focus_request: Option<NodeId>,
     pub frame_request: bool,
+    pub remote: bool,
 }
 
 impl Default for GraphEditor {
@@ -147,6 +149,7 @@ impl Default for GraphEditor {
             pointer_canvas: None,
             focus_request: None,
             frame_request: false,
+            remote: false,
         }
     }
 }
@@ -159,6 +162,8 @@ pub struct Env<'a> {
     pub pal: &'a Palette,
     pub snap: &'a Snapshot,
     pub bridge: &'a Bridge,
+    pub graph: &'a shocking_vrc_app::graph_runtime::GraphStatus,
+    pub remote: bool,
 }
 
 impl Env<'_> {
@@ -168,6 +173,13 @@ impl Env<'_> {
 }
 
 impl GraphEditor {
+    pub fn for_remote() -> Self {
+        Self {
+            remote: true,
+            ..Self::default()
+        }
+    }
+
     pub fn initialized(&self) -> bool {
         self.initialized
     }
@@ -287,7 +299,7 @@ impl GraphEditor {
             self.synced_replaced = shared.replaced;
             return;
         }
-        if shared.rev != self.synced_rev {
+        if shared.rev != self.synced_rev && !self.remote {
             self.synced_rev = shared.rev;
             let mut added = false;
             for n in &shared.graph.nodes {
@@ -323,13 +335,18 @@ impl GraphEditor {
             ctx.request_repaint_after(SEND_INTERVAL);
             return;
         }
-        bridge.send(Command::SetGraph(Box::new(self.doc.clone())));
+        let doc = Box::new(self.doc.clone());
+        bridge.send(if self.remote {
+            Command::SetRemoteGraph(doc)
+        } else {
+            Command::SetGraph(doc)
+        });
         self.dirty = false;
         self.last_send = Some(Instant::now());
     }
 
-    pub fn record_traces(&mut self, snap: &Snapshot) {
-        let tick = snap.graph.tick;
+    pub fn record_traces(&mut self, graph: &shocking_vrc_app::graph_runtime::GraphStatus) {
+        let tick = graph.tick;
         if tick == self.last_trace_tick {
             return;
         }
@@ -350,8 +367,7 @@ impl GraphEditor {
             })
             .collect();
         for key in wanted {
-            let Some(v) = snap
-                .graph
+            let Some(v) = graph
                 .probe
                 .nodes
                 .get(&key.0)
