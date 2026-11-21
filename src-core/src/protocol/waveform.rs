@@ -86,6 +86,23 @@ impl WaveformV3 {
         )
     }
 
+
+    pub fn output(
+        strength_a: u8,
+        strength_b: u8,
+        frequency_a: [u8; 4],
+        intensity_a: [u8; 4],
+        frequency_b: [u8; 4],
+        intensity_b: [u8; 4],
+    ) -> Self {
+        let silent = |strength: u8, f: [u8; 4], i: [u8; 4]| {
+            if strength == 0 { ([MIN_PULSE_FREQUENCY; 4], [0; 4]) } else { (f, i) }
+        };
+        let (frequency_a, intensity_a) = silent(strength_a, frequency_a, intensity_a);
+        let (frequency_b, intensity_b) = silent(strength_b, frequency_b, intensity_b);
+        Self::new(strength_a, strength_b, frequency_a, intensity_a, frequency_b, intensity_b)
+    }
+
     pub fn waveform_only_a(frequency_a: [u8; 4], intensity_a: [u8; 4]) -> Self {
         Self::with_mode(MODE_NO_CHANGE, 0, 0, frequency_a, intensity_a, [0; 4], [0, 0, 0, 101])
     }
@@ -156,34 +173,16 @@ impl fmt::Display for WaveformV3 {
             )
         };
 
-        match (self.strength_a != 0, self.strength_b != 0) {
-            (true, false) => {
-                write!(
-                    f,
-                    "{}",
-                    format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a)
-                )
-            }
-            (false, true) => {
-                write!(
-                    f,
-                    "{}",
-                    format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b)
-                )
-            }
-            _ => {
-                write!(
-                    f,
-                    "{}",
-                    format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a)
-                )?;
-                write!(
-                    f,
-                    "{}",
-                    format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b)
-                )
-            }
-        }
+        write!(
+            f,
+            "{}",
+            format_wave("WAVE A", self.strength_a, &self.frequency_a, &self.intensity_a)
+        )?;
+        write!(
+            f,
+            "{}",
+            format_wave("WAVE B", self.strength_b, &self.frequency_b, &self.intensity_b)
+        )
     }
 }
 
@@ -280,6 +279,22 @@ mod tests {
         assert_eq!(
             WaveformV3::default().to_bytes(),
             [0xB0, 0x0F, 0, 0, 10, 10, 10, 10, 0, 0, 0, 0, 10, 10, 10, 10, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn a_channel_at_zero_strength_gets_no_pulses() {
+        let wave = WaveformV3::output(40, 0, [18; 4], [100; 4], [18; 4], [100; 4]);
+        assert_eq!(
+            wave.to_bytes(),
+            [0xB0, 0x0F, 40, 0, 18, 18, 18, 18, 100, 100, 100, 100, 10, 10, 10, 10, 0, 0, 0, 0]
+        );
+        let wave = WaveformV3::output(0, 25, [30; 4], [80; 4], [50; 4], [60; 4]);
+        assert_eq!(wave.intensity_a, [0; 4]);
+        assert_eq!((wave.frequency_b, wave.intensity_b), ([50; 4], [60; 4]));
+        assert_eq!(
+            WaveformV3::output(0, 0, [30; 4], [80; 4], [50; 4], [60; 4]).to_bytes(),
+            WaveformV3::default().to_bytes()
         );
     }
 

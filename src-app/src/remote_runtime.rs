@@ -74,8 +74,21 @@ pub fn save_settings(s: &RemoteSettings) -> Result<(), String> {
 
 pub fn starter_graph() -> Graph {
     let mut g = Graph::default();
-    let fader = g.add_kind(NodeKind::Fader(FaderParams::default()), [0.0, 0.0]);
-    let pad = g.add_kind(NodeKind::XyPad(XyPadParams::default()), [0.0, 260.0]);
+    let fader = g.add_kind(
+        NodeKind::Fader(FaderParams {
+            latch: true,
+            ..FaderParams::default()
+        }),
+        [0.0, 0.0],
+    );
+    let pad = g.add_kind(
+        NodeKind::XyPad(XyPadParams {
+            spring: false,
+            y: 0.8,
+            ..XyPadParams::default()
+        }),
+        [0.0, 260.0],
+    );
     let one = g.add_kind(NodeKind::Constant(ConstantParams { value: 1.0 }), [0.0, -140.0]);
     let partner = g.add_kind(NodeKind::PartnerDevice(PartnerDeviceParams::default()), [380.0, 0.0]);
     let wires = [
@@ -514,6 +527,7 @@ impl RemoteRuntime {
                     .scanner
                     .with_raw_inputs(|raw| ev.fill_external(|req| sample(req, raw, now, guard)));
                 ev.set_alarm(AlarmSample::default());
+                ev.set_partner(svc.partner_context());
                 ev.step(dt);
                 if controlling {
                     let slots: Vec<SlotFrame> = if ev.is_valid() && !ev.panic_requested() {

@@ -120,12 +120,38 @@ impl Node {
             .get(spec.key.as_ref())
             .copied()
             .filter(|v| v.is_finite())
+            .map(|v| self.clamp_input(spec, v))
             .unwrap_or(spec.default)
     }
 
     pub fn set_input_default(&mut self, key: &str, value: f32) {
         if value.is_finite() {
+            let value = match self.inputs().iter().find(|p| p.key == key) {
+                Some(spec) => self.clamp_input(spec, value),
+                None => value,
+            };
             self.defaults.insert(key.to_string(), value);
+        }
+    }
+
+    pub fn clamp_input(&self, spec: &PinSpec, value: f32) -> f32 {
+        if self.kind.clamps_inputs() {
+            let (lo, hi) = spec.range;
+            value.clamp(lo.min(hi), hi.max(lo))
+        } else {
+            value
+        }
+    }
+
+    fn clamp_defaults(&mut self) {
+        if !self.kind.clamps_inputs() {
+            return;
+        }
+        for spec in self.inputs() {
+            if let Some(v) = self.defaults.get(spec.key.as_ref()).copied() {
+                let c = self.clamp_input(&spec, v);
+                self.defaults.insert(spec.key.to_string(), c);
+            }
         }
     }
 
@@ -663,6 +689,7 @@ impl Graph {
             }
             n.defaults.retain(|_, v| v.is_finite());
             n.kind.sanitize();
+            n.clamp_defaults();
         }
         if !self.view.zoom.is_finite() || self.view.zoom <= 0.0 {
             self.view.zoom = 1.0;

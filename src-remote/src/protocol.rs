@@ -85,10 +85,27 @@ fn is_zero(v: &u64) -> bool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct WireChannel {
+    #[serde(deserialize_with = "lenient_segments")]
     pub p: [f32; SEGMENTS],
+    #[serde(deserialize_with = "lenient_segments")]
     pub f: [f32; SEGMENTS],
+    #[serde(deserialize_with = "lenient_segments")]
     pub i: [f32; SEGMENTS],
+    #[serde(default = "default_max", deserialize_with = "lenient_max")]
     pub m: f32,
+}
+
+fn default_max() -> f32 {
+    200.0
+}
+
+fn lenient_segments<'de, D: serde::Deserializer<'de>>(d: D) -> Result<[f32; SEGMENTS], D::Error> {
+    let raw: [Option<f32>; SEGMENTS] = Deserialize::deserialize(d)?;
+    Ok(raw.map(|v| v.unwrap_or(f32::NAN)))
+}
+
+fn lenient_max<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    Ok(Option::<f32>::deserialize(d)?.unwrap_or_else(default_max))
 }
 
 impl WireChannel {
@@ -156,6 +173,13 @@ pub struct OutputReport {
     pub slots: Vec<(u8, [u8; MAX_CHANNELS])>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedbackKind {
+    More,
+    Less,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 pub enum Message {
@@ -174,6 +198,9 @@ pub enum Message {
     Frame(RemoteFrame),
     Policy(PolicySnapshot),
     Output(OutputReport),
+    Feedback {
+        kind: FeedbackKind,
+    },
     Ping {
         seq: u64,
         ts: u64,
@@ -200,6 +227,7 @@ impl Message {
             Message::Frame(_) => "frame",
             Message::Policy(_) => "policy",
             Message::Output(_) => "output",
+            Message::Feedback { .. } => "feedback",
             Message::Ping { .. } => "ping",
             Message::Pong { .. } => "pong",
             Message::Stop { .. } => "stop",
@@ -321,5 +349,32 @@ mod tests {
         assert_eq!(f.power, 1.0);
         assert_eq!(f.freq[0], 0.0);
         assert_eq!(f.limit_max, 200.0);
+    }
+
+    #[test]
+    fn feedback_round_trips() {
+        let msg = Message::Feedback { kind: FeedbackKind::More };
+        assert_eq!(decode(&encode(&msg)), Ok(msg));
+        assert!(String::from_utf8_lossy(&encode(&Message::Feedback { kind: FeedbackKind::Less })).contains(r#""t":"feedback","kind":"less""#));
+    }
+
+    fn raw(body: &str) -> Vec<u8> {
+        let mut out = b"SV\x02\x00".to_vec();
+        out.extend_from_slice(&(body.len() as u32).to_be_bytes());
+        out.extend_from_slice(body.as_bytes());
+        out
+    }
+
+    #[test]
+    fn a_null_from_the_browser_does_not_drop_the_whole_frame() {
+        let body = r#"{"t":"frame","seq":3,"ts":10,"slots":[{"slot":0,
+            "a":{"p":[0.5,null,0.5,0.5],"f":[18,18,18,18],"i":[100,100,100,100],"m":null},
+            "b":{"p":[0,0,0,0],"f":[18,18,18,18],"i":[0,0,0,0]}}]}"#;
+        let Ok(Message::Frame(f)) = decode(&raw(body)) else { panic!("frame did not decode") };
+        let [a, b] = f.slots[0].channels();
+        let a = a.unwrap();
+        assert_eq!(a.power_seg, [0.5, 0.0, 0.5, 0.5]);
+        assert_eq!(a.limit_max, 200.0, "a null max means no extra limit");
+        assert_eq!(b.unwrap().limit_max, 200.0, "a missing max too");
     }
 }

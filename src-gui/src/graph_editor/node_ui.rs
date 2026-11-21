@@ -101,13 +101,23 @@ impl NodeLayout {
     }
 }
 
+pub fn resizable(kind: &NodeKind) -> bool {
+    matches!(kind, NodeKind::XyPad(_))
+}
+
 pub fn width(kind: &NodeKind) -> f32 {
     match kind {
         NodeKind::Device(_) | NodeKind::PartnerDevice(_) => 236.0,
-        NodeKind::DrawZone(_) | NodeKind::ShapeFill(_) | NodeKind::StampPattern(_) | NodeKind::SegmentPainter(_) => {
-            260.0
+        NodeKind::DrawZone(_) | NodeKind::ShapeFill(_) | NodeKind::SegmentPainter(_) => 260.0,
+        NodeKind::XyPad(p) => p.size[0],
+        NodeKind::Fader(_) | NodeKind::Pan(_) | NodeKind::PartnerFeedback(_) => 220.0,
+        NodeKind::StepSequencer(p) => {
+            if p.steps > 8 {
+                340.0
+            } else {
+                280.0
+            }
         }
-        NodeKind::XyPad(_) | NodeKind::Fader(_) => 220.0,
         NodeKind::Curve(_) | NodeKind::Scope(_) | NodeKind::Ukf(_) => 220.0,
         NodeKind::Frame(p) => p.size[0],
         NodeKind::Reroute(_) => REROUTE,
@@ -160,9 +170,12 @@ fn preview_h(kind: &NodeKind) -> f32 {
     match kind {
         NodeKind::Curve(_) => 110.0,
         NodeKind::Scope(_) => 96.0,
-        NodeKind::DrawZone(_) | NodeKind::StampPattern(_) => 120.0,
+        NodeKind::DrawZone(_) => 120.0,
         NodeKind::ShapeFill(_) => 100.0,
-        NodeKind::XyPad(_) => 170.0,
+        NodeKind::XyPad(p) => p.size[1],
+        NodeKind::StepSequencer(_) => 110.0,
+        NodeKind::Pan(_) => 30.0,
+        NodeKind::PartnerFeedback(_) => 66.0,
         NodeKind::SegmentPainter(_) => 120.0,
         NodeKind::Fader(_) => 116.0,
         NodeKind::Lfo(_)
@@ -749,6 +762,23 @@ pub fn draw(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView, typing
         inputs_rows(ui, node, lay, v, base_id, typing, &fade);
         body(ui, node, lay, v, base_id, typing, &mut out);
         preview(ui, node, lay, v);
+        if resizable(&node.kind) {
+            let g = z.px(12.0).max(8.0);
+            let grip = Rect::from_min_size(lay.rect.max - vec2(g, g), vec2(g, g));
+            let resp = ui.interact(grip, base_id.with("grip"), Sense::drag());
+            ui.painter()
+                .line_segment([grip.left_bottom(), grip.right_top()], Stroke::new(1.0, pal.dim));
+            ui.painter().line_segment(
+                [grip.left_bottom() + vec2(g * 0.5, 0.0), grip.right_top() + vec2(0.0, g * 0.5)],
+                Stroke::new(1.0, pal.dim),
+            );
+            if resp.dragged_by(egui::PointerButton::Primary) {
+                out.resize = Some(resp.drag_delta() / z.0);
+            }
+            if resp.hovered() || resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeNwSe);
+            }
+        }
     }
     pins(ui, node, lay, v, base_id, &mut out);
     out.header = Some(resp);
@@ -882,7 +912,7 @@ fn inputs_rows(
                 node.id,
                 &p.key,
             ) {
-                node.defaults.insert(p.key.clone(), val);
+                node.set_input_default(&p.key, val);
             }
         }
     }
@@ -1342,7 +1372,15 @@ fn body(
         NodeKind::Missing(m) => {
             let remote = matches!(
                 m.type_name.as_str(),
-                "PartnerDevice" | "DrawZone" | "ShapeFill" | "StampPattern" | "XyPad" | "SegmentPainter" | "Fader"
+                "PartnerDevice"
+                    | "DrawZone"
+                    | "ShapeFill"
+                    | "XyPad"
+                    | "SegmentPainter"
+                    | "Fader"
+                    | "StepSequencer"
+                    | "Pan"
+                    | "PartnerFeedback"
             );
             small(
                 ui,
@@ -1381,10 +1419,12 @@ fn preview(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView) {
         NodeKind::Curve(p) => curve_editor(ui, pal, rect, &mut p.curve, v, node.id),
         NodeKind::DrawZone(p) => super::draw_ui::draw_zone(ui, pal, rect, p, v.probe, id, v.zoom),
         NodeKind::ShapeFill(p) => super::draw_ui::shape_fill(ui, pal, rect, p, v.probe, id, v.zoom),
-        NodeKind::StampPattern(p) => super::draw_ui::stamp_pattern(ui, pal, rect, p, v.probe, id, v.zoom),
         NodeKind::XyPad(p) => super::draw_ui::xy_pad(ui, pal, rect, p, id, v.zoom),
         NodeKind::SegmentPainter(p) => super::draw_ui::segment_painter(ui, pal, rect, p, id, v.zoom),
-        NodeKind::Fader(p) => super::draw_ui::fader(ui, pal, rect, p, v.probe, id),
+        NodeKind::Fader(p) => super::draw_ui::fader(ui, pal, rect, p, v.probe, id, v.zoom),
+        NodeKind::StepSequencer(p) => super::draw_ui::step_sequencer(ui, pal, rect, p, v.probe, id, v.zoom),
+        NodeKind::Pan(p) => super::draw_ui::pan(ui, pal, rect, p, v.probe, v.zoom),
+        NodeKind::PartnerFeedback(p) => super::draw_ui::partner_feedback(ui, pal, rect, p, v.probe, v.zoom),
         NodeKind::Scope(p) => {
             ui.painter().rect_filled(rect, w::SQUARE, pal.well);
             ui.painter()

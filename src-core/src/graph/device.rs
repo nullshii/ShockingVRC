@@ -245,6 +245,45 @@ impl ChannelParams {
         }
     }
 
+    pub fn pin_range(&self, g: &PinGroupSpec) -> (f32, f32) {
+        match g.role {
+            PinRole::Frequency => match self.freq_mode {
+                FreqMode::Normalized => (0.0, 1.0),
+                FreqMode::Hz => (1.0, 100.0),
+                FreqMode::Raw => (10.0, 240.0),
+            },
+            _ => g.range,
+        }
+    }
+
+    pub fn pin_default(&self, g: &PinGroupSpec) -> f32 {
+        match (g.role, self.freq_mode) {
+            (PinRole::Frequency, FreqMode::Hz) => 55.0,
+            (PinRole::Frequency, FreqMode::Raw) => crate::hz_to_raw(55.0) as f32,
+            _ => g.default,
+        }
+    }
+
+    pub fn freq_to_hz(&self, v: f32) -> f32 {
+        let v = if v.is_finite() { v } else { 0.5 };
+        match self.freq_mode {
+            FreqMode::Normalized => self.freq_hz[0] + (self.freq_hz[1] - self.freq_hz[0]) * v.clamp(0.0, 1.0),
+            FreqMode::Hz => v.clamp(1.0, 100.0),
+            FreqMode::Raw => crate::protocol::waveform::raw_to_hz(v.clamp(10.0, 240.0).round() as u8),
+        }
+    }
+
+    pub fn freq_from_hz(&self, hz: f32) -> f32 {
+        match self.freq_mode {
+            FreqMode::Normalized => {
+                let span = self.freq_hz[1] - self.freq_hz[0];
+                if span.abs() < 1e-6 { 0.0 } else { ((hz - self.freq_hz[0]) / span).clamp(0.0, 1.0) }
+            }
+            FreqMode::Hz => hz.clamp(1.0, 100.0),
+            FreqMode::Raw => crate::hz_to_raw(hz) as f32,
+        }
+    }
+
     pub fn sanitize(&mut self) {
         for v in &mut self.freq_hz {
             if !v.is_finite() {

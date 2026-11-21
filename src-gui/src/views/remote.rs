@@ -168,6 +168,17 @@ fn sessions(ui: &mut Ui, cx: &mut Ctx) {
                             .color(pal.warning),
                     );
                 }
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    use shocking_vrc_remote::protocol::FeedbackKind;
+                    if w::button(ui, pal, "▲ More").clicked() {
+                        cx.bridge.send(Command::RemoteFeedback(FeedbackKind::More));
+                    }
+                    if w::button(ui, pal, "▼ Less").clicked() {
+                        cx.bridge.send(Command::RemoteFeedback(FeedbackKind::Less));
+                    }
+                    w::dim(ui, pal, format!("tell {} what you want", s.partner));
+                });
             }
             if s.i_control {
                 w::caption(ui, pal, "Partner's limits and output");

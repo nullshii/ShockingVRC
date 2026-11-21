@@ -320,6 +320,7 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
         _ => None,
     };
 
+    let mut drawn: HashSet<NodeId> = HashSet::new();
     for id in &order {
         let Some(lay) = frame.layouts.get(id) else { continue };
         if !lay.rect.expand(24.0).intersects(visible) {
@@ -327,6 +328,9 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
         }
         let screen = lay.to_screen(&transform);
         let Some(original) = scope.node(*id) else { continue };
+        if !original.collapsed {
+            drawn.insert(*id);
+        }
         let is_group = matches!(original.kind, NodeKind::Group(_));
         let mut node = original.clone();
         let flat = flat_of(*id);
@@ -434,14 +438,21 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
         });
     }
     if let Some((id, d)) = resize {
-        ed.edit(|g| {
-            if let Some(n) = g.node_mut(id)
-                && let NodeKind::Frame(p) = &mut n.kind
-            {
+        ed.edit(|g| match g.node_mut(id).map(|n| &mut n.kind) {
+            Some(NodeKind::Frame(p)) => {
                 p.size = [(p.size[0] + d.x).max(80.0), (p.size[1] + d.y).max(60.0)];
             }
+            Some(NodeKind::XyPad(p)) => {
+                use shocking_vrc_core::graph::draw::{XY_MAX_SIZE, XY_MIN_SIZE};
+                p.size = [
+                    (p.size[0] + d.x).clamp(XY_MIN_SIZE, XY_MAX_SIZE),
+                    (p.size[1] + d.y).clamp(XY_MIN_SIZE, XY_MAX_SIZE),
+                ];
+            }
+            _ => {}
         });
     }
+    release_unseen_controls(ed, &drawn);
     if let Some(id) = add_port {
         ed.edit(|g| {
             let Some(n) = g.node_mut(id) else { return };
@@ -730,6 +741,45 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
     w::dashed_rect(ui, rect, pal.hair);
     if ed.minimap {
         minimap(ui, rect, ed, &frame, &transform, pal);
+    }
+}
+
+fn held_live_control(kind: &NodeKind) -> bool {
+    match kind {
+        NodeKind::Fader(p) => p.pressed && !p.latch,
+        NodeKind::XyPad(p) => p.touching,
+        _ => false,
+    }
+}
+
+fn release_in(g: &mut shocking_vrc_core::graph::Graph, drawn: &HashSet<NodeId>) -> bool {
+    let mut any = false;
+    for n in &mut g.nodes {
+        if let NodeKind::Group(grp) = &mut n.kind {
+            any |= release_in(&mut grp.graph, drawn);
+            continue;
+        }
+        if drawn.contains(&n.id) || !held_live_control(&n.kind) {
+            continue;
+        }
+        match &mut n.kind {
+            NodeKind::Fader(p) => p.pressed = false,
+            NodeKind::XyPad(p) => {
+                p.touching = false;
+                if p.spring {
+                    p.y = 0.0;
+                }
+            }
+            _ => {}
+        }
+        any = true;
+    }
+    any
+}
+
+fn release_unseen_controls(ed: &mut GraphEditor, drawn: &HashSet<NodeId>) {
+    if release_in(&mut ed.doc, drawn) {
+        ed.mark_dirty();
     }
 }
 

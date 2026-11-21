@@ -328,6 +328,7 @@ pub enum Command {
     RemoteConsent(ConsentAnswer),
     RemoteStop,
     RemoteStopSession(u64),
+    RemoteFeedback(shocking_vrc_remote::protocol::FeedbackKind),
     RemoteExportLog,
     RemoteRegisterScheme,
     RemoteDismissResult,
@@ -1133,6 +1134,11 @@ impl Worker {
             Command::RemoteStopSession(id) => {
                 if let Some(svc) = self.state.remote.service() {
                     svc.stop_session(id, "stopped");
+                }
+            }
+            Command::RemoteFeedback(kind) => {
+                if let Some(svc) = self.state.remote.service() {
+                    svc.send_feedback(kind);
                 }
             }
             Command::RemoteExportLog => {

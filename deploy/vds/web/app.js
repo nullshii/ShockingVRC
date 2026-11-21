@@ -70,8 +70,8 @@ function buildBars(el, values, onChange) {
 
 for (const sheet of $$("[data-ch]")) {
   const ch = state.channels[sheet.dataset.ch];
-  const power = $(".power", sheet);
-  const max = $(".max", sheet);
+  const power = $("input.power", sheet);
+  const max = $("input.max", sheet);
   power.addEventListener("input", () => {
     ch.power = Number(power.value);
     power.nextElementSibling.textContent = `${Math.round(ch.power * 100)} %`;
@@ -138,15 +138,17 @@ function presetFactor(t) {
   }
 }
 
+const finite = (v, fallback) => (Number.isFinite(v) ? v : fallback);
+
 function wireChannel(ch, factor, xyOnA) {
-  const p = Math.min(1, Math.max(0, ch.power * factor));
+  const p = Math.min(1, Math.max(0, finite(ch.power * factor, 0)));
   const freq = xyOnA ? [0, 0, 0, 0].map(() => state.xy.x) : ch.freq;
   const int = xyOnA ? [0, 0, 0, 0].map(() => state.xy.y) : ch.int;
   return {
     p: [p, p, p, p].map((v) => Math.round(v * 1000) / 1000),
-    f: freq.map(P.rawFrequency),
-    i: int.map((v) => Math.round(v * 100)),
-    m: ch.max,
+    f: freq.map((v) => P.rawFrequency(finite(v, 0.5))),
+    i: int.map((v) => Math.round(finite(v, 0) * 100)),
+    m: finite(ch.max, 200),
   };
 }
 
@@ -157,7 +159,7 @@ function showPolicy(policy) {
     const sheet = $(`[data-ch="${key}"]`);
     const cap = c && c.allowed ? c.cap : 0;
     $(".cap", sheet).textContent = c && c.allowed ? `cap ${cap}` : "locked by partner";
-    $(".max", sheet).style.setProperty("--cap", `${(cap / 200) * 100}%`);
+    $("label.max", sheet).style.setProperty("--cap", `${(cap / 200) * 100}%`);
   });
 }
 
@@ -317,7 +319,7 @@ function start({ pc, dc, pipe, partner, policy, linkNote }) {
   const s = {
     pc, dc, pipe, partner, policy,
     seq: 0, ping: 0, t0: performance.now(), lastRx: performance.now(),
-    timers: [],
+    ticker: null,
   };
   state.session = s;
   ui.connect.classList.add("hidden");
@@ -349,6 +351,8 @@ function start({ pc, dc, pipe, partner, policy, linkNote }) {
         const out = (m.slots || []).reduce((acc, [, o]) => [Math.max(acc[0], o[0]), Math.max(acc[1], o[1])], [0, 0]);
         ui.output.textContent = `A ${out[0]} · B ${out[1]}`;
         ui.badge.textContent = `REMOTE · ${partner} · A ${out[0]} B ${out[1]}`;
+      } else if (m.t === "feedback") {
+        toast(`${partner} asks for ${m.kind === "more" ? "more ▲" : "less ▼"}`, "ok");
       } else if (m.t === "stop" || m.t === "bye") {
         end(m.t === "stop" ? `stopped by ${partner}: ${m.reason}` : `${partner} left`);
         return;
@@ -356,30 +360,48 @@ function start({ pc, dc, pipe, partner, policy, linkNote }) {
     }
   })();
 
-  s.timers.push(
-    setInterval(() => {
-      const t = (performance.now() - s.t0) / 1000;
-      const factor = presetFactor(t);
-      const xyOnA = ui.xyOn.checked && state.xy.held;
-      const slots = (s.policy?.slots?.length ? s.policy.slots.map((x) => x.slot) : [0]).map((slot) => ({
-        slot,
-        a: wireChannel(state.channels.a, factor, xyOnA),
-        b: wireChannel(state.channels.b, factor, false),
-      }));
-      pipe.send(P.encode({ t: "frame", seq: ++s.seq, ts: now(), slots }));
-    }, TICK_MS),
-    setInterval(() => pipe.send(P.encode({ t: "ping", seq: ++s.ping, ts: now() })), PING_MS),
-  );
+  const sendFrame = () => {
+    if (state.session !== s) return;
+    const t = (performance.now() - s.t0) / 1000;
+    const factor = presetFactor(t);
+    const xyOnA = ui.xyOn.checked && state.xy.held;
+    const slots = (s.policy?.slots?.length ? s.policy.slots.map((x) => x.slot) : [0]).map((slot) => ({
+      slot,
+      a: wireChannel(state.channels.a, factor, xyOnA),
+      b: wireChannel(state.channels.b, factor, false),
+    }));
+    pipe.send(P.encode({ t: "frame", seq: ++s.seq, ts: now(), slots }));
+  };
+  const sendPing = () => state.session === s && pipe.send(P.encode({ t: "ping", seq: ++s.ping, ts: now() }));
+  s.ticker = startTicker(TICK_MS, PING_MS, sendFrame, sendPing);
   pc.onconnectionstatechange = () => {
     if (["failed", "closed"].includes(pc.connectionState) && state.session === s) end("connection lost");
   };
+}
+
+function startTicker(frameMs, pingMs, onFrame, onPing) {
+  try {
+    const src = `let n=0;setInterval(()=>{n++;postMessage(n%${Math.max(1, Math.round(pingMs / frameMs))}===0)},${frameMs});`;
+    const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    const worker = new Worker(url);
+    URL.revokeObjectURL(url);
+    worker.onmessage = (ev) => {
+      onFrame();
+      if (ev.data) onPing();
+    };
+    return { stop: () => worker.terminate() };
+  } catch {
+    const a = setInterval(onFrame, frameMs);
+    const b = setInterval(onPing, pingMs);
+    return { stop: () => (clearInterval(a), clearInterval(b)) };
+  }
 }
 
 function end(reason, notify = false) {
   const s = state.session;
   if (!s) return;
   state.session = null;
-  s.timers.forEach(clearInterval);
+  s.ticker?.stop();
   if (notify) s.pipe.send(P.encode({ t: "stop", reason }));
   setTimeout(() => {
     try {
@@ -388,7 +410,7 @@ function end(reason, notify = false) {
     } catch {}
   }, 150);
   for (const ch of Object.values(state.channels)) ch.power = 0;
-  $$(".power").forEach((el) => {
+  $$("input.power").forEach((el) => {
     el.value = 0;
     el.nextElementSibling.textContent = "0 %";
   });
@@ -406,6 +428,10 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape" && state.session) end("stopped", true);
 });
 window.addEventListener("pagehide", () => state.session && end("page closed", true));
+document.addEventListener("visibilitychange", () => {
+  if (state.session && document.hidden) toast("keep this tab open — some browsers slow hidden tabs", "");
+  else if (state.session) toast("connected", "ok");
+});
 
 ui.go.addEventListener("click", connect);
 ui.code.addEventListener("keydown", (ev) => ev.key === "Enter" && connect());

@@ -1,7 +1,11 @@
 use std::time::{Duration, Instant};
 
 use super::device::{ChannelFrame, SEGMENTS};
-use super::draw::{DrawRect, DrawZoneParams, FaderParams, FillShape, ShapeFillParams, StampParams, XyPadParams};
+use super::draw::{
+    DrawRect, DrawZoneParams, FaderParams, FeedbackParams, FillShape, PanLaw, PanParams, ShapeFillParams,
+    StepSeqParams, XyMode, XyPadParams,
+};
+use super::eval::PartnerContext;
 
 use super::safety::{
     self, MergeMode, REMOTE_FRAME_TIMEOUT, RemoteChannelPolicy, RemoteInput, RemoteOverlay, SafeChannel,
@@ -56,10 +60,12 @@ fn remote_entries_appear_only_when_enabled() {
             "Partner Device",
             "Draw Zone",
             "Shape Fill",
-            "Stamp Pattern",
             "XY Pad",
             "Segment Painter",
-            "Envelope / Fader"
+            "Envelope / Fader",
+            "Step Sequencer",
+            "A↔B Pan",
+            "Partner Feedback"
         ]
     );
     let rest: Vec<&str> = on
@@ -171,18 +177,6 @@ fn square_fill_follows_duty() {
 }
 
 #[test]
-fn stamp_pattern_plays_the_lane() {
-    let p = StampParams {
-        length_s: 1.0,
-        ..StampParams::default()
-    };
-    let (ev, id) = run(NodeKind::StampPattern(p.clone()), 8);
-    assert_eq!(out(&ev, id, "out"), 0.0, "t = 0.2 is a gap");
-    let (ev, id) = run(NodeKind::StampPattern(p), 15);
-    assert!(out(&ev, id, "out") > 0.9, "t = 0.375 is the middle of the swell");
-}
-
-#[test]
 fn xy_pad_outputs_its_position() {
     let (ev, id) = run(
         NodeKind::XyPad(XyPadParams {
@@ -190,6 +184,7 @@ fn xy_pad_outputs_its_position() {
             y: 0.75,
             touching: true,
             spring: true,
+            ..XyPadParams::default()
         }),
         1,
     );
@@ -217,6 +212,7 @@ fn fader_envelope_rises_on_press_and_releases() {
         decay: 0.1,
         sustain: 0.5,
         release: 0.1,
+        latch: false,
         pressed: true,
     };
     let (ev, id) = run(NodeKind::Fader(pressed.clone()), 40);
@@ -415,4 +411,152 @@ fn the_overlay_soft_starts_and_limits_the_rise() {
         t += Duration::from_millis(25);
     }
     assert!(last > 0);
+}
+
+#[test]
+fn xy_pad_modes_change_its_outputs() {
+    let pad = |mode| XyPadParams {
+        x: 1.0,
+        y: 0.5,
+        touching: true,
+        mode,
+        ..XyPadParams::default()
+    };
+    let (ev, id) = run(NodeKind::XyPad(pad(XyMode::PanPower)), 1);
+    assert!(out(&ev, id, "a") < 1e-4, "all the way to B");
+    assert!((out(&ev, id, "b") - 0.5).abs() < 1e-4, "Y is the power");
+    let (ev, id) = run(NodeKind::XyPad(pad(XyMode::Position)), 3);
+    assert_eq!(out(&ev, id, "x"), 1.0);
+    assert_eq!(out(&ev, id, "speed"), 0.0, "a pad that does not move has no speed");
+    assert_eq!(out(&ev, id, "touch"), 1.0);
+}
+
+#[test]
+fn xy_pad_speed_follows_movement() {
+    let mut g = Graph::default();
+    let id = g.add_kind(NodeKind::XyPad(XyPadParams { mode: XyMode::Position, x: 0.0, ..XyPadParams::default() }), [0.0, 0.0]);
+    let mut ev = GraphEvaluator::new(&g);
+    ev.step(DT);
+    for k in 1..=10 {
+        if let NodeKind::XyPad(p) = &mut g.node_mut(id).unwrap().kind {
+            p.x = k as f32 * 0.025;
+        }
+        ev.rebuild(&g);
+        ev.step(DT);
+    }
+    assert!(out(&ev, id, "vx") > 0.5, "moving right at 1 unit/s");
+    assert!(out(&ev, id, "speed") > 0.25);
+}
+
+#[test]
+fn pan_laws_split_the_level() {
+    let run_pan = |law, pan: f32| {
+        let mut g = Graph::default();
+        let c = g.add_kind(NodeKind::Constant(ConstantParams { value: pan }), [0.0, 0.0]);
+        let p = g.add_kind(NodeKind::Pan(PanParams { law, ..PanParams::default() }), [0.0, 0.0]);
+        wire(&mut g, c, "out", p, "pan");
+        let mut ev = GraphEvaluator::new(&g);
+        ev.step(DT);
+        (out(&ev, p, "a"), out(&ev, p, "b"))
+    };
+    let (a, b) = run_pan(PanLaw::Linear, 0.25);
+    assert!((a - 0.75).abs() < 1e-4 && (b - 0.25).abs() < 1e-4);
+    let (a, b) = run_pan(PanLaw::EqualPower, 0.5);
+    assert!((a - b).abs() < 1e-4 && (a * a + b * b - 1.0).abs() < 1e-3);
+    assert_eq!(run_pan(PanLaw::Exclusive, 0.3), (1.0, 0.0), "only A");
+    assert_eq!(run_pan(PanLaw::Exclusive, 0.7), (0.0, 1.0), "only B");
+}
+
+#[test]
+fn step_sequencer_walks_its_steps_in_time() {
+    let p = StepSeqParams {
+        bpm: 120.0,
+        per_beat: 2,
+        ..StepSeqParams::default()
+    };
+    assert!((p.step_s() - 0.25).abs() < 1e-6);
+    let mut g = Graph::default();
+    let id = g.add_kind(NodeKind::StepSequencer(p.clone()), [0.0, 0.0]);
+    let mut ev = GraphEvaluator::new(&g);
+    ev.step(DT);
+    assert_eq!(out(&ev, id, "step"), 0.0);
+    assert_eq!(out(&ev, id, "a"), p.a[0]);
+    assert_eq!(out(&ev, id, "gate"), 1.0);
+    for _ in 0..10 {
+        ev.step(DT);
+    }
+    assert_eq!(out(&ev, id, "step"), 1.0, "after a quarter second");
+    assert_eq!(out(&ev, id, "b"), p.b[1]);
+}
+
+#[test]
+fn swing_delays_the_off_beat() {
+    let p = StepSeqParams {
+        swing: 0.5,
+        ..StepSeqParams::default()
+    };
+    let n = p.steps as f32;
+    assert_eq!(p.locate(1.2 / n).0, 0, "still on the first step");
+    assert_eq!(p.locate(1.6 / n).0, 1);
+}
+
+#[test]
+fn partner_feedback_reports_strength_and_wishes() {
+    let mut g = Graph::default();
+    let id = g.add_kind(NodeKind::PartnerFeedback(FeedbackParams::default()), [0.0, 0.0]);
+    let mut ev = GraphEvaluator::new(&g);
+    let ctx = |more, less| PartnerContext {
+        outputs: vec![(0, [100, 20])],
+        live: true,
+        more,
+        less,
+    };
+    ev.set_partner(ctx(3, 1));
+    ev.step(DT);
+    assert_eq!(out(&ev, id, "str_a"), 0.5);
+    assert_eq!(out(&ev, id, "live"), 1.0);
+    assert_eq!(out(&ev, id, "wish"), 0.0, "wish starts in the centre; earlier presses are not counted");
+    ev.set_partner(ctx(5, 1));
+    ev.step(DT);
+    assert!((out(&ev, id, "wish") - 0.2).abs() < 1e-4);
+    assert_eq!(out(&ev, id, "more"), 1.0);
+    for _ in 0..20 {
+        ev.step(DT);
+    }
+    assert_eq!(out(&ev, id, "more"), 0.0, "the pulse ends");
+    ev.set_partner(ctx(5, 6));
+    ev.step(DT);
+    assert!((out(&ev, id, "wish") + 0.3).abs() < 1e-4, "Less goes below the centre");
+    assert_eq!(out(&ev, id, "less"), 1.0);
+    for k in 0..30 {
+        ev.set_partner(ctx(5, 7 + k));
+        ev.step(DT);
+    }
+    assert_eq!(out(&ev, id, "wish"), -1.0, "wish stops at -1");
+    for k in 0..30 {
+        ev.set_partner(ctx(6 + k, 36));
+        ev.step(DT);
+    }
+    assert_eq!(out(&ev, id, "wish"), 1.0, "wish stops at +1");
+}
+
+#[test]
+fn an_old_wish_start_is_kept_in_range() {
+    let mut p = FeedbackParams { start: 4.0, ..FeedbackParams::default() };
+    p.sanitize();
+    assert_eq!(p.start, 1.0);
+    p.start = -3.0;
+    p.sanitize();
+    assert_eq!(p.start, -1.0);
+    assert_eq!(FeedbackParams::default().start, 0.0);
+}
+
+#[test]
+fn live_controls_are_not_saved() {
+    let pad = XyPadParams { touching: true, ..XyPadParams::default() };
+    let back: XyPadParams = serde_json::from_value(serde_json::to_value(&pad).unwrap()).unwrap();
+    assert!(!back.touching);
+    let fader = FaderParams { pressed: true, ..FaderParams::default() };
+    let back: FaderParams = serde_json::from_value(serde_json::to_value(&fader).unwrap()).unwrap();
+    assert!(!back.pressed);
 }

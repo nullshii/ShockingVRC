@@ -817,18 +817,14 @@ impl CliEngine {
         status.channel_b.frequency = freq_b_out;
 
         if let Some(wave_now) = wave_arc {
-            let wave = if status.channel_a.strength == 0 && status.channel_b.strength == 0 {
-                WaveformV3::default()
-            } else {
-                WaveformV3::new(
-                    status.channel_a.strength,
-                    status.channel_b.strength,
-                    freq_a_out,
-                    int_a,
-                    freq_b_out,
-                    int_b,
-                )
-            };
+            let wave = WaveformV3::output(
+                status.channel_a.strength,
+                status.channel_b.strength,
+                freq_a_out,
+                int_a,
+                freq_b_out,
+                int_b,
+            );
             *wave_now.lock().await = wave;
         }
 

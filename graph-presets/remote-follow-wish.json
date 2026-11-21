@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Follow their wish",
+  "description": "Remote: your partner's More / Less buttons raise and lower the power",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -150.0
+        ],
+        "kind": {
+          "type": "Frame",
+          "size": [
+            900.0,
+            116.0
+          ],
+          "text": "Your partner presses More or Less in their app; Wish starts in the centre and moves toward +1 or -1. Remap turns it into 0-60% for the fader: the centre is 30%. Click the fader's button to start. Their real output shows on the Feedback node."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "PartnerFeedback",
+          "slot": 0,
+          "step": 0.2,
+          "start": 0.0
+        }
+      },
+      {
+        "id": 5,
+        "pos": [
+          300.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Remap",
+          "clamp": true
+        },
+        "defaults": {
+          "in_min": -1.0,
+          "in_max": 1.0,
+          "out_min": 0.0,
+          "out_max": 0.6
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          520.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Fader",
+          "level": 1.0,
+          "attack": 0.6,
+          "decay": 0.0,
+          "sustain": 1.0,
+          "release": 1.0,
+          "latch": true
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          780.0,
+          0.0
+        ],
+        "kind": {
+          "type": "PartnerDevice",
+          "slot": 0,
+          "channels": [
+            {
+              "expanded": []
+            },
+            {
+              "expanded": []
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "wish"
+        },
+        "to": {
+          "node": 5,
+          "pin": "in"
+        }
+      },
+      {
+        "from": {
+          "node": 5,
+          "pin": "out"
+        },
+        "to": {
+          "node": 3,
+          "pin": "level"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "out"
+        },
+        "to": {
+          "node": 4,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

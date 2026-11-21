@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Ping-pong",
+  "description": "Remote: power swings between channel A and B — only one side at a time",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -150.0
+        ],
+        "kind": {
+          "type": "Frame",
+          "size": [
+            640.0,
+            116.0
+          ],
+          "text": "The A↔B Pan swings on its own (one channel at a time). Turn off 'Auto swing' in the inspector and drive Pan from your own node instead. Level sets the strength."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Constant",
+          "value": 0.7
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          260.0,
+          0.0
+        ],
+        "kind": {
+          "type": "Pan",
+          "law": "Exclusive",
+          "swing": true,
+          "rate_hz": 0.5
+        }
+      },
+      {
+        "id": 4,
+        "pos": [
+          540.0,
+          0.0
+        ],
+        "kind": {
+          "type": "PartnerDevice",
+          "slot": 0,
+          "channels": [
+            {
+              "expanded": []
+            },
+            {
+              "expanded": []
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "out"
+        },
+        "to": {
+          "node": 3,
+          "pin": "level"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "a"
+        },
+        "to": {
+          "node": 4,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 3,
+          "pin": "b"
+        },
+        "to": {
+          "node": 4,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

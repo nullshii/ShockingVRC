@@ -92,11 +92,7 @@ pub fn safe_channel(f: &ChannelFrame, cap: u8, alarm: AlarmOverlay, ramp: f32) -
 }
 
 pub fn build_wave(a: &SafeChannel, b: &SafeChannel) -> WaveformV3 {
-    if a.strength == 0 && b.strength == 0 {
-        WaveformV3::default()
-    } else {
-        WaveformV3::new(a.strength, b.strength, a.freq, a.intensity, b.freq, b.intensity)
-    }
+    WaveformV3::output(a.strength, b.strength, a.freq, a.intensity, b.freq, b.intensity)
 }
 
 pub const REMOTE_FRAME_TIMEOUT: Duration = Duration::from_millis(1000);

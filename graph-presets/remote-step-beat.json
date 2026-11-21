@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "kind": "Graph",
+  "name": "Step beat",
+  "description": "Remote: a 16-step beat at 110 BPM — A on the downbeats, B on the off-beats, a little swing",
+  "author": "ShockingVRC",
+  "graph": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": 1,
+        "pos": [
+          40.0,
+          -150.0
+        ],
+        "kind": {
+          "type": "Frame",
+          "size": [
+            640.0,
+            116.0
+          ],
+          "text": "Paint the two lanes of the Step Sequencer: A on top, B below. Right-click a step to clear it. Change BPM, steps and swing in the inspector."
+        }
+      },
+      {
+        "id": 2,
+        "pos": [
+          40.0,
+          0.0
+        ],
+        "kind": {
+          "type": "StepSequencer",
+          "steps": 16,
+          "bpm": 110.0,
+          "per_beat": 4,
+          "swing": 0.15,
+          "a": [
+            1.0,
+            0,
+            0,
+            0,
+            0.7,
+            0,
+            0,
+            0,
+            1.0,
+            0,
+            0,
+            0.5,
+            0.7,
+            0,
+            0,
+            0
+          ],
+          "b": [
+            0,
+            0,
+            0.6,
+            0,
+            0,
+            0,
+            0.6,
+            0,
+            0,
+            0,
+            0.6,
+            0,
+            0,
+            0.4,
+            0.8,
+            0
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "pos": [
+          460.0,
+          0.0
+        ],
+        "kind": {
+          "type": "PartnerDevice",
+          "slot": 0,
+          "channels": [
+            {
+              "expanded": []
+            },
+            {
+              "expanded": []
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node": 2,
+          "pin": "a"
+        },
+        "to": {
+          "node": 3,
+          "pin": "a.power"
+        }
+      },
+      {
+        "from": {
+          "node": 2,
+          "pin": "b"
+        },
+        "to": {
+          "node": 3,
+          "pin": "b.power"
+        }
+      }
+    ]
+  }
+}

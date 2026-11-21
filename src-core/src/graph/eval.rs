@@ -7,10 +7,14 @@ use crate::modulation::noise;
 
 use super::compile::{self, ExternalRequest, Extra, GraphIssue, Plan, Src};
 use super::device::{
-    ChannelFrame, ChannelParams, DEFAULT_CHANNEL, DeviceFrame, DeviceProfile, MAX_CHANNELS, PartnerFrame, PinRole,
-    SEGMENTS,
+    CEILING_OFF, ChannelFrame, ChannelParams, DEFAULT_CHANNEL, DeviceFrame, DeviceProfile, MAX_CHANNELS,
+    PartnerFrame, PinRole, SEGMENTS,
 };
-use super::draw::FillShape;
+
+fn finite_or(v: f32, fallback: f32) -> f32 {
+    if v.is_finite() { v } else { fallback }
+}
+use super::draw::{FillShape, PanLaw, XyMode, pan_split};
 use super::kind::{
     CombineMode, CompareOp, EnvMode, LfoShape, LogicOp, NodeKind, NoiseKind, as_bool, from_bool, sanitised_ukf,
 };
@@ -27,6 +31,18 @@ pub struct AlarmSample {
     pub strength: f32,
     pub active: bool,
 }
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PartnerContext {
+    pub outputs: Vec<(u8, [u8; MAX_CHANNELS])>,
+    pub live: bool,
+    pub more: u32,
+    pub less: u32,
+}
+
+const FEEDBACK_PULSE_S: f32 = 0.25;
+const XY_SPEED_TAU_S: f32 = 0.08;
+const XY_FULL_SPEED: f32 = 2.0;
 
 #[derive(Debug)]
 enum NodeState {
@@ -124,6 +140,24 @@ enum NodeState {
         rng: u32,
         last_reset: bool,
     },
+    Xy {
+        px: f32,
+        py: f32,
+        vx: f32,
+        vy: f32,
+        init: bool,
+    },
+    Phase {
+        p: f32,
+    },
+    Feedback {
+        wish: f32,
+        more_seen: u32,
+        less_seen: u32,
+        more_t: f32,
+        less_t: f32,
+        init: bool,
+    },
 }
 
 impl NodeState {
@@ -186,7 +220,23 @@ impl NodeState {
                 stale: 0.0,
                 init: false,
             },
-            NodeKind::DrawZone(_) | NodeKind::StampPattern(_) => NodeState::Play {
+            NodeKind::XyPad(_) => NodeState::Xy {
+                px: 0.0,
+                py: 0.0,
+                vx: 0.0,
+                vy: 0.0,
+                init: false,
+            },
+            NodeKind::Pan(_) => NodeState::Phase { p: 0.0 },
+            NodeKind::PartnerFeedback(p) => NodeState::Feedback {
+                wish: p.start,
+                more_seen: 0,
+                less_seen: 0,
+                more_t: 0.0,
+                less_t: 0.0,
+                init: false,
+            },
+            NodeKind::DrawZone(_) | NodeKind::StepSequencer(_) => NodeState::Play {
                 t: 0.0,
                 last_reset: false,
             },
@@ -265,6 +315,7 @@ pub struct GraphEvaluator {
     partners: Vec<PartnerFrame>,
     external: Vec<ExternalSample>,
     alarm: AlarmSample,
+    partner: PartnerContext,
     time: f64,
     tick: u64,
     panic: bool,
@@ -287,6 +338,7 @@ impl GraphEvaluator {
             partners: Vec::new(),
             external: Vec::new(),
             alarm: AlarmSample::default(),
+            partner: PartnerContext::default(),
             time: 0.0,
             tick: 0,
             panic: false,
@@ -399,6 +451,10 @@ impl GraphEvaluator {
         self.alarm = alarm;
     }
 
+    pub fn set_partner(&mut self, partner: PartnerContext) {
+        self.partner = partner;
+    }
+
     pub fn frames(&self) -> &[DeviceFrame] {
         &self.frames
     }
@@ -450,6 +506,7 @@ impl GraphEvaluator {
             dt,
             time: self.time,
             alarm: self.alarm,
+            partner: self.partner.clone(),
         };
         let Self {
             plan,
@@ -542,6 +599,7 @@ struct Ctx {
     dt: f32,
     time: f64,
     alarm: AlarmSample,
+    partner: PartnerContext,
 }
 
 struct Sinks<'a> {
@@ -641,9 +699,12 @@ fn drive_channels(
                     cf.power_seg = *hist;
                     cf.power = hist.iter().copied().fold(0.0, f32::max);
                 }
-                PinRole::LimitMin => cf.limit_min = v0,
-                PinRole::LimitMax => cf.limit_max = v0,
-                PinRole::Ceiling => cf.ceiling = v0,
+
+                PinRole::LimitMin => cf.limit_min = finite_or(v0, 0.0).clamp(0.0, 200.0),
+                PinRole::LimitMax => cf.limit_max = finite_or(v0, 0.0).clamp(0.0, 200.0),
+                PinRole::Ceiling => {
+                    cf.ceiling = if v0.is_finite() && v0 >= 0.0 { v0.min(200.0) } else { CEILING_OFF }
+                }
                 PinRole::Frequency | PinRole::Intensity => {
                     let is_freq = g.role == PinRole::Frequency;
                     let map = |v: f32| {
@@ -1001,13 +1062,6 @@ fn eval_node(
                 outs[2] = from_bool(inside);
             }
         }
-        NodeKind::StampPattern(p) => {
-            if let NodeState::Play { t, last_reset } = state {
-                let at = advance_loop(t, last_reset, as_bool(i(1)), i(0), p.length_s, dt);
-                outs[0] = p.sample(at);
-                outs[1] = at;
-            }
-        }
         NodeKind::ShapeFill(p) => {
             if let NodeState::Fill {
                 t,
@@ -1054,9 +1108,118 @@ fn eval_node(
             }
         }
         NodeKind::XyPad(p) => {
-            outs[0] = p.x;
-            outs[1] = p.y;
-            outs[2] = from_bool(p.touching);
+            let (x, y) = (p.x.clamp(0.0, 1.0), p.y.clamp(0.0, 1.0));
+            let (mut vx, mut vy) = (0.0, 0.0);
+            if let NodeState::Xy {
+                px,
+                py,
+                vx: svx,
+                vy: svy,
+                init,
+            } = state
+            {
+                if *init && dt > 0.0 {
+                    let k = (dt / XY_SPEED_TAU_S).min(1.0);
+                    *svx += ((x - *px) / dt - *svx) * k;
+                    *svy += ((y - *py) / dt - *svy) * k;
+                } else {
+                    *svx = 0.0;
+                    *svy = 0.0;
+                }
+                (*px, *py, *init) = (x, y, true);
+                vx = svx.clamp(-4.0, 4.0);
+                vy = svy.clamp(-4.0, 4.0);
+            }
+            let touch = from_bool(p.touching);
+            match p.mode {
+                XyMode::FreqInt => {
+                    outs[0] = x;
+                    outs[1] = y;
+                    outs[2] = touch;
+                }
+                XyMode::PanPower => {
+                    let (a, b) = pan_split(PanLaw::EqualPower, x, y);
+                    outs[0] = a;
+                    outs[1] = b;
+                    outs[2] = x;
+                    outs[3] = y;
+                    outs[4] = touch;
+                }
+                XyMode::Position => {
+                    outs[0] = x;
+                    outs[1] = y;
+                    outs[2] = vx;
+                    outs[3] = vy;
+                    outs[4] = ((vx * vx + vy * vy).sqrt() / XY_FULL_SPEED).clamp(0.0, 1.0);
+                    outs[5] = touch;
+                }
+            }
+        }
+        NodeKind::StepSequencer(p) => {
+            if let NodeState::Play { t, last_reset } = state {
+                let at = advance_loop(t, last_reset, as_bool(i(1)), i(0), p.length_s(), dt);
+                let (step, frac) = p.locate(at);
+                let a = p.a.get(step).copied().unwrap_or(0.0);
+                let b = p.b.get(step).copied().unwrap_or(0.0);
+                outs[0] = a;
+                outs[1] = b;
+                outs[2] = from_bool((a > 0.0 || b > 0.0) && frac < 0.5);
+                outs[3] = step as f32;
+            }
+        }
+        NodeKind::Pan(p) => {
+            let mut pan = i(1);
+            if let NodeState::Phase { p: phase } = state {
+                if p.swing {
+                    *phase = (*phase + p.rate_hz * dt).rem_euclid(1.0);
+                    pan = 0.5 - 0.5 * (TAU * *phase).cos();
+                } else {
+                    *phase = 0.0;
+                }
+            }
+            let (a, b) = pan_split(p.law, pan, i(0));
+            outs[0] = a;
+            outs[1] = b;
+        }
+        NodeKind::PartnerFeedback(p) => {
+            let partner = &ctx.partner;
+            let out = partner
+                .outputs
+                .iter()
+                .find(|(slot, _)| *slot == p.slot)
+                .map(|(_, o)| *o)
+                .unwrap_or([0; MAX_CHANNELS]);
+            outs[0] = out[0] as f32 / 200.0;
+            outs[1] = out[1] as f32 / 200.0;
+            outs[2] = from_bool(partner.live);
+            if let NodeState::Feedback {
+                wish,
+                more_seen,
+                less_seen,
+                more_t,
+                less_t,
+                init,
+            } = state
+            {
+                if !*init {
+                    (*more_seen, *less_seen, *init) = (partner.more, partner.less, true);
+                }
+                let more = partner.more.wrapping_sub(*more_seen).min(8);
+                let less = partner.less.wrapping_sub(*less_seen).min(8);
+                (*more_seen, *less_seen) = (partner.more, partner.less);
+                if more > 0 {
+                    *more_t = FEEDBACK_PULSE_S;
+                }
+                if less > 0 {
+                    *less_t = FEEDBACK_PULSE_S;
+                }
+                *wish = (*wish + (more as f32 - less as f32) * p.step).clamp(-1.0, 1.0);
+                *more_t = (*more_t - dt).max(0.0);
+                *less_t = (*less_t - dt).max(0.0);
+                outs[3] = from_bool(*more_t > 0.0);
+                outs[4] = from_bool(*less_t > 0.0);
+                outs[5] = *wish;
+            }
         }
         NodeKind::SegmentPainter(p) => {
             let mut k = 0;

@@ -3,7 +3,7 @@ use egui::{Align2, Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use shocking_vrc_core::OldZoneType;
 use shocking_vrc_core::cli::{MotionNorms, UkfConfig};
 use shocking_vrc_core::graph::curve::{Curve, CurveInterp, CurvePreset};
-use shocking_vrc_core::graph::device::FreqMode;
+use shocking_vrc_core::graph::device::{ChannelParams, DeviceProfile, FreqMode};
 use shocking_vrc_core::graph::kind::*;
 use shocking_vrc_core::graph::{
     DeviceBinding, GraphPresetEntry, GraphPresetKind, Node, NodeKind, NodeTint, PinType, Severity,
@@ -93,15 +93,24 @@ fn seg_row(ui: &mut Ui, pal: &Palette, label: &str, options: &[&str], selected: 
 }
 
 fn num_row(ui: &mut Ui, pal: &Palette, label: &str, v: &mut f32, min: f32, max: f32) -> bool {
+    num_row_in(ui, pal, label, v, min, max, false)
+}
+
+fn num_row_clamped(ui: &mut Ui, pal: &Palette, label: &str, v: &mut f32, min: f32, max: f32) -> bool {
+    num_row_in(ui, pal, label, v, min, max, true)
+}
+
+fn num_row_in(ui: &mut Ui, pal: &Palette, label: &str, v: &mut f32, min: f32, max: f32, bounded: bool) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         row_label(ui, pal, label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let speed = ((max - min).abs() / 300.0).max(1e-4) as f64;
-            if ui
-                .add_sized(vec2(VALUE_W, 20.0), egui::DragValue::new(v).speed(speed).max_decimals(4))
-                .changed()
-            {
+            let mut drag = egui::DragValue::new(v).speed(speed).max_decimals(4);
+            if bounded {
+                drag = drag.range(min.min(max)..=max.max(min));
+            }
+            if ui.add_sized(vec2(VALUE_W, 20.0), drag).changed() {
                 changed = true;
             }
             let sw = ui.available_width();
@@ -120,8 +129,16 @@ fn num_row(ui: &mut Ui, pal: &Palette, label: &str, v: &mut f32, min: f32, max: 
 }
 
 fn int_row(ui: &mut Ui, pal: &Palette, label: &str, v: &mut u32, min: u32, max: u32) -> bool {
+    int_row_in(ui, pal, label, v, min, max, false)
+}
+
+fn int_row_clamped(ui: &mut Ui, pal: &Palette, label: &str, v: &mut u32, min: u32, max: u32) -> bool {
+    int_row_in(ui, pal, label, v, min, max, true)
+}
+
+fn int_row_in(ui: &mut Ui, pal: &Palette, label: &str, v: &mut u32, min: u32, max: u32, clamped: bool) -> bool {
     let mut f = *v as f32;
-    let changed = num_row(ui, pal, label, &mut f, min as f32, max as f32);
+    let changed = num_row_in(ui, pal, label, &mut f, min as f32, max as f32, clamped);
     if changed {
         *v = f.round().clamp(min as f32, max as f32) as u32;
     }
@@ -340,6 +357,9 @@ fn inspector(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<G
                         v = if b { 1.0 } else { 0.0 };
                         c
                     }
+                    PinType::Float if node.kind.clamps_inputs() => {
+                        num_row_clamped(ui, pal, &p.label, &mut v, p.range.0, p.range.1)
+                    }
                     PinType::Float => num_row(ui, pal, &p.label, &mut v, p.range.0, p.range.1),
                 };
                 if changed {
@@ -432,6 +452,14 @@ fn summary(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
 
 #[allow(clippy::too_many_arguments)]
 fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut bool, ungroup: &mut bool) {
+    let before = channel_modes(&node.kind);
+    params_inner(ui, ed, env, node, enter, ungroup);
+    if !before.is_empty() {
+        convert_freq_defaults(node, &before);
+    }
+}
+
+fn params_inner(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut bool, ungroup: &mut bool) {
     let pal = env.pal;
     match &mut node.kind {
         NodeKind::OscFloat(p) => {
@@ -783,6 +811,8 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
                 pal,
                 format!("Partner caps now: A {} · B {} — their limits always win.", caps[0], caps[1]),
             );
+            let profile = p.profile();
+            channel_settings(ui, pal, profile, &mut p.channels);
             w::dim(ui, pal, "Power 0–1 scales up to Max; values above the cap are shaded.");
         }
         NodeKind::DrawZone(p) => {
@@ -800,28 +830,28 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
             int_row(ui, pal, "Seed", &mut p.seed, 1, 9999);
             w::dim(ui, pal, "Drag in the canvas to set the zone. Rate, duty and jitter are inputs.");
         }
-        NodeKind::StampPattern(p) => {
-            num_row(ui, pal, "Loop length s", &mut p.length_s, 0.25, 30.0);
-            let snaps = [0.0, 0.125, 0.0625, 0.03125];
-            let sel = snaps.iter().position(|s| (s - p.snap).abs() < 1e-4).unwrap_or(2);
-            if let Some(i) = seg_row(ui, pal, "Snap", &["off", "1/8", "1/16", "1/32"], sel) {
-                p.snap = snaps[i];
-            }
-            for s in &mut p.stamps {
-                text_row(ui, pal, "Stamp", &mut s.name, "name");
-            }
-            ui.horizontal(|ui| {
-                if w::button(ui, pal, "Clear lane").clicked() {
-                    p.lane.clear();
-                }
-                w::dim(ui, pal, format!("{} placed", p.lane.len()));
-            });
-            w::dim(ui, pal, "Ctrl+C over a stamp copies it; Ctrl+V over the lane pastes.");
-        }
         NodeKind::XyPad(p) => {
-            num_row(ui, pal, "X (freq)", &mut p.x, 0.0, 1.0);
-            num_row(ui, pal, "Y (intensity)", &mut p.y, 0.0, 1.0);
+            use shocking_vrc_core::graph::draw::{XY_MAX_SIZE, XY_MIN_SIZE, XyMode};
+            let names: Vec<&str> = XyMode::ALL.iter().map(|m| m.label()).collect();
+            let sel = XyMode::ALL.iter().position(|m| *m == p.mode).unwrap_or(0);
+            if let Some(i) = seg_row(ui, pal, "Mode", &names, sel) {
+                p.mode = XyMode::ALL[i];
+            }
+            num_row(ui, pal, "X", &mut p.x, 0.0, 1.0);
+            num_row(ui, pal, "Y", &mut p.y, 0.0, 1.0);
             toggle_row(ui, pal, "Spring", &mut p.spring, "Y drops to 0 on release");
+            num_row(ui, pal, "Width", &mut p.size[0], XY_MIN_SIZE, XY_MAX_SIZE);
+            num_row(ui, pal, "Height", &mut p.size[1], XY_MIN_SIZE, XY_MAX_SIZE);
+            w::dim(
+                ui,
+                pal,
+                match p.mode {
+                    XyMode::FreqInt => "X → frequency, Y → intensity. Wire them into a Partner Device.",
+                    XyMode::PanPower => "X slides between channel A and B, Y sets the power. Wire A/B power.",
+                    XyMode::Position => "Raw X/Y plus how fast you move: X/Y speed (±4/s) and Speed 0–1.",
+                },
+            );
+            w::dim(ui, pal, "Drag the corner of the node to resize the pad.");
         }
         NodeKind::SegmentPainter(_) => {
             w::dim(
@@ -837,7 +867,76 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
             num_row(ui, pal, "Decay s", &mut p.decay, 0.0, 10.0);
             num_row(ui, pal, "Sustain", &mut p.sustain, 0.0, 1.0);
             num_row(ui, pal, "Release s", &mut p.release, 0.0, 10.0);
-            w::dim(ui, pal, "Hold the button in the node, or wire a bool into Trigger.");
+            if toggle_row(ui, pal, "Latch", &mut p.latch, "click starts, click again stops") && !p.latch {
+                p.pressed = false;
+            }
+            w::dim(
+                ui,
+                pal,
+                if p.latch {
+                    "Click the button in the node to start and again to stop, or wire a bool into Trigger."
+                } else {
+                    "Hold the button in the node, or wire a bool into Trigger."
+                },
+            );
+        }
+        NodeKind::StepSequencer(p) => {
+            let sel = if p.steps > 8 { 1 } else { 0 };
+            if let Some(i) = seg_row(ui, pal, "Steps", &["8", "16"], sel) {
+                p.steps = if i == 1 { 16 } else { 8 };
+            }
+            num_row(ui, pal, "BPM", &mut p.bpm, 20.0, 300.0);
+            let per = [1u8, 2, 4];
+            let sel = per.iter().position(|v| *v == p.per_beat).unwrap_or(1);
+            if let Some(i) = seg_row(ui, pal, "Steps per beat", &["1", "2", "4"], sel) {
+                p.per_beat = per[i];
+            }
+            num_row(ui, pal, "Swing", &mut p.swing, 0.0, 0.5);
+            ui.horizontal(|ui| {
+                if w::button(ui, pal, "Clear A").clicked() {
+                    p.a.iter_mut().for_each(|v| *v = 0.0);
+                }
+                if w::button(ui, pal, "Clear B").clicked() {
+                    p.b.iter_mut().for_each(|v| *v = 0.0);
+                }
+            });
+            w::dim(
+                ui,
+                pal,
+                format!(
+                    "One step = {:.2} s. Click or drag in a lane to set a step's level; right-click clears it. \
+                     Wire A/B level into Partner Device power.",
+                    p.step_s()
+                ),
+            );
+        }
+        NodeKind::Pan(p) => {
+            pick_enum(ui, pal, &shocking_vrc_core::graph::draw::PanLaw::ALL, &mut p.law, |l| {
+                l.label().to_string()
+            });
+            toggle_row(ui, pal, "Auto swing", &mut p.swing, "moves A↔B by itself");
+            if p.swing {
+                num_row(ui, pal, "Swing Hz", &mut p.rate_hz, 0.01, 10.0);
+            }
+            w::dim(
+                ui,
+                pal,
+                "Pan 0 = only A, 1 = only B. 'One at a time' never drives both channels together.",
+            );
+        }
+        NodeKind::PartnerFeedback(p) => {
+            let mut slot = p.slot as u32 + 1;
+            if int_row(ui, pal, "Partner device", &mut slot, 1, 8) {
+                p.slot = (slot.max(1) - 1) as u8;
+            }
+            num_row(ui, pal, "Wish step", &mut p.step, 0.01, 0.5);
+            num_row(ui, pal, "Wish start", &mut p.start, -1.0, 1.0);
+            w::dim(
+                ui,
+                pal,
+                "Their A/B = the partner's real output. More/Less pulse when they press those buttons; \
+                 Wish starts in the centre (0) and moves toward +1 on More and −1 on Less.",
+            );
         }
         NodeKind::Missing(m) => {
             ui.label(
@@ -928,8 +1027,53 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
         ui.ctx()
             .data_mut(|m| m.insert_temp(egui::Id::new("graph_mac_entry"), typed));
     }
+    channel_settings(ui, pal, profile, &mut d.channels);
+    ui.add_space(space::ITEM_GAP);
+    let caps = env.graph.caps;
+    ui.label(
+        egui::RichText::new(format!(
+            "Limit pins are requests: the effective max is never above the Graph cap ({} / {}) set in Setup.",
+            caps[0], caps[1]
+        ))
+        .font(font::small())
+        .color(pal.warning),
+    );
+}
+
+fn channel_modes(kind: &NodeKind) -> Vec<ChannelParams> {
+    match kind {
+        NodeKind::Device(d) => d.channels.clone(),
+        NodeKind::PartnerDevice(p) => p.channels.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn convert_freq_defaults(node: &mut Node, before: &[ChannelParams]) {
+    let after = channel_modes(&node.kind);
+    let profile = match &node.kind {
+        NodeKind::Device(d) => d.profile(),
+        NodeKind::PartnerDevice(p) => p.profile(),
+        _ => return,
+    };
     for (ci, ch) in profile.channels.iter().enumerate() {
-        let Some(cp) = d.channels.get_mut(ci) else { continue };
+        let (Some(old), Some(new)) = (before.get(ci), after.get(ci)) else { continue };
+        if old.freq_mode == new.freq_mode && old.freq_hz == new.freq_hz {
+            continue;
+        }
+        let prefix = format!("{}.freq", ch.key);
+        let keys: Vec<String> = node.defaults.keys().filter(|k| k.starts_with(&prefix)).cloned().collect();
+        for k in keys {
+            let hz = old.freq_to_hz(node.defaults[&k]);
+            node.defaults.insert(k, new.freq_from_hz(hz));
+        }
+    }
+}
+
+fn channel_settings(ui: &mut Ui, pal: &Palette, profile: &DeviceProfile, channels: &mut [ChannelParams]) {
+    let num = num_row_clamped;
+    let int = int_row_clamped;
+    for (ci, ch) in profile.channels.iter().enumerate() {
+        let Some(cp) = channels.get_mut(ci) else { continue };
         ui.add_space(space::ITEM_GAP);
         w::caption(ui, pal, ch.label);
         let mut ef = cp.is_expanded("freq");
@@ -946,15 +1090,15 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
             cp.freq_mode = FreqMode::ALL[i];
         }
         if cp.freq_mode == FreqMode::Normalized {
-            num_row(ui, pal, "0 → Hz", &mut cp.freq_hz[0], 1.0, 100.0);
-            num_row(ui, pal, "1 → Hz", &mut cp.freq_hz[1], 1.0, 100.0);
+            num(ui, pal, "0 → Hz", &mut cp.freq_hz[0], 1.0, 100.0);
+            num(ui, pal, "1 → Hz", &mut cp.freq_hz[1], 1.0, 100.0);
         }
         let mut lo = cp.freq_clamp[0] as u32;
         let mut hi = cp.freq_clamp[1] as u32;
-        if int_row(ui, pal, "Raw min", &mut lo, 10, 255) {
+        if int(ui, pal, "Raw min", &mut lo, 10, 255) {
             cp.freq_clamp[0] = lo as u8;
         }
-        if int_row(ui, pal, "Raw max", &mut hi, 10, 255) {
+        if int(ui, pal, "Raw max", &mut hi, 10, 255) {
             cp.freq_clamp[1] = hi as u8;
         }
         w::dim(
@@ -970,23 +1114,13 @@ fn device_params(ui: &mut Ui, ed: &GraphEditor, env: &Env, d: &mut DeviceParams)
         );
         let mut ilo = cp.intensity_clamp[0] as u32;
         let mut ihi = cp.intensity_clamp[1] as u32;
-        if int_row(ui, pal, "Int. min %", &mut ilo, 0, 100) {
+        if int(ui, pal, "Int. min %", &mut ilo, 0, 100) {
             cp.intensity_clamp[0] = ilo as u8;
         }
-        if int_row(ui, pal, "Int. max %", &mut ihi, 0, 100) {
+        if int(ui, pal, "Int. max %", &mut ihi, 0, 100) {
             cp.intensity_clamp[1] = ihi as u8;
         }
     }
-    ui.add_space(space::ITEM_GAP);
-    let caps = env.graph.caps;
-    ui.label(
-        egui::RichText::new(format!(
-            "Limit pins are requests: the effective max is never above the Graph cap ({} / {}) set in Setup.",
-            caps[0], caps[1]
-        ))
-        .font(font::small())
-        .color(pal.warning),
-    );
 }
 
 fn byline(e: &GraphPresetEntry) -> String {

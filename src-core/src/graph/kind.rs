@@ -10,7 +10,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::curve::Curve;
 use super::device::{self, ChannelParams, DeviceBinding};
-pub use super::draw::{DrawZoneParams, FaderParams, SegmentPainterParams, ShapeFillParams, StampParams, XyPadParams};
+pub use super::draw::{
+    DrawZoneParams, FaderParams, FeedbackParams, PanParams, SegmentPainterParams, ShapeFillParams,
+    StepSeqParams, XyMode, XyPadParams,
+};
 use super::model::Graph;
 
 static REMOTE_NODES: AtomicBool = AtomicBool::new(false);
@@ -917,21 +920,22 @@ fn profile_pins(p: &device::DeviceProfile, channel: impl Fn(usize) -> ChannelPar
         for (ci, ch) in p.channels.iter().enumerate() {
             let params = channel(ci);
             for g in ch.groups {
+                let (default, range) = (params.pin_default(g), params.pin_range(g));
                 if g.expandable && params.is_expanded(g.key) {
                     for s in 0..device::SEGMENTS {
                         out.push(owned(
                             DeviceParams::pin_key(ch.key, g.key, Some(s)),
                             format!("{} {}", g.label, s + 1),
-                            g.default,
-                            g.range,
+                            default,
+                            range,
                         ));
                     }
                 } else {
                     out.push(owned(
                         DeviceParams::pin_key(ch.key, g.key, None),
                         g.label.to_string(),
-                        g.default,
-                        g.range,
+                        default,
+                        range,
                     ));
                 }
             }
@@ -1031,10 +1035,12 @@ pub enum NodeKind {
     PartnerDevice(PartnerDeviceParams),
     DrawZone(DrawZoneParams),
     ShapeFill(ShapeFillParams),
-    StampPattern(StampParams),
     XyPad(XyPadParams),
     SegmentPainter(SegmentPainterParams),
     Fader(FaderParams),
+    StepSequencer(StepSeqParams),
+    Pan(PanParams),
+    PartnerFeedback(FeedbackParams),
     #[serde(skip)]
     Missing(MissingParams),
 }
@@ -1116,10 +1122,12 @@ impl NodeKind {
             NodeKind::PartnerDevice(_) => "PartnerDevice",
             NodeKind::DrawZone(_) => "DrawZone",
             NodeKind::ShapeFill(_) => "ShapeFill",
-            NodeKind::StampPattern(_) => "StampPattern",
             NodeKind::XyPad(_) => "XyPad",
             NodeKind::SegmentPainter(_) => "SegmentPainter",
             NodeKind::Fader(_) => "Fader",
+            NodeKind::StepSequencer(_) => "StepSequencer",
+            NodeKind::Pan(_) => "Pan",
+            NodeKind::PartnerFeedback(_) => "PartnerFeedback",
             NodeKind::Missing(m) => &m.type_name,
         }
     }
@@ -1188,10 +1196,12 @@ impl NodeKind {
             NodeKind::PartnerDevice(p) => format!("Partner Device {}", p.slot as u32 + 1),
             NodeKind::DrawZone(_) => "Draw Zone".into(),
             NodeKind::ShapeFill(p) => format!("Shape Fill {}", p.shape.label()),
-            NodeKind::StampPattern(_) => "Stamp Pattern".into(),
             NodeKind::XyPad(_) => "XY Pad".into(),
             NodeKind::SegmentPainter(_) => "Segment Painter".into(),
             NodeKind::Fader(_) => "Envelope / Fader".into(),
+            NodeKind::StepSequencer(_) => "Step Sequencer".into(),
+            NodeKind::Pan(_) => "A↔B Pan".into(),
+            NodeKind::PartnerFeedback(p) => format!("Partner Feedback {}", p.slot as u32 + 1),
             NodeKind::Missing(m) => format!("Missing: {}", m.type_name),
         }
     }
@@ -1247,16 +1257,22 @@ impl NodeKind {
             NodeKind::PartnerDevice(_)
             | NodeKind::DrawZone(_)
             | NodeKind::ShapeFill(_)
-            | NodeKind::StampPattern(_)
             | NodeKind::XyPad(_)
             | NodeKind::SegmentPainter(_)
-            | NodeKind::Fader(_) => Category::Remote,
+            | NodeKind::Fader(_)
+            | NodeKind::StepSequencer(_)
+            | NodeKind::Pan(_)
+            | NodeKind::PartnerFeedback(_) => Category::Remote,
             NodeKind::Frame(_) | NodeKind::Missing(_) => Category::Layout,
         }
     }
 
     pub fn is_remote(&self) -> bool {
         self.category() == Category::Remote
+    }
+
+    pub fn clamps_inputs(&self) -> bool {
+        matches!(self, NodeKind::Device(_) | NodeKind::PartnerDevice(_))
     }
 
     pub fn is_partner_device(&self) -> bool {
@@ -1290,8 +1306,11 @@ impl NodeKind {
             | NodeKind::Panic(_)
             | NodeKind::XyPad(_)
             | NodeKind::SegmentPainter(_)
+            | NodeKind::PartnerFeedback(_)
             | NodeKind::Missing(_) => Vec::new(),
-            NodeKind::DrawZone(_) | NodeKind::StampPattern(_) => {
+            NodeKind::StepSequencer(_) => vec![fl("rate", "Speed", 1.0, (0.0, 4.0)), bl("reset", "Reset", 0.0)],
+            NodeKind::Pan(_) => vec![fl("level", "Level", 1.0, (0.0, 1.0)), fl("pan", "Pan A→B", 0.5, (0.0, 1.0))],
+            NodeKind::DrawZone(_) => {
                 vec![fl("rate", "Speed", 1.0, (0.0, 4.0)), bl("reset", "Reset", 0.0)]
             }
             NodeKind::ShapeFill(_) => vec![
@@ -1474,8 +1493,39 @@ impl NodeKind {
             NodeKind::DrawZone(_) | NodeKind::ShapeFill(_) => {
                 vec![out(), unit("phase", "Phase"), bl("active", "In zone", 0.0)]
             }
-            NodeKind::StampPattern(_) => vec![out(), unit("phase", "Phase")],
-            NodeKind::XyPad(_) => vec![unit("x", "X / Freq"), unit("y", "Y / Int"), bl("touch", "Touch", 0.0)],
+            NodeKind::XyPad(p) => match p.mode {
+                XyMode::FreqInt => vec![unit("x", "X / Freq"), unit("y", "Y / Int"), bl("touch", "Touch", 0.0)],
+                XyMode::PanPower => vec![
+                    unit("a", "A power"),
+                    unit("b", "B power"),
+                    unit("x", "X / Pan"),
+                    unit("y", "Y / Power"),
+                    bl("touch", "Touch", 0.0),
+                ],
+                XyMode::Position => vec![
+                    unit("x", "X"),
+                    unit("y", "Y"),
+                    fl("vx", "X speed", 0.0, (-4.0, 4.0)),
+                    fl("vy", "Y speed", 0.0, (-4.0, 4.0)),
+                    unit("speed", "Speed"),
+                    bl("touch", "Touch", 0.0),
+                ],
+            },
+            NodeKind::StepSequencer(_) => vec![
+                unit("a", "A level"),
+                unit("b", "B level"),
+                bl("gate", "Trigger", 0.0),
+                fl("step", "Step", 0.0, (0.0, 15.0)),
+            ],
+            NodeKind::Pan(_) => vec![unit("a", "A"), unit("b", "B")],
+            NodeKind::PartnerFeedback(_) => vec![
+                unit("str_a", "Their A"),
+                unit("str_b", "Their B"),
+                bl("live", "Live", 0.0),
+                bl("more", "More", 0.0),
+                bl("less", "Less", 0.0),
+                fl("wish", "Wish", 0.0, (-1.0, 1.0)),
+            ],
             NodeKind::SegmentPainter(_) => {
                 let mut v = Vec::with_capacity(16);
                 for ch in ["a", "b"] {
@@ -1633,10 +1683,12 @@ impl NodeKind {
             }
             NodeKind::DrawZone(p) => p.sanitize(),
             NodeKind::ShapeFill(p) => p.sanitize(),
-            NodeKind::StampPattern(p) => p.sanitize(),
             NodeKind::XyPad(p) => p.sanitize(),
             NodeKind::SegmentPainter(p) => p.sanitize(),
             NodeKind::Fader(p) => p.sanitize(),
+            NodeKind::StepSequencer(p) => p.sanitize(),
+            NodeKind::Pan(p) => p.sanitize(),
+            NodeKind::PartnerFeedback(p) => p.sanitize(),
             _ => {}
         }
     }
@@ -1688,17 +1740,23 @@ fn remote_catalog() -> Vec<CatalogEntry> {
             "shape fill sine triangle saw square pulse ramp random",
             || { NodeKind::ShapeFill(ShapeFillParams::default()) }
         ),
-        entry!("Stamp Pattern", Remote, "stamp pattern timeline lane copy paste", || {
-            NodeKind::StampPattern(StampParams::default())
-        }),
         entry!("XY Pad", Remote, "xy pad live drag frequency intensity", || {
             NodeKind::XyPad(XyPadParams::default())
         }),
         entry!("Segment Painter", Remote, "segment painter bars frequency intensity", || {
             NodeKind::SegmentPainter(SegmentPainterParams::default())
         }),
-        entry!("Envelope / Fader", Remote, "fader master adsr envelope button", || {
+        entry!("Envelope / Fader", Remote, "fader master adsr envelope button latch", || {
             NodeKind::Fader(FaderParams::default())
+        }),
+        entry!("Step Sequencer", Remote, "step sequencer bpm rhythm beat grid pattern", || {
+            NodeKind::StepSequencer(StepSeqParams::default())
+        }),
+        entry!("A↔B Pan", Remote, "pan crossfader balance channel a b swing one at a time", || {
+            NodeKind::Pan(PanParams::default())
+        }),
+        entry!("Partner Feedback", Remote, "partner feedback more less wish strength reaction", || {
+            NodeKind::PartnerFeedback(FeedbackParams::default())
         }),
     ]
 }

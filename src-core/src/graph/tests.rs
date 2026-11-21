@@ -52,6 +52,85 @@ fn contact_to_power_follows_the_level() {
 }
 
 #[test]
+fn device_inputs_cannot_be_negative() {
+    let mut g = Graph::default();
+    let d = device(&mut g, "AA");
+    let node = g.nodes.iter_mut().find(|n| n.id == d).unwrap();
+    node.set_input_default("a.limit_min", -384.3);
+    node.set_input_default("a.power", -0.5);
+    assert_eq!(node.defaults["a.limit_min"], 0.0);
+    assert_eq!(node.defaults["a.power"], 0.0);
+    node.defaults.insert("a.limit_max".into(), -198.6);
+    node.defaults.insert("a.int".into(), -2.25);
+    node.defaults.insert("b.limit_max".into(), 900.0);
+    g.sanitize();
+    let node = g.nodes.iter().find(|n| n.id == d).unwrap();
+    assert_eq!(node.defaults["a.limit_max"], 0.0);
+    assert_eq!(node.defaults["a.int"], 0.0);
+    assert_eq!(node.defaults["b.limit_max"], 200.0);
+    let mut g2 = Graph::default();
+    let d2 = device(&mut g2, "BB");
+    let node = g2.nodes.iter_mut().find(|n| n.id == d2).unwrap();
+    node.set_input_default("a.bf", -1.0);
+    assert_eq!(node.defaults["a.bf"], -1.0);
+}
+
+#[test]
+fn the_frequency_range_follows_its_unit() {
+    let mut params = DeviceParams::bound_to("AA");
+    params.channels[0].freq_mode = device::FreqMode::Hz;
+    let range = |p: &DeviceParams| p.pins().into_iter().find(|s| s.key == "a.freq").unwrap().range;
+    assert_eq!(range(&params), (1.0, 100.0));
+    params.channels[0].freq_mode = device::FreqMode::Raw;
+    assert_eq!(range(&params), (10.0, 240.0));
+    params.channels[0].freq_mode = device::FreqMode::Normalized;
+    assert_eq!(range(&params), (0.0, 1.0));
+}
+
+#[test]
+fn partner_device_inputs_are_clamped_too() {
+    let mut g = Graph::default();
+    let p = g.add_kind(NodeKind::PartnerDevice(PartnerDeviceParams::default()), [0.0, 0.0]);
+    let node = g.nodes.iter_mut().find(|n| n.id == p).unwrap();
+    node.set_input_default("a.limit_max", -120.0);
+    node.set_input_default("a.power", 3.0);
+    assert_eq!(node.defaults["a.limit_max"], 0.0);
+    assert_eq!(node.defaults["a.power"], 1.0);
+    node.defaults.insert("b.int".into(), -2.25);
+    g.sanitize();
+    let node = g.nodes.iter().find(|n| n.id == p).unwrap();
+    assert_eq!(node.defaults["b.int"], 0.0);
+
+    let mut g = Graph::default();
+    let c = g.add_kind(NodeKind::Constant(ConstantParams { value: -50.0 }), [0.0, 0.0]);
+    let p = g.add_kind(NodeKind::PartnerDevice(PartnerDeviceParams::default()), [0.0, 0.0]);
+    wire(&mut g, c, "out", p, "a.limit_max");
+    let mut ev = GraphEvaluator::new(&g);
+    ev.step(DT);
+    assert_eq!(ev.partner_frames()[0].channels[0].limit_max, 0.0);
+
+    let mut params = PartnerDeviceParams::default();
+    params.channels[0].freq_mode = device::FreqMode::Hz;
+    let range = params.pins().into_iter().find(|s| s.key == "a.freq").unwrap().range;
+    assert_eq!(range, (1.0, 100.0), "the frequency range follows its unit");
+}
+
+#[test]
+fn a_wired_negative_limit_is_clamped() {
+    let mut g = Graph::default();
+    let c = g.add_kind(NodeKind::Constant(ConstantParams { value: -50.0 }), [0.0, 0.0]);
+    let d = device(&mut g, "AA");
+    wire(&mut g, c, "out", d, "a.limit_max");
+    wire(&mut g, c, "out", d, "a.limit_min");
+    wire(&mut g, c, "out", d, "a.bf");
+    let mut ev = GraphEvaluator::new(&g);
+    let f = &ev.step(DT)[0];
+    assert_eq!(f.channels[0].limit_max, 0.0);
+    assert_eq!(f.channels[0].limit_min, 0.0);
+    assert_eq!(f.channels[0].ceiling, device::CEILING_OFF);
+}
+
+#[test]
 fn an_unwired_device_is_reported() {
     let mut g = Graph::default();
     device(&mut g, "AA");

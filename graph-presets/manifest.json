@@ -255,13 +255,6 @@
       "category": "remote"
     },
     {
-      "id": "remote-pulse-ladder",
-      "name": "Pulse ladder",
-      "description": "Remote: four pulses that climb step by step, then start again",
-      "file": "remote-pulse-ladder.json",
-      "category": "remote"
-    },
-    {
       "id": "remote-tease-ramp",
       "name": "Tease ramp",
       "description": "Remote: a slow climb over ten seconds that cuts out just before the top",
@@ -276,17 +269,31 @@
       "category": "remote"
     },
     {
-      "id": "remote-heartbeat",
-      "name": "Heartbeat",
-      "description": "Remote: a lub-dub beat, about 75 per minute",
-      "file": "remote-heartbeat.json",
+      "id": "remote-live-pad",
+      "name": "Live pad",
+      "description": "Remote: play your partner live with a latching fader, an XY pad and painted segments",
+      "file": "remote-live-pad.json",
       "category": "remote"
     },
     {
-      "id": "remote-live-pad",
-      "name": "Live pad",
-      "description": "Remote: play your partner live with a fader, an XY pad and painted segments",
-      "file": "remote-live-pad.json",
+      "id": "remote-step-beat",
+      "name": "Step beat",
+      "description": "Remote: a 16-step beat — A on the downbeats, B on the off-beats",
+      "file": "remote-step-beat.json",
+      "category": "remote"
+    },
+    {
+      "id": "remote-ping-pong",
+      "name": "Ping-pong",
+      "description": "Remote: power swings between channel A and B, one side at a time",
+      "file": "remote-ping-pong.json",
+      "category": "remote"
+    },
+    {
+      "id": "remote-follow-wish",
+      "name": "Follow their wish",
+      "description": "Remote: your partner's More / Less buttons raise and lower the power",
+      "file": "remote-follow-wish.json",
       "category": "remote"
     }
   ]

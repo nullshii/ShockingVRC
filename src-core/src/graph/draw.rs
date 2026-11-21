@@ -3,11 +3,12 @@ use std::f32::consts::TAU;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_DRAW_POINTS: usize = 256;
-pub const MAX_STAMP_POINTS: usize = 32;
-pub const MAX_STAMPS: usize = 16;
-pub const MAX_PLACED: usize = 64;
 pub const MIN_LENGTH_S: f32 = 0.25;
 pub const MAX_LENGTH_S: f32 = 120.0;
+pub const MAX_SEQ_STEPS: usize = 16;
+pub const XY_MIN_SIZE: f32 = 160.0;
+pub const XY_MAX_SIZE: f32 = 640.0;
+pub const XY_DEFAULT_SIZE: [f32; 2] = [320.0, 280.0];
 
 fn fin(v: f32, d: f32) -> f32 {
     if v.is_finite() { v } else { d }
@@ -95,19 +96,6 @@ pub fn sample_points(points: &[[f32; 2]], x: f32) -> f32 {
                 }
             }
             points[points.len() - 1][1]
-        }
-    }
-}
-
-pub fn sample_levels(levels: &[f32], x: f32) -> f32 {
-    match levels.len() {
-        0 => 0.0,
-        1 => levels[0],
-        n => {
-            let pos = unit(x) * (n - 1) as f32;
-            let i = (pos.floor() as usize).min(n - 2);
-            let k = pos - i as f32;
-            levels[i] + (levels[i + 1] - levels[i]) * k
         }
     }
 }
@@ -249,138 +237,31 @@ impl ShapeFillParams {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct StampDef {
-    pub name: String,
-    pub levels: Vec<f32>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum XyMode {
+    #[default]
+    FreqInt,
+    PanPower,
+    Position,
 }
 
-impl Default for StampDef {
-    fn default() -> Self {
-        Self {
-            name: "Pulse".into(),
-            levels: vec![0.0, 1.0, 1.0, 0.0],
-        }
-    }
-}
+impl XyMode {
+    pub const ALL: [XyMode; 3] = [XyMode::FreqInt, XyMode::PanPower, XyMode::Position];
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PlacedStamp {
-    pub stamp: u16,
-    pub start: f32,
-    pub len: f32,
-    pub gain: f32,
-}
-
-impl Default for PlacedStamp {
-    fn default() -> Self {
-        Self {
-            stamp: 0,
-            start: 0.0,
-            len: 0.125,
-            gain: 1.0,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct StampParams {
-    pub length_s: f32,
-    pub snap: f32,
-    pub stamps: Vec<StampDef>,
-    pub lane: Vec<PlacedStamp>,
-}
-
-impl Default for StampParams {
-    fn default() -> Self {
-        Self {
-            length_s: 4.0,
-            snap: 0.0625,
-            stamps: vec![
-                StampDef::default(),
-                StampDef {
-                    name: "Swell".into(),
-                    levels: vec![0.0, 0.3, 0.7, 1.0, 0.7, 0.3, 0.0],
-                },
-                StampDef {
-                    name: "Spike".into(),
-                    levels: vec![1.0, 0.4, 0.1, 0.0],
-                },
-            ],
-            lane: vec![
-                PlacedStamp {
-                    stamp: 0,
-                    start: 0.0,
-                    len: 0.125,
-                    gain: 0.8,
-                },
-                PlacedStamp {
-                    stamp: 1,
-                    start: 0.25,
-                    len: 0.25,
-                    gain: 1.0,
-                },
-                PlacedStamp {
-                    stamp: 2,
-                    start: 0.625,
-                    len: 0.125,
-                    gain: 0.9,
-                },
-            ],
-        }
-    }
-}
-
-impl StampParams {
-    pub fn sanitize(&mut self) {
-        self.length_s = length(self.length_s);
-        self.snap = fin(self.snap, 0.0).clamp(0.0, 0.5);
-        self.stamps.truncate(MAX_STAMPS);
-        if self.stamps.is_empty() {
-            self.stamps.push(StampDef::default());
-        }
-        for s in &mut self.stamps {
-            s.levels.truncate(MAX_STAMP_POINTS);
-            for v in &mut s.levels {
-                *v = unit(*v);
-            }
-            if s.levels.is_empty() {
-                s.levels.push(0.0);
-            }
-        }
-        let n = self.stamps.len() as u16;
-        self.lane.truncate(MAX_PLACED);
-        for p in &mut self.lane {
-            p.stamp = p.stamp.min(n - 1);
-            p.start = unit(p.start);
-            p.len = fin(p.len, 0.125).clamp(0.01, 1.0);
-            p.gain = unit(p.gain);
+    pub fn label(self) -> &'static str {
+        match self {
+            XyMode::FreqInt => "Freq / Int",
+            XyMode::PanPower => "A↔B / Power",
+            XyMode::Position => "Position + speed",
         }
     }
 
-    pub fn snapped(&self, v: f32) -> f32 {
-        if self.snap > 0.0 {
-            ((v / self.snap).round() * self.snap).clamp(0.0, 1.0)
-        } else {
-            unit(v)
+    pub fn axis_labels(self) -> (&'static str, &'static str) {
+        match self {
+            XyMode::FreqInt => ("freq →", "↑ int"),
+            XyMode::PanPower => ("A ← → B", "↑ power"),
+            XyMode::Position => ("x →", "↑ y"),
         }
-    }
-
-    pub fn sample(&self, t: f32) -> f32 {
-        let mut out = 0.0f32;
-        for p in &self.lane {
-            if p.len <= 0.0 || t < p.start || t >= p.start + p.len {
-                continue;
-            }
-            let Some(def) = self.stamps.get(p.stamp as usize) else {
-                continue;
-            };
-            out = out.max(p.gain * sample_levels(&def.levels, (t - p.start) / p.len));
-        }
-        out.clamp(0.0, 1.0)
     }
 }
 
@@ -389,8 +270,11 @@ impl StampParams {
 pub struct XyPadParams {
     pub x: f32,
     pub y: f32,
+    #[serde(skip)]
     pub touching: bool,
     pub spring: bool,
+    pub mode: XyMode,
+    pub size: [f32; 2],
 }
 
 impl Default for XyPadParams {
@@ -400,6 +284,8 @@ impl Default for XyPadParams {
             y: 0.0,
             touching: false,
             spring: true,
+            mode: XyMode::FreqInt,
+            size: XY_DEFAULT_SIZE,
         }
     }
 }
@@ -408,6 +294,172 @@ impl XyPadParams {
     pub fn sanitize(&mut self) {
         self.x = unit(self.x);
         self.y = unit(self.y);
+        for (v, d) in self.size.iter_mut().zip(XY_DEFAULT_SIZE) {
+            *v = fin(*v, d).clamp(XY_MIN_SIZE, XY_MAX_SIZE);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum PanLaw {
+    Linear,
+    #[default]
+    EqualPower,
+    Exclusive,
+}
+
+impl PanLaw {
+    pub const ALL: [PanLaw; 3] = [PanLaw::Linear, PanLaw::EqualPower, PanLaw::Exclusive];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PanLaw::Linear => "linear",
+            PanLaw::EqualPower => "equal power",
+            PanLaw::Exclusive => "one at a time",
+        }
+    }
+}
+
+pub fn pan_split(law: PanLaw, pan: f32, level: f32) -> (f32, f32) {
+    let pan = unit(pan);
+    let level = unit(level);
+    match law {
+        PanLaw::Linear => (level * (1.0 - pan), level * pan),
+        PanLaw::EqualPower => {
+            let a = pan * std::f32::consts::FRAC_PI_2;
+            (level * a.cos(), level * a.sin())
+        }
+        PanLaw::Exclusive => {
+            if pan < 0.5 {
+                (level, 0.0)
+            } else {
+                (0.0, level)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PanParams {
+    pub law: PanLaw,
+    pub swing: bool,
+    pub rate_hz: f32,
+}
+
+impl Default for PanParams {
+    fn default() -> Self {
+        Self {
+            law: PanLaw::EqualPower,
+            swing: false,
+            rate_hz: 0.25,
+        }
+    }
+}
+
+impl PanParams {
+    pub fn sanitize(&mut self) {
+        self.rate_hz = fin(self.rate_hz, 0.25).clamp(0.01, 10.0);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StepSeqParams {
+    pub steps: u8,
+    pub bpm: f32,
+    pub per_beat: u8,
+    pub swing: f32,
+    pub a: Vec<f32>,
+    pub b: Vec<f32>,
+}
+
+impl Default for StepSeqParams {
+    fn default() -> Self {
+        let mut a = vec![0.0; MAX_SEQ_STEPS];
+        let mut b = vec![0.0; MAX_SEQ_STEPS];
+        for (i, v) in [1.0, 0.0, 0.5, 0.0, 0.8, 0.0, 0.5, 0.3].iter().enumerate() {
+            a[i] = *v;
+        }
+        for (i, v) in [0.0, 0.6, 0.0, 0.6, 0.0, 0.6, 0.0, 1.0].iter().enumerate() {
+            b[i] = *v;
+        }
+        Self {
+            steps: 8,
+            bpm: 100.0,
+            per_beat: 2,
+            swing: 0.0,
+            a,
+            b,
+        }
+    }
+}
+
+impl StepSeqParams {
+    pub fn sanitize(&mut self) {
+        self.steps = if self.steps > 8 { 16 } else { 8 };
+        self.bpm = fin(self.bpm, 100.0).clamp(20.0, 300.0);
+        self.per_beat = match self.per_beat {
+            0 | 1 => 1,
+            2 | 3 => 2,
+            _ => 4,
+        };
+        self.swing = fin(self.swing, 0.0).clamp(0.0, 0.5);
+        for lane in [&mut self.a, &mut self.b] {
+            lane.resize(MAX_SEQ_STEPS, 0.0);
+            for v in lane.iter_mut() {
+                *v = unit(*v);
+            }
+        }
+    }
+
+    pub fn step_s(&self) -> f32 {
+        60.0 / (self.bpm.max(1.0) * self.per_beat.max(1) as f32)
+    }
+
+    pub fn length_s(&self) -> f32 {
+        self.step_s() * self.steps.max(1) as f32
+    }
+
+    pub fn locate(&self, t: f32) -> (usize, f32) {
+        let n = self.steps.max(1) as usize;
+        let pos = unit(t) * n as f32;
+        let pair = (pos / 2.0).floor();
+        let within = pos / 2.0 - pair;
+        let split = 0.5 + self.swing * 0.5;
+        let (odd, frac) = if within < split {
+            (0, within / split)
+        } else {
+            (1, (within - split) / (1.0 - split).max(1e-4))
+        };
+        let step = ((pair as usize) * 2 + odd).min(n - 1);
+        (step, frac.clamp(0.0, 1.0))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FeedbackParams {
+    pub slot: u8,
+    pub step: f32,
+    pub start: f32,
+}
+
+impl Default for FeedbackParams {
+    fn default() -> Self {
+        Self {
+            slot: 0,
+            step: 0.1,
+            start: 0.0,
+        }
+    }
+}
+
+impl FeedbackParams {
+    pub fn sanitize(&mut self) {
+        self.slot = self.slot.min(7);
+        self.step = fin(self.step, 0.1).clamp(0.01, 0.5);
+        self.start = fin(self.start, 0.0).clamp(-1.0, 1.0);
     }
 }
 
@@ -445,6 +497,8 @@ pub struct FaderParams {
     pub decay: f32,
     pub sustain: f32,
     pub release: f32,
+    pub latch: bool,
+    #[serde(skip)]
     pub pressed: bool,
 }
 
@@ -456,6 +510,7 @@ impl Default for FaderParams {
             decay: 0.3,
             sustain: 0.7,
             release: 0.8,
+            latch: false,
             pressed: false,
         }
     }
@@ -501,14 +556,6 @@ mod tests {
                 assert!((0.0..=1.0).contains(&v), "{s:?} {v}");
             }
         }
-    }
-
-    #[test]
-    fn stamps_play_where_placed_and_snap() {
-        let p = StampParams::default();
-        assert_eq!(p.sample(0.2), 0.0, "gap between stamps");
-        assert!(p.sample(0.375) > 0.9, "middle of the swell");
-        assert_eq!(p.snapped(0.27), 0.25);
     }
 
     #[test]

@@ -14,7 +14,9 @@ use crate::handshake::{self, GrantFound, HandshakeError, JoinGrant, JoinerCtx};
 use crate::jitter::JitterBuffer;
 use crate::limiter::FailLimiter;
 use crate::link::{self, LinkBody, OfferedRole, RouteHints};
-use crate::protocol::{ClientKind, Message, OutputReport, PolicySnapshot, RemoteFrame, SlotFrame, Welcome};
+use crate::protocol::{
+    ClientKind, FeedbackKind, Message, OutputReport, PolicySnapshot, RemoteFrame, SlotFrame, Welcome,
+};
 use crate::store::{self, Lifetime, PartnerRecord, TrustStore};
 use crate::tls;
 use crate::transport::dialers::{LanIceTransport, VdsRtcTransport};
@@ -34,6 +36,8 @@ const TOKEN_TTL: Duration = Duration::from_secs(300);
 const RESUME_WINDOW: Duration = Duration::from_secs(30);
 const MAX_FRAMES_PER_SEC: f32 = 100.0;
 const LOG_LEN: usize = 500;
+const BAD_MESSAGE_LOG_EVERY: Duration = Duration::from_secs(5);
+const FEEDBACK_MIN_GAP_MS: u64 = 250;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ConnectionMode {
@@ -231,6 +235,10 @@ struct SessionShared {
     latency_ms: AtomicU32,
     partner_policy: Mutex<Option<PolicySnapshot>>,
     partner_output: Mutex<OutputReport>,
+    feedback_out: Mutex<Vec<FeedbackKind>>,
+    feedback_more: AtomicU32,
+    feedback_less: AtomicU32,
+    last_feedback_ms: AtomicU64,
     stop: mpsc::Sender<String>,
     policy_tx: watch::Sender<Option<PolicySnapshot>>,
     frames: watch::Sender<Option<RemoteFrame>>,
@@ -1258,6 +1266,47 @@ impl RemoteService {
         self.sessions().iter().any(|s| s.i_control)
     }
 
+    pub fn send_feedback(&self, kind: FeedbackKind) -> bool {
+        let now = self.now_ms();
+        let mut sent = false;
+        for s in self.sessions() {
+            if !s.i_receive {
+                continue;
+            }
+            let last = s.last_feedback_ms.load(Ordering::Relaxed);
+            if now.saturating_sub(last) < FEEDBACK_MIN_GAP_MS {
+                continue;
+            }
+            s.last_feedback_ms.store(now, Ordering::Relaxed);
+            if let Ok(mut q) = s.feedback_out.lock() {
+                q.push(kind);
+                sent = true;
+            }
+        }
+        sent
+    }
+
+    pub fn partner_context(&self) -> shocking_vrc_core::graph::PartnerContext {
+        let mut ctx = shocking_vrc_core::graph::PartnerContext::default();
+        for s in self.sessions().iter().filter(|s| s.i_control) {
+            ctx.live = true;
+            ctx.more = ctx.more.wrapping_add(s.feedback_more.load(Ordering::Relaxed));
+            ctx.less = ctx.less.wrapping_add(s.feedback_less.load(Ordering::Relaxed));
+            if let Ok(o) = s.partner_output.lock() {
+                for (slot, out) in &o.slots {
+                    match ctx.outputs.iter_mut().find(|(k, _)| k == slot) {
+                        Some((_, v)) => {
+                            v[0] = v[0].max(out[0]);
+                            v[1] = v[1].max(out[1]);
+                        }
+                        None => ctx.outputs.push((*slot, *out)),
+                    }
+                }
+            }
+        }
+        ctx
+    }
+
     pub fn send_frame(&self, slots: Vec<SlotFrame>) {
         let frame = RemoteFrame {
             seq: self.inner.seq.fetch_add(1, Ordering::Relaxed) + 1,
@@ -1504,6 +1553,10 @@ impl RemoteService {
             latency_ms: AtomicU32::new(u32::MAX),
             partner_policy: Mutex::new(s.partner_policy),
             partner_output: Mutex::new(OutputReport::default()),
+            feedback_out: Mutex::new(Vec::new()),
+            feedback_more: AtomicU32::new(0),
+            feedback_less: AtomicU32::new(0),
+            last_feedback_ms: AtomicU64::new(0),
             stop: stop_tx,
             policy_tx,
             frames,
@@ -1537,13 +1590,23 @@ impl RemoteService {
         let mut bucket = MAX_FRAMES_PER_SEC / 5.0;
         let mut bucket_at = Instant::now();
         let mut last_seq = 0u64;
+        let mut last_bad_log: Option<Instant> = None;
         let reason: String;
         let mut remote_stop = false;
         loop {
             tokio::select! {
                 msg = ch.recv() => {
                     let Some(msg) = msg else { reason = "connection lost".into(); break };
-                    let Ok(msg) = msg else { continue };
+                    let msg = match msg {
+                        Ok(m) => m,
+                        Err(e) => {
+                            if last_bad_log.is_none_or(|t| t.elapsed() >= BAD_MESSAGE_LOG_EVERY) {
+                                last_bad_log = Some(Instant::now());
+                                log::warn!("remote: ignored a message from {} that did not decode: {e}", shared.partner);
+                            }
+                            continue;
+                        }
+                    };
                     shared.last_rx_ms.store(self.now_ms(), Ordering::Relaxed);
                     match msg {
                         Message::Frame(f) if shared.i_receive => {
@@ -1570,6 +1633,18 @@ impl RemoteService {
                             if let Ok(mut slot) = shared.partner_output.lock() {
                                 *slot = o;
                             }
+                        }
+                        Message::Feedback { kind } if shared.i_control => {
+                            let counter = match kind {
+                                FeedbackKind::More => &shared.feedback_more,
+                                FeedbackKind::Less => &shared.feedback_less,
+                            };
+                            counter.fetch_add(1, Ordering::Relaxed);
+                            self.log(format!(
+                                "{} asks for {}",
+                                shared.partner,
+                                if kind == FeedbackKind::More { "more" } else { "less" }
+                            ));
                         }
                         Message::Ping { seq, ts } => {
                             let _ = ch.try_send(&Message::Pong { seq, ts });
@@ -1626,6 +1701,16 @@ impl RemoteService {
                         last_ping = now;
                         ping_seq += 1;
                         let _ = ch.try_send(&Message::Ping { seq: ping_seq, ts: self.now_ms() });
+                    }
+                    if shared.i_receive {
+                        let queued: Vec<FeedbackKind> = shared
+                            .feedback_out
+                            .lock()
+                            .map(|mut q| std::mem::take(&mut *q))
+                            .unwrap_or_default();
+                        for kind in queued {
+                            let _ = ch.try_send(&Message::Feedback { kind });
+                        }
                     }
                     if shared.i_receive && now.duration_since(last_output) >= OUTPUT_EVERY {
                         last_output = now;

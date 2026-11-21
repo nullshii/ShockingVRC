@@ -125,10 +125,6 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
         include_str!("../../graph-presets/remote-gentle-wave.json"),
     ),
     (
-        "remote-pulse-ladder.json",
-        include_str!("../../graph-presets/remote-pulse-ladder.json"),
-    ),
-    (
         "remote-tease-ramp.json",
         include_str!("../../graph-presets/remote-tease-ramp.json"),
     ),
@@ -136,11 +132,13 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
         "remote-random-storm.json",
         include_str!("../../graph-presets/remote-random-storm.json"),
     ),
-    (
-        "remote-heartbeat.json",
-        include_str!("../../graph-presets/remote-heartbeat.json"),
-    ),
     ("remote-live-pad.json", include_str!("../../graph-presets/remote-live-pad.json")),
+    ("remote-step-beat.json", include_str!("../../graph-presets/remote-step-beat.json")),
+    ("remote-ping-pong.json", include_str!("../../graph-presets/remote-ping-pong.json")),
+    (
+        "remote-follow-wish.json",
+        include_str!("../../graph-presets/remote-follow-wish.json"),
+    ),
 ];
 
 pub const REMOTE_CATEGORY: &str = "remote";
@@ -348,14 +346,15 @@ mod tests {
             remote,
             [
                 "Gentle wave",
-                "Pulse ladder",
                 "Tease ramp",
                 "Random storm",
-                "Heartbeat",
-                "Live pad"
+                "Live pad",
+                "Step beat",
+                "Ping-pong",
+                "Follow their wish"
             ]
         );
-        assert_eq!(off.len(), on.len() - 6);
+        assert_eq!(off.len(), on.len() - 7);
         assert!(off.iter().all(|e| !e.id.starts_with("remote-")));
     }
 
@@ -380,7 +379,7 @@ mod tests {
                 }
             }
             assert_eq!(ev.partner_frames().len(), 1, "{}", e.id);
-            if e.id != "remote-live-pad" {
+            if !matches!(e.id.as_str(), "remote-live-pad" | "remote-follow-wish") {
                 assert!(peak > 0.05, "{} never drives the partner ({peak})", e.id);
             }
         }
