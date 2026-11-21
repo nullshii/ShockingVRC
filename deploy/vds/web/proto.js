@@ -540,13 +540,12 @@ export async function join(pipe, { name, binding, grant, onPending }) {
   }
 }
 
-export function rawFrequency(unit) {
-  const hz = 10 + 90 * Math.min(1, Math.max(0, unit));
-  const ms = 1000 / hz;
+export function rawFromHz(hz) {
+  const h = Number.isFinite(hz) ? Math.min(100, Math.max(1, hz)) : 100;
+  const ms = 1000 / h;
   let raw;
-  if (ms >= 10 && ms <= 100) raw = ms;
+  if (ms <= 100) raw = ms;
   else if (ms <= 600) raw = (ms - 100) / 5 + 100;
-  else if (ms <= 1000) raw = (ms - 600) / 10 + 200;
-  else raw = 10;
+  else raw = (ms - 600) / 10 + 200;
   return Math.round(Math.min(240, Math.max(10, raw)));
 }

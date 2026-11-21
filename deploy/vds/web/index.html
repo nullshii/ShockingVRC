@@ -38,53 +38,17 @@
     </section>
 
     <section id="control" class="hidden">
-      <div class="sheet">
-        <h2><span>Session</span></h2>
-        <div class="stats">
-          <div><small>PARTNER</small><b id="partner">—</b></div>
-          <div><small>LATENCY</small><b id="latency">—</b></div>
-          <div><small>THEIR OUTPUT</small><b id="output">A 0 · B 0</b></div>
-        </div>
-        <p class="dim" id="verify"></p>
+      <div class="session">
+        <span><small>Partner</small><b id="partner">—</b></span>
+        <span><small>Latency</small><b id="latency">—</b></span>
+        <span id="verify" class="dim"></span>
       </div>
-
-      <div class="grid">
-        <div class="sheet" data-ch="a">
-          <h2><span>Channel A</span><em class="cap">cap —</em></h2>
-          <label class="slider"><span>Power</span><input type="range" min="0" max="1" step="0.01" value="0" class="power"><output>0 %</output></label>
-          <label class="slider max"><span>Max</span><input type="range" min="0" max="200" step="1" value="200" class="max"><output>200</output></label>
-          <div class="segments"><small>FREQUENCY ×4</small><div class="bars freq"></div><small>INTENSITY ×4</small><div class="bars int"></div></div>
-        </div>
-        <div class="sheet" data-ch="b">
-          <h2><span>Channel B</span><em class="cap">cap —</em></h2>
-          <label class="slider"><span>Power</span><input type="range" min="0" max="1" step="0.01" value="0" class="power"><output>0 %</output></label>
-          <label class="slider max"><span>Max</span><input type="range" min="0" max="200" step="1" value="200" class="max"><output>200</output></label>
-          <div class="segments"><small>FREQUENCY ×4</small><div class="bars freq"></div><small>INTENSITY ×4</small><div class="bars int"></div></div>
-        </div>
-      </div>
-
-      <div class="grid">
-        <div class="sheet">
-          <h2><span>XY pad</span></h2>
-          <div id="xy" class="xy"><i></i></div>
-          <label class="check"><input type="checkbox" id="xy-on"> X → frequency, Y → intensity on channel A while held</label>
-        </div>
-        <div class="sheet">
-          <h2><span>Presets</span></h2>
-          <div class="segmented" id="presets">
-            <button type="button" data-p="off" class="on">Off</button>
-            <button type="button" data-p="wave">Gentle wave</button>
-            <button type="button" data-p="ladder">Pulse ladder</button>
-            <button type="button" data-p="heart">Heartbeat</button>
-            <button type="button" data-p="storm">Random storm</button>
-          </div>
-          <p class="dim">A preset shapes the power faders over time; the faders set how strong it gets.</p>
-        </div>
-      </div>
+      <div id="devices"></div>
+      <p class="dim hint">Each button turns its channel on for the set time; press it again to stop early. STOP or Esc ends the session.</p>
     </section>
   </main>
 
-  <footer class="bar foot"><span class="dim">ShockingVRC partner remote · protocol 2</span><span id="toast"></span></footer>
+  <footer class="bar foot"><span class="dim">ShockingVRC partner remote · protocol 2</span><span id="toast" role="status"></span></footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

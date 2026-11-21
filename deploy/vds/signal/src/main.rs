@@ -592,6 +592,7 @@ const INDEX: &str = include_str!("../../web/index.html");
 const STYLE: &str = include_str!("../../web/style.css");
 const APP_JS: &str = include_str!("../../web/app.js");
 const PROTO_JS: &str = include_str!("../../web/proto.js");
+const PANEL_JS: &str = include_str!("../../web/panel.js");
 
 fn page(kind: &'static str, body: &'static str) -> Response {
     (
@@ -611,6 +612,7 @@ fn web_router() -> Router {
         .route("/style.css", get(|| async { page("text/css; charset=utf-8", STYLE) }))
         .route("/app.js", get(|| async { page("text/javascript; charset=utf-8", APP_JS) }))
         .route("/proto.js", get(|| async { page("text/javascript; charset=utf-8", PROTO_JS) }))
+        .route("/panel.js", get(|| async { page("text/javascript; charset=utf-8", PANEL_JS) }))
 }
 
 async fn healthcheck(addr: SocketAddr) -> bool {

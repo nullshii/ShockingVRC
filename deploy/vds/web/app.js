@@ -1,7 +1,7 @@
 import * as P from "./proto.js";
+import * as Panel from "./panel.js";
 
 const $ = (s, el = document) => el.querySelector(s);
-const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const TICK_MS = 25;
 const PING_MS = 250;
 const DEAD_MS = 6000;
@@ -9,20 +9,11 @@ const DEAD_MS = 6000;
 const ui = {
   code: $("#code"), pass: $("#pass"), passRow: $("#pass-row"), name: $("#name"), go: $("#go"),
   status: $("#status"), connect: $("#connect"), control: $("#control"), stop: $("#stop"),
-  badge: $("#badge"), partner: $("#partner"), latency: $("#latency"), output: $("#output"),
-  verify: $("#verify"), toast: $("#toast"), xy: $("#xy"), xyOn: $("#xy-on"),
+  badge: $("#badge"), partner: $("#partner"), latency: $("#latency"),
+  verify: $("#verify"), toast: $("#toast"), devices: $("#devices"),
 };
 
-const state = {
-  channels: {
-    a: { power: 0, max: 200, freq: [0.5, 0.5, 0.5, 0.5], int: [1, 1, 1, 1] },
-    b: { power: 0, max: 200, freq: [0.5, 0.5, 0.5, 0.5], int: [1, 1, 1, 1] },
-  },
-  xy: { x: 0.5, y: 0, held: false },
-  preset: "off",
-  walk: 0.5,
-  session: null,
-};
+const state = { session: null };
 
 function store(key, value) {
   try {
@@ -41,126 +32,6 @@ function toast(text, kind = "") {
 
 function setStatus(text) {
   ui.status.textContent = text;
-}
-
-function buildBars(el, values, onChange) {
-  el.innerHTML = "";
-  values.forEach((v, i) => {
-    const cell = document.createElement("div");
-    const fill = document.createElement("i");
-    cell.appendChild(fill);
-    el.appendChild(cell);
-    const paint = () => (fill.style.height = `calc(${(values[i] * 100).toFixed(1)}% - 4px)`);
-    paint();
-    const set = (ev) => {
-      const r = cell.getBoundingClientRect();
-      values[i] = Math.min(1, Math.max(0, 1 - (ev.clientY - r.top) / r.height));
-      paint();
-      onChange?.();
-    };
-    cell.addEventListener("pointerdown", (ev) => {
-      cell.setPointerCapture(ev.pointerId);
-      set(ev);
-    });
-    cell.addEventListener("pointermove", (ev) => {
-      if (ev.buttons) set(ev);
-    });
-  });
-}
-
-for (const sheet of $$("[data-ch]")) {
-  const ch = state.channels[sheet.dataset.ch];
-  const power = $("input.power", sheet);
-  const max = $("input.max", sheet);
-  power.addEventListener("input", () => {
-    ch.power = Number(power.value);
-    power.nextElementSibling.textContent = `${Math.round(ch.power * 100)} %`;
-  });
-  max.addEventListener("input", () => {
-    ch.max = Number(max.value);
-    max.nextElementSibling.textContent = String(ch.max);
-  });
-  buildBars($(".bars.freq", sheet), ch.freq);
-  buildBars($(".bars.int", sheet), ch.int);
-}
-
-function xyFromEvent(ev) {
-  const r = ui.xy.getBoundingClientRect();
-  state.xy.x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
-  state.xy.y = Math.min(1, Math.max(0, 1 - (ev.clientY - r.top) / r.height));
-  const dot = $("i", ui.xy);
-  dot.style.left = `${state.xy.x * 100}%`;
-  dot.style.top = `${(1 - state.xy.y) * 100}%`;
-}
-ui.xy.addEventListener("pointerdown", (ev) => {
-  ui.xy.setPointerCapture(ev.pointerId);
-  state.xy.held = true;
-  ui.xy.classList.add("held");
-  xyFromEvent(ev);
-});
-ui.xy.addEventListener("pointermove", (ev) => {
-  if (state.xy.held) xyFromEvent(ev);
-});
-const release = () => {
-  state.xy.held = false;
-  ui.xy.classList.remove("held");
-};
-ui.xy.addEventListener("pointerup", release);
-ui.xy.addEventListener("pointercancel", release);
-
-for (const b of $$("#presets button")) {
-  b.addEventListener("click", () => {
-    state.preset = b.dataset.p;
-    $$("#presets button").forEach((x) => x.classList.toggle("on", x === b));
-  });
-}
-
-function presetFactor(t) {
-  switch (state.preset) {
-    case "wave":
-      return 0.5 - 0.5 * Math.cos((2 * Math.PI * t) / 4);
-    case "ladder": {
-      const u = (t / 4) % 1;
-      const step = Math.floor(u * 4);
-      return u * 4 - step < 0.5 ? (step + 1) / 4 : 0;
-    }
-    case "heart": {
-      const u = (t / 0.8) % 1;
-      if (u < 0.08) return 1;
-      if (u > 0.16 && u < 0.24) return 0.6;
-      return 0;
-    }
-    case "storm":
-      state.walk = Math.min(1, Math.max(0.1, state.walk + (Math.random() - 0.5) * 0.15));
-      return state.walk;
-    default:
-      return 1;
-  }
-}
-
-const finite = (v, fallback) => (Number.isFinite(v) ? v : fallback);
-
-function wireChannel(ch, factor, xyOnA) {
-  const p = Math.min(1, Math.max(0, finite(ch.power * factor, 0)));
-  const freq = xyOnA ? [0, 0, 0, 0].map(() => state.xy.x) : ch.freq;
-  const int = xyOnA ? [0, 0, 0, 0].map(() => state.xy.y) : ch.int;
-  return {
-    p: [p, p, p, p].map((v) => Math.round(v * 1000) / 1000),
-    f: freq.map((v) => P.rawFrequency(finite(v, 0.5))),
-    i: int.map((v) => Math.round(finite(v, 0) * 100)),
-    m: finite(ch.max, 200),
-  };
-}
-
-function showPolicy(policy) {
-  if (!policy) return;
-  ["a", "b"].forEach((key, i) => {
-    const c = policy.channels?.[i];
-    const sheet = $(`[data-ch="${key}"]`);
-    const cap = c && c.allowed ? c.cap : 0;
-    $(".cap", sheet).textContent = c && c.allowed ? `cap ${cap}` : "locked by partner";
-    $("label.max", sheet).style.setProperty("--cap", `${(cap / 200) * 100}%`);
-  });
 }
 
 function messagePipe(dc) {
@@ -317,8 +188,8 @@ async function connect() {
 
 function start({ pc, dc, pipe, partner, policy, linkNote }) {
   const s = {
-    pc, dc, pipe, partner, policy,
-    seq: 0, ping: 0, t0: performance.now(), lastRx: performance.now(),
+    pc, dc, pipe, partner,
+    seq: 0, ping: 0, t0: performance.now(),
     ticker: null,
   };
   state.session = s;
@@ -326,9 +197,10 @@ function start({ pc, dc, pipe, partner, policy, linkNote }) {
   ui.control.classList.remove("hidden");
   ui.stop.classList.remove("hidden");
   ui.badge.classList.remove("hidden");
+  ui.badge.textContent = `REMOTE · ${partner}`;
   ui.partner.textContent = partner;
   ui.verify.textContent = linkNote || "Connected with a control code.";
-  showPolicy(policy);
+  Panel.renderDevices(ui.devices, policy);
   toast("connected", "ok");
 
   const now = () => Math.round(performance.now() - s.t0);
@@ -341,18 +213,15 @@ function start({ pc, dc, pipe, partner, policy, linkNote }) {
         if (state.session === s) end("the partner stopped answering");
         return;
       }
-      s.lastRx = performance.now();
+      if (state.session !== s) return;
       if (m.t === "ping") pipe.send(P.encode({ t: "pong", seq: m.seq, ts: m.ts }));
       else if (m.t === "pong") ui.latency.textContent = `${now() - m.ts} ms`;
-      else if (m.t === "policy") {
-        s.policy = m;
-        showPolicy(m);
-      } else if (m.t === "output") {
-        const out = (m.slots || []).reduce((acc, [, o]) => [Math.max(acc[0], o[0]), Math.max(acc[1], o[1])], [0, 0]);
-        ui.output.textContent = `A ${out[0]} · B ${out[1]}`;
-        ui.badge.textContent = `REMOTE · ${partner} · A ${out[0]} B ${out[1]}`;
+      else if (m.t === "policy") Panel.renderDevices(ui.devices, m);
+      else if (m.t === "output") {
+        const [a, b] = Panel.showOutput(m.slots);
+        ui.badge.textContent = `REMOTE · ${partner} · A ${a} B ${b}`;
       } else if (m.t === "feedback") {
-        toast(`${partner} asks for ${m.kind === "more" ? "more ▲" : "less ▼"}`, "ok");
+        toast(`${partner} asks for ${m.kind === "more" ? "more" : "less"}`, "ok");
       } else if (m.t === "stop" || m.t === "bye") {
         end(m.t === "stop" ? `stopped by ${partner}: ${m.reason}` : `${partner} left`);
         return;
@@ -362,15 +231,7 @@ function start({ pc, dc, pipe, partner, policy, linkNote }) {
 
   const sendFrame = () => {
     if (state.session !== s) return;
-    const t = (performance.now() - s.t0) / 1000;
-    const factor = presetFactor(t);
-    const xyOnA = ui.xyOn.checked && state.xy.held;
-    const slots = (s.policy?.slots?.length ? s.policy.slots.map((x) => x.slot) : [0]).map((slot) => ({
-      slot,
-      a: wireChannel(state.channels.a, factor, xyOnA),
-      b: wireChannel(state.channels.b, factor, false),
-    }));
-    pipe.send(P.encode({ t: "frame", seq: ++s.seq, ts: now(), slots }));
+    pipe.send(P.encode({ t: "frame", seq: ++s.seq, ts: now(), slots: Panel.frameSlots() }));
   };
   const sendPing = () => state.session === s && pipe.send(P.encode({ t: "ping", seq: ++s.ping, ts: now() }));
   s.ticker = startTicker(TICK_MS, PING_MS, sendFrame, sendPing);
@@ -400,6 +261,8 @@ function startTicker(frameMs, pingMs, onFrame, onPing) {
 function end(reason, notify = false) {
   const s = state.session;
   if (!s) return;
+  Panel.stopAll();
+  if (notify) s.pipe.send(P.encode({ t: "frame", seq: ++s.seq, ts: Math.round(performance.now() - s.t0), slots: Panel.frameSlots() }));
   state.session = null;
   s.ticker?.stop();
   if (notify) s.pipe.send(P.encode({ t: "stop", reason }));
@@ -409,11 +272,7 @@ function end(reason, notify = false) {
       s.pc.close();
     } catch {}
   }, 150);
-  for (const ch of Object.values(state.channels)) ch.power = 0;
-  $$("input.power").forEach((el) => {
-    el.value = 0;
-    el.nextElementSibling.textContent = "0 %";
-  });
+  Panel.reset(ui.devices);
   ui.control.classList.add("hidden");
   ui.connect.classList.remove("hidden");
   ui.stop.classList.add("hidden");
