@@ -59,6 +59,7 @@ async fn timed_session(secs: u64) -> (RemoteService, RemoteService, u64) {
             lifetime: Lifetime::Minutes10,
             passphrase: None,
             label: String::new(),
+            trusted: false,
         })
         .unwrap();
     let controller = RemoteService::start(config("Controller"), None);
@@ -173,6 +174,7 @@ async fn a_controller_pairs_over_the_lan_and_drives_the_receiver() {
             lifetime: Lifetime::SingleUse,
             passphrase: None,
             label: "test".into(),
+            trusted: false,
         })
         .unwrap();
     let controller = RemoteService::start(config("Controller"), None);
@@ -238,6 +240,7 @@ async fn a_declined_partner_gets_nothing_and_a_used_link_fails() {
             lifetime: Lifetime::SingleUse,
             passphrase: None,
             label: String::new(),
+            trusted: false,
         })
         .unwrap();
     let controller = RemoteService::start(config("Controller"), None);
@@ -257,6 +260,61 @@ async fn a_declined_partner_gets_nothing_and_a_used_link_fails() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_trusted_link_connects_without_asking() {
+    let receiver = reachable("Receiver").await;
+    let invite = receiver
+        .create_invite(InviteRequest {
+            role: OfferedRole::Receiver,
+            lifetime: Lifetime::SingleUse,
+            passphrase: None,
+            label: String::new(),
+            trusted: true,
+        })
+        .unwrap();
+    assert!(receiver.status().invites[0].trusted, "the list shows the choice");
+    let controller = RemoteService::start(config("Controller"), None);
+    controller.connect_link(&invite.link, None).unwrap();
+    let start = Instant::now();
+    while !(receiver.status().receiving().is_some() && controller.status().controlling().is_some()) {
+        assert!(receiver.status().consent.is_none(), "a trusted link never asks");
+        assert!(start.elapsed() < Duration::from_secs(15), "timed out waiting for the session");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(receiver.status().partners.is_empty(), "a one-off link does not add a partner");
+    assert!(receiver.export_log().contains("trusted link"));
+    receiver.shutdown();
+    controller.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_trusted_pairing_auto_accepts_later() {
+    let receiver = reachable("Receiver").await;
+    let invite = receiver
+        .create_invite(InviteRequest {
+            role: OfferedRole::Receiver,
+            lifetime: Lifetime::Indefinite,
+            passphrase: Some("open sesame".into()),
+            label: String::new(),
+            trusted: true,
+        })
+        .unwrap();
+    let controller = RemoteService::start(config("Controller"), None);
+    controller
+        .connect_link(&invite.link, Some("open sesame".into()))
+        .unwrap();
+    until("the session", Duration::from_secs(15), || {
+        receiver.status().receiving().is_some()
+    })
+    .await;
+    assert!(receiver.status().consent.is_none());
+    let partners = receiver.status().partners;
+    assert_eq!(partners.len(), 1);
+    assert!(partners[0].auto_accept, "the trust carries over to the pairing");
+    receiver.shutdown();
+    controller.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn indefinite_pairing_needs_a_passphrase_and_then_trusts() {
     let receiver = reachable("Receiver").await;
     let no_pass = receiver.create_invite(InviteRequest {
@@ -264,6 +322,7 @@ async fn indefinite_pairing_needs_a_passphrase_and_then_trusts() {
         lifetime: Lifetime::Indefinite,
         passphrase: None,
         label: String::new(),
+        trusted: false,
     });
     assert!(no_pass.is_err(), "indefinite keys require a passphrase");
     let invite = receiver
@@ -272,6 +331,7 @@ async fn indefinite_pairing_needs_a_passphrase_and_then_trusts() {
             lifetime: Lifetime::Indefinite,
             passphrase: Some("open sesame".into()),
             label: String::new(),
+            trusted: false,
         })
         .unwrap();
     let controller = RemoteService::start(config("Controller"), None);
@@ -351,6 +411,7 @@ async fn two_apps_pair_through_the_rendezvous_server() {
             lifetime: Lifetime::Minutes10,
             passphrase: None,
             label: String::new(),
+            trusted: false,
         })
         .unwrap();
     let controller = RemoteService::start(internet("Controller", &vds), None);
@@ -395,7 +456,7 @@ async fn web_panel_host() {
         matches!(receiver.status().vds, crate::service::VdsState::Online)
     })
     .await;
-    let code = receiver.create_web_code(Lifetime::Minutes10).await.unwrap();
+    let code = receiver.create_web_code(Lifetime::Minutes10, false).await.unwrap();
     println!("WEB CODE {code}");
     let start = Instant::now();
     let mut frames = 0u32;

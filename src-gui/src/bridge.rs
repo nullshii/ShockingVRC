@@ -315,8 +315,12 @@ pub enum Command {
         lifetime: Lifetime,
         passphrase: String,
         label: String,
+        trusted: bool,
     },
-    RemoteCreateWebCode(Lifetime),
+    RemoteCreateWebCode {
+        lifetime: Lifetime,
+        trusted: bool,
+    },
     RemoteRevokeInvite(String),
     RemoteRevokePartner(String),
     RemoteAutoAccept(String, bool),
@@ -1069,6 +1073,7 @@ impl Worker {
                 lifetime,
                 passphrase,
                 label,
+                trusted,
             } => {
                 if let Some(svc) = self.remote_service() {
                     let req = InviteRequest {
@@ -1076,6 +1081,7 @@ impl Worker {
                         lifetime,
                         passphrase: Some(passphrase).filter(|p| !p.trim().is_empty()),
                         label,
+                        trusted,
                     };
                     match svc.create_invite(req) {
                         Ok(created) => {
@@ -1086,9 +1092,9 @@ impl Worker {
                     }
                 }
             }
-            Command::RemoteCreateWebCode(lifetime) => {
+            Command::RemoteCreateWebCode { lifetime, trusted } => {
                 if let Some(svc) = self.remote_service() {
-                    match svc.create_web_code(lifetime).await {
+                    match svc.create_web_code(lifetime, trusted).await {
                         Ok(code) => self.remote_ui(|r| r.code = Some(code)),
                         Err(e) => self.notify(ToastKind::Error, e),
                     }

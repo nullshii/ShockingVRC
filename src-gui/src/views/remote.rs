@@ -12,6 +12,9 @@ use crate::theme::Palette;
 use crate::theme::widgets::{self as w, font, space};
 
 const LABEL_W: f32 = 132.0;
+const TWO_COLUMN_MIN_W: f32 = 520.0;
+
+type Sheet = fn(&mut Ui, &mut Ctx);
 
 fn role_label(s: &SessionStatus) -> &'static str {
     match (s.i_control, s.i_receive) {
@@ -85,23 +88,27 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
     }
     let gap = space::SHEET_GAP;
     let col_w = (ui.available_width() - gap) * 0.5;
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        w::column(ui, col_w, |ui| sessions(ui, cx));
-        w::column(ui, col_w, |ui| join(ui, cx));
-    });
-    ui.add_space(gap);
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        w::column(ui, col_w, |ui| invite(ui, cx));
-        w::column(ui, col_w, |ui| limits(ui, cx));
-    });
-    ui.add_space(gap);
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        w::column(ui, col_w, |ui| connection(ui, cx));
-        w::column(ui, col_w, |ui| session_log(ui, cx));
-    });
+    let rows: [[Sheet; 2]; 3] = [[sessions, join], [invite, limits], [connection, session_log]];
+    if col_w < TWO_COLUMN_MIN_W {
+        let full = ui.available_width();
+        for (i, sheet) in rows.iter().flatten().enumerate() {
+            if i > 0 {
+                ui.add_space(gap);
+            }
+            w::column(ui, full, |ui| sheet(ui, cx));
+        }
+        return;
+    }
+    for (i, [left, right]) in rows.iter().enumerate() {
+        if i > 0 {
+            ui.add_space(gap);
+        }
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            w::column(ui, col_w, |ui| left(ui, cx));
+            w::column(ui, col_w, |ui| right(ui, cx));
+        });
+    }
 }
 
 fn sessions(ui: &mut Ui, cx: &mut Ctx) {
@@ -314,6 +321,16 @@ fn join(ui: &mut Ui, cx: &mut Ctx) {
     });
 }
 
+fn trust_button(ui: &mut Ui, pal: &Palette, on: bool, what: &str) -> bool {
+    w::toggle_button(ui, pal, "Trust this user", on)
+        .on_hover_text(if on {
+            format!("On: whoever uses this {what} connects without asking you to accept")
+        } else {
+            format!("Off: you accept or decline each time someone uses this {what}")
+        })
+        .clicked()
+}
+
 fn invite(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
     let st = cx.snap.remote.service.clone();
@@ -361,14 +378,20 @@ fn invite(ui: &mut Ui, cx: &mut Ctx) {
         if !ok {
             w::dim(ui, pal, "An indefinite pairing needs a passphrase of 6+ characters.");
         }
-        if w::button_enabled(ui, pal, "Create link", ok).clicked() {
-            cx.bridge.send(Command::RemoteCreateInvite {
-                role: form.role,
-                lifetime: form.lifetime,
-                passphrase: std::mem::take(&mut form.passphrase),
-                label: std::mem::take(&mut form.label),
-            });
-        }
+        ui.horizontal(|ui| {
+            if w::button_enabled(ui, pal, "Create link", ok).clicked() {
+                cx.bridge.send(Command::RemoteCreateInvite {
+                    role: form.role,
+                    lifetime: form.lifetime,
+                    passphrase: std::mem::take(&mut form.passphrase),
+                    label: std::mem::take(&mut form.label),
+                    trusted: form.trusted,
+                });
+            }
+            if trust_button(ui, pal, form.trusted, "link") {
+                form.trusted = !form.trusted;
+            }
+        });
         let results = cx.bridge.shared.remote_ui();
         if let Some(link) = &results.link {
             ui.add_space(space::ITEM_GAP);
@@ -393,7 +416,7 @@ fn invite(ui: &mut Ui, cx: &mut Ctx) {
 
         ui.add_space(space::ITEM_GAP);
         w::caption(ui, pal, "Web control code");
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             let short = [Lifetime::Minutes10, Lifetime::Hour1, Lifetime::Hours24];
             let labels: Vec<&str> = short.iter().map(|l| l.label()).collect();
             let sel = short
@@ -407,7 +430,13 @@ fn invite(ui: &mut Ui, cx: &mut Ctx) {
                 .on_hover_text("Lets someone drive you from a browser at your rendezvous server")
                 .clicked()
             {
-                cx.send(Command::RemoteCreateWebCode(cx.ui_state.remote_form.web_lifetime));
+                cx.send(Command::RemoteCreateWebCode {
+                    lifetime: cx.ui_state.remote_form.web_lifetime,
+                    trusted: cx.ui_state.remote_form.web_trusted,
+                });
+            }
+            if trust_button(ui, pal, cx.ui_state.remote_form.web_trusted, "code") {
+                cx.ui_state.remote_form.web_trusted = !cx.ui_state.remote_form.web_trusted;
             }
         });
         if !vds_online {
@@ -438,23 +467,34 @@ fn invite(ui: &mut Ui, cx: &mut Ctx) {
         }
         for i in &st.invites {
             ui.horizontal(|ui| {
-                let label = if i.label.is_empty() { "invite" } else { i.label.as_str() };
-                ui.label(egui::RichText::new(label).font(font::body()).color(pal.contrast));
-                ui.add_space(6.0);
-                let uses = i.uses_left.map(|u| format!(" · {u} use(s)")).unwrap_or_default();
-                w::dim(
-                    ui,
-                    pal,
-                    format!(
-                        "{} · {}{uses}",
-                        i.lifetime.label().to_lowercase(),
-                        i.role.label().to_lowercase()
-                    ),
-                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if w::danger_button(ui, pal, "Revoke", true).clicked() {
                         cx.send(Command::RemoteRevokeInvite(i.id.clone()));
                     }
+                    ui.add_space(8.0);
+                    ui.with_layout(
+                        egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                        |ui| {
+                            let label = if i.label.is_empty() { "invite" } else { i.label.as_str() };
+                            ui.label(egui::RichText::new(label).font(font::body()).color(pal.contrast));
+                            ui.add_space(6.0);
+                            if i.trusted {
+                                w::tag(ui, pal, "trusted", pal.warning)
+                                    .on_hover_text("Connects without asking you to accept");
+                                ui.add_space(6.0);
+                            }
+                            let uses = i.uses_left.map(|u| format!(" · {u} use(s)")).unwrap_or_default();
+                            w::dim(
+                                ui,
+                                pal,
+                                format!(
+                                    "{} · {}{uses}",
+                                    i.lifetime.label().to_lowercase(),
+                                    i.role.label().to_lowercase()
+                                ),
+                            );
+                        },
+                    );
                 });
             });
         }

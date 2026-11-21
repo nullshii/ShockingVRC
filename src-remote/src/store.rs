@@ -94,6 +94,8 @@ pub struct InviteRecord {
     pub passphrase: bool,
     #[serde(default)]
     pub web_code: bool,
+    #[serde(default)]
+    pub trusted: bool,
 }
 
 impl InviteRecord {
@@ -221,6 +223,7 @@ impl TrustStore {
         lifetime: Lifetime,
         label: &str,
         passphrase: bool,
+        trusted: bool,
         now: u64,
     ) -> (InviteRecord, [u8; 32]) {
         let secret: [u8; 32] = crypto::random_bytes();
@@ -236,13 +239,21 @@ impl TrustStore {
             label: label.to_string(),
             passphrase,
             web_code: false,
+            trusted,
         };
         self.data.invites.push(rec.clone());
         self.save();
         (rec, secret)
     }
 
-    pub fn add_web_code(&mut self, code: &str, role: OfferedRole, lifetime: Lifetime, now: u64) -> InviteRecord {
+    pub fn add_web_code(
+        &mut self,
+        code: &str,
+        role: OfferedRole,
+        lifetime: Lifetime,
+        trusted: bool,
+        now: u64,
+    ) -> InviteRecord {
         let rec = InviteRecord {
             id: crate::link::code_invite_id(code),
             key: b64(&crypto::secret_key(code.as_bytes())),
@@ -254,6 +265,7 @@ impl TrustStore {
             label: "Web control code".into(),
             passphrase: false,
             web_code: true,
+            trusted,
         };
         self.data.invites.retain(|i| i.id != rec.id);
         self.data.invites.push(rec.clone());
@@ -343,7 +355,7 @@ mod tests {
     #[test]
     fn only_a_hash_of_the_secret_is_stored() {
         let mut s = TrustStore::in_memory();
-        let (rec, secret) = s.add_invite(OfferedRole::Receiver, Lifetime::Hour1, "x", false, 100);
+        let (rec, secret) = s.add_invite(OfferedRole::Receiver, Lifetime::Hour1, "x", false, false, 100);
         assert_ne!(rec.key, b64(&secret));
         assert_eq!(rec.key, b64(&crypto::secret_key(&secret)));
         assert_eq!(rec.expires, 3700);
@@ -354,10 +366,23 @@ mod tests {
     #[test]
     fn single_use_invites_are_spent() {
         let mut s = TrustStore::in_memory();
-        let (rec, _) = s.add_invite(OfferedRole::Both, Lifetime::SingleUse, "", false, 0);
+        let (rec, _) = s.add_invite(OfferedRole::Both, Lifetime::SingleUse, "", false, false, 0);
         s.consume_invite(&rec.id);
         assert!(s.invite(&rec.id, 1).is_none());
         assert!(s.invites().is_empty());
+    }
+
+    #[test]
+    fn the_trust_choice_is_kept_and_old_invites_ask() {
+        let mut s = TrustStore::in_memory();
+        let (rec, _) = s.add_invite(OfferedRole::Receiver, Lifetime::Hour1, "", false, true, 0);
+        assert!(s.invite(&rec.id, 1).unwrap().trusted);
+        let code = s.add_web_code("ABCD1234EFGH5678", OfferedRole::Receiver, Lifetime::Hour1, false, 0);
+        assert!(!s.invite(&code.id, 1).unwrap().trusted);
+        let mut old = serde_json::to_value(&rec).unwrap();
+        old.as_object_mut().unwrap().remove("trusted");
+        let back: InviteRecord = serde_json::from_value(old).unwrap();
+        assert!(!back.trusted, "invites saved before the choice existed still ask");
     }
 
     #[test]

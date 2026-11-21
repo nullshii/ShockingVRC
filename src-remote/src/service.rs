@@ -155,6 +155,7 @@ pub struct InviteInfo {
     pub expires: u64,
     pub uses_left: Option<u32>,
     pub web_code: bool,
+    pub trusted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +206,7 @@ pub struct InviteRequest {
     pub lifetime: Lifetime,
     pub passphrase: Option<String>,
     pub label: String,
+    pub trusted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -781,7 +783,7 @@ impl RemoteService {
         let now = store::now_unix();
         let (rec, secret, identity) = {
             let mut s = self.inner.store.lock().map_err(|_| "store unavailable")?;
-            let (rec, secret) = s.add_invite(req.role, req.lifetime, &req.label, pass.is_some(), now);
+            let (rec, secret) = s.add_invite(req.role, req.lifetime, &req.label, pass.is_some(), req.trusted, now);
             (rec, secret, s.identity().clone())
         };
         let body = LinkBody {
@@ -798,9 +800,10 @@ impl RemoteService {
         };
         let link = link::encode_link(&body, &identity, pass);
         self.log(format!(
-            "Created a {} invite ({})",
+            "Created a {} invite ({}{})",
             req.lifetime.label().to_lowercase(),
-            req.role.label().to_lowercase()
+            req.role.label().to_lowercase(),
+            if req.trusted { ", trusted — no prompt" } else { "" }
         ));
         Ok(CreatedInvite {
             id: rec.id,
@@ -809,7 +812,7 @@ impl RemoteService {
         })
     }
 
-    pub async fn create_web_code(&self, lifetime: Lifetime) -> Result<String, String> {
+    pub async fn create_web_code(&self, lifetime: Lifetime, trusted: bool) -> Result<String, String> {
         let host = self
             .inner
             .vds
@@ -828,11 +831,16 @@ impl RemoteService {
             &norm,
             OfferedRole::Receiver,
             lifetime,
+            trusted,
             store::now_unix(),
         );
         host.alias(&link::code_room(&norm), rec.expires.saturating_sub(store::now_unix()))
             .await;
-        self.log("Created a web control code");
+        self.log(if trusted {
+            "Created a web control code (trusted — no prompt)"
+        } else {
+            "Created a web control code"
+        });
         Ok(code)
     }
 
@@ -917,6 +925,7 @@ impl RemoteService {
                     id: rec.id.clone(),
                     role: rec.role,
                     pairing: rec.lifetime.creates_pairing(),
+                    trusted: rec.trusted,
                 },
             ));
         }
@@ -1019,7 +1028,7 @@ impl RemoteService {
         let needs_consent = match &grant {
             Grant::Resume { .. } => false,
             Grant::Trusted { auto_accept, .. } => !auto_accept,
-            Grant::Invite { .. } => true,
+            Grant::Invite { trusted, .. } => !trusted,
         };
         let mut trust = matches!(grant, Grant::Invite { pairing: true, .. });
         if needs_consent {
@@ -1060,6 +1069,8 @@ impl RemoteService {
                     .await;
                 return;
             }
+        } else if matches!(grant, Grant::Invite { trusted: true, .. }) {
+            self.log(format!("{partner} connected through a trusted link — no prompt"));
         }
 
         let deadline_ms = match &grant {
@@ -1103,7 +1114,7 @@ impl RemoteService {
                     name: partner.clone(),
                     my_role: role,
                     added: now,
-                    auto_accept: !matches!(grant, Grant::Invite { pairing: true, .. }) || known,
+                    auto_accept: !matches!(grant, Grant::Invite { pairing: true, trusted: false, .. }) || known,
                     last_seen: now,
                     routes: None,
                 });
@@ -1863,6 +1874,7 @@ impl RemoteService {
                             expires: i.expires,
                             uses_left: i.uses_left,
                             web_code: i.web_code,
+                            trusted: i.trusted,
                         })
                         .collect(),
                     s.partners()
@@ -1929,6 +1941,7 @@ enum Grant {
         id: String,
         role: OfferedRole,
         pairing: bool,
+        trusted: bool,
     },
     Trusted {
         role: OfferedRole,

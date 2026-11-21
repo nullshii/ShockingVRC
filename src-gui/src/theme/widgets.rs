@@ -228,6 +228,32 @@ pub fn danger_button(ui: &mut Ui, pal: &Palette, text: &str, enabled: bool) -> R
     button_inner(ui, pal, text, ButtonStyle::Danger, enabled)
 }
 
+pub fn toggle_button(ui: &mut Ui, pal: &Palette, text: &str, on: bool) -> Response {
+    let font = font::body();
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_string(), font.clone(), pal.contrast);
+    let size = vec2(galley.size().x + 20.0, galley.size().y + 9.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let (fill, fg, border) = match (on, resp.hovered()) {
+        (true, false) => (pal.warning, pal.on_solid(), pal.warning),
+        (true, true) => (pal.contrast, pal.on_solid(), pal.contrast),
+        (false, false) => (Color32::TRANSPARENT, pal.dim, pal.hair),
+        (false, true) => (pal.well, pal.contrast, pal.warning),
+    };
+    let p = ui.painter();
+    if fill != Color32::TRANSPARENT {
+        p.rect_filled(rect, SQUARE, fill);
+    }
+    p.rect_stroke(rect, SQUARE, Stroke::new(1.0, border), StrokeKind::Inside);
+    p.text(rect.center(), Align2::CENTER_CENTER, text, font, fg);
+    if resp.has_focus() {
+        focus_corners(ui, rect, pal.accent);
+    }
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, text));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum ButtonStyle {
     Cta,
