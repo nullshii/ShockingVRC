@@ -108,9 +108,9 @@ function emptyState() {
 
 export function renderDevices(root, policy) {
   const list = (policy?.slots ?? []).filter((d) => Number.isInteger(d?.slot));
-  const rules = policy?.channels ?? [];
   const next = JSON.stringify(list.map((d) => [d.slot, d.name]));
   for (const d of list) {
+    const rules = d.channels ?? policy?.channels ?? [];
     NAMES.forEach((_, i) => {
       const c = channel(d.slot, i);
       const rule = rules[i];

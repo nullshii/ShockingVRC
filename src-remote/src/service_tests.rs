@@ -165,6 +165,7 @@ async fn a_controller_pairs_over_the_lan_and_drives_the_receiver() {
         slots: vec![SlotInfo {
             slot: 0,
             name: "Coyote".into(),
+            ..SlotInfo::default()
         }],
         ..PolicySnapshot::default()
     });
@@ -449,6 +450,7 @@ async fn web_panel_host() {
         slots: vec![SlotInfo {
             slot: 0,
             name: "Coyote".into(),
+            ..SlotInfo::default()
         }],
         ..PolicySnapshot::default()
     });

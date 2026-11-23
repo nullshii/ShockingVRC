@@ -1486,7 +1486,13 @@ fn remote_graph_status(snap: &Snapshot) -> GraphStatus {
         .service
         .controlling()
         .and_then(|s| s.partner_policy.as_ref())
-        .map(|p| p.channels.map(|c| if c.allowed { c.cap } else { 0 }))
+        .map(|p| {
+            p.slots
+                .first()
+                .map(|slot| p.slot_channels(slot.slot))
+                .unwrap_or(p.channels)
+                .map(|c| if c.allowed { c.cap } else { 0 })
+        })
         .unwrap_or([0; 2]);
     GraphStatus {
         mode: EngineMode::Graph,

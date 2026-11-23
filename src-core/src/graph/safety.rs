@@ -159,10 +159,8 @@ impl Default for RemoteChannelPolicy {
 impl RemoteChannelPolicy {
     pub fn sanitized(mut self) -> Self {
         self.cap = self.cap.min(200);
-        let f = self.freq_bounds.map(|v| v.clamp(10, MAX_PULSE_FREQUENCY));
-        self.freq_bounds = [f[0].min(f[1]), f[0].max(f[1])];
-        let i = self.int_bounds.map(|v| v.min(100));
-        self.int_bounds = [i[0].min(i[1]), i[0].max(i[1])];
+        self.freq_bounds = [10, MAX_PULSE_FREQUENCY];
+        self.int_bounds = [0, 100];
         self.ramp_per_s = if self.ramp_per_s.is_finite() {
             self.ramp_per_s.clamp(0.0, 1000.0)
         } else {

@@ -85,6 +85,7 @@ pub struct RemoteForm {
     pub connection: Option<shocking_vrc_remote::service::RemoteConfig>,
     pub stop_param: Option<String>,
     pub show_log: bool,
+    pub limit_slot: u8,
 }
 
 impl Default for RemoteForm {
@@ -102,6 +103,7 @@ impl Default for RemoteForm {
             connection: None,
             stop_param: None,
             show_log: false,
+            limit_slot: 0,
         }
     }
 }

@@ -1,5 +1,7 @@
 use egui::{Color32, Ui};
 
+use shocking_vrc_app::app_state::DeviceSlotInfo;
+use shocking_vrc_app::remote_runtime::MAX_REMOTE_SLOTS;
 use shocking_vrc_core::graph::safety::{MergeMode, RemoteChannelPolicy};
 use shocking_vrc_remote::link::OfferedRole;
 use shocking_vrc_remote::protocol::ClientKind;
@@ -155,7 +157,7 @@ fn sessions(ui: &mut Ui, cx: &mut Ctx) {
                 }
                 for (slot, out) in mine {
                     for (ch, v) in out.iter().enumerate() {
-                        let cap = cx.snap.remote_settings.channels[ch].cap.max(1);
+                        let cap = cx.snap.remote_settings.slot_channels(*slot)[ch].cap.max(1);
                         w::gauge_row(
                             ui,
                             pal,
@@ -191,23 +193,71 @@ fn sessions(ui: &mut Ui, cx: &mut Ctx) {
                 w::caption(ui, pal, "Partner's limits and output");
                 match &s.partner_policy {
                     Some(p) => {
-                        for (ch, c) in p.channels.iter().enumerate() {
-                            let out = s.partner_output.slots.iter().map(|(_, o)| o[ch]).max().unwrap_or(0);
-                            let cap = if c.allowed { c.cap } else { 0 };
-                            w::gauge_row(
-                                ui,
-                                pal,
-                                &format!("Channel {}", ["A", "B"][ch]),
-                                LABEL_W,
-                                out as f32 / cap.max(1) as f32,
-                                pal.success,
-                                &if c.allowed {
-                                    format!("{out} / {cap}")
+                        if p.slots.len() <= 1 {
+                            let ch_policies = p
+                                .slots
+                                .first()
+                                .map(|slot| p.slot_channels(slot.slot))
+                                .unwrap_or(p.channels);
+                            for (ch, c) in ch_policies.iter().enumerate() {
+                                let out = match p.slots.first() {
+                                    Some(slot) => s
+                                        .partner_output
+                                        .slots
+                                        .iter()
+                                        .find(|(id, _)| *id == slot.slot)
+                                        .map(|(_, o)| o[ch])
+                                        .unwrap_or(0),
+                                    None => s.partner_output.slots.iter().map(|(_, o)| o[ch]).max().unwrap_or(0),
+                                };
+                                let cap = if c.allowed { c.cap } else { 0 };
+                                w::gauge_row(
+                                    ui,
+                                    pal,
+                                    &format!("Channel {}", ["A", "B"][ch]),
+                                    LABEL_W,
+                                    out as f32 / cap.max(1) as f32,
+                                    pal.success,
+                                    &if c.allowed {
+                                        format!("{out} / {cap}")
+                                    } else {
+                                        "locked".into()
+                                    },
+                                    72.0,
+                                );
+                            }
+                        } else {
+                            for slot_info in &p.slots {
+                                let label = if slot_info.name.is_empty() {
+                                    format!("Device {}", slot_info.slot + 1)
                                 } else {
-                                    "locked".into()
-                                },
-                                72.0,
-                            );
+                                    format!("{} ({})", slot_info.name, slot_info.slot + 1)
+                                };
+                                for (ch, c) in p.slot_channels(slot_info.slot).iter().enumerate() {
+                                    let out = s
+                                        .partner_output
+                                        .slots
+                                        .iter()
+                                        .find(|(id, _)| *id == slot_info.slot)
+                                        .map(|(_, o)| o[ch])
+                                        .unwrap_or(0);
+                                    let cap = if c.allowed { c.cap } else { 0 };
+                                    w::gauge_row(
+                                        ui,
+                                        pal,
+                                        &format!("{label} · {}", ["A", "B"][ch]),
+                                        LABEL_W,
+                                        out as f32 / cap.max(1) as f32,
+                                        pal.success,
+                                        &if c.allowed {
+                                            format!("{out} / {cap}")
+                                        } else {
+                                            "locked".into()
+                                        },
+                                        72.0,
+                                    );
+                                }
+                            }
                         }
                         let names: Vec<String> = p
                             .slots
@@ -501,6 +551,15 @@ fn invite(ui: &mut Ui, cx: &mut Ctx) {
     });
 }
 
+fn slot_display_name(devices: &[DeviceSlotInfo], slot: usize) -> String {
+    devices
+        .get(slot)
+        .map(|d| d.name.trim())
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("Device {}", slot + 1))
+}
+
 fn limits(ui: &mut Ui, cx: &mut Ctx) {
     let pal = cx.pal;
     let mut s = cx.snap.remote_settings.clone();
@@ -516,14 +575,10 @@ fn limits(ui: &mut Ui, cx: &mut Ctx) {
         ui.add_space(space::ROW_GAP);
         w::caption(ui, pal, "Devices a partner may drive");
         ui.horizontal_wrapped(|ui| {
-            let count = cx.snap.devices.len().max(1);
-            for slot in 0..count.max(s.slots.iter().map(|x| *x as usize + 1).max().unwrap_or(1)) {
-                let name = cx
-                    .snap
-                    .devices
-                    .get(slot)
-                    .map(|d| d.name.clone())
-                    .unwrap_or_else(|| format!("Device {}", slot + 1));
+            let max_slot = s.slots.iter().map(|x| *x as usize + 1).max().unwrap_or(1);
+            let count = cx.snap.devices.len().max(max_slot).clamp(1, MAX_REMOTE_SLOTS);
+            for slot in 0..count {
+                let name = slot_display_name(&cx.snap.devices, slot);
                 let on = s.allows(slot);
                 let label = format!("{} {}", if on { "■" } else { "□" }, name);
                 if w::segmented(ui, pal, &[label.as_str()], if on { 0 } else { 1 }).is_some() {
@@ -531,15 +586,62 @@ fn limits(ui: &mut Ui, cx: &mut Ctx) {
                         s.slots.retain(|x| *x as usize != slot);
                     } else {
                         s.slots.push(slot as u8);
+                        s.slots.sort_unstable();
+                        s.slots.dedup();
                     }
                     changed = true;
                 }
                 ui.add_space(4.0);
             }
         });
-        for ch in 0..2 {
+        let mut enabled_slots: Vec<u8> = s
+            .slots
+            .iter()
+            .copied()
+            .filter(|&slot| (slot as usize) < MAX_REMOTE_SLOTS)
+            .collect();
+        enabled_slots.sort_unstable();
+        enabled_slots.dedup();
+        if enabled_slots.is_empty() {
             ui.add_space(space::ITEM_GAP);
-            changed |= channel_limits(ui, pal, ["A", "B"][ch], &mut s.channels[ch]);
+            w::dim(
+                ui,
+                pal,
+                "No device enabled for remote control — pick a device above to configure its limits.",
+            );
+        } else {
+            let slot = if enabled_slots.len() == 1 {
+                enabled_slots[0] as usize
+            } else {
+                if !enabled_slots.contains(&cx.ui_state.remote_form.limit_slot) {
+                    cx.ui_state.remote_form.limit_slot = enabled_slots[0];
+                }
+                let active_slot = cx.ui_state.remote_form.limit_slot;
+                ui.add_space(space::ITEM_GAP);
+                w::caption(ui, pal, "Limits for device");
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+                    for &dev_slot in &enabled_slots {
+                        let name = slot_display_name(&cx.snap.devices, dev_slot as usize);
+                        let tab_label = if name.starts_with("Device ") {
+                            name
+                        } else {
+                            format!("Device {} · {}", dev_slot + 1, name)
+                        };
+                        let selected = dev_slot == active_slot;
+                        if w::segmented(ui, pal, &[tab_label.as_str()], if selected { 0 } else { 1 }).is_some() {
+                            cx.ui_state.remote_form.limit_slot = dev_slot;
+                        }
+                    }
+                });
+                cx.ui_state.remote_form.limit_slot as usize
+            };
+            ui.push_id(slot, |ui| {
+                for ch in 0..2 {
+                    ui.add_space(space::ITEM_GAP);
+                    changed |= channel_limits(ui, pal, ["A", "B"][ch], &mut s.slot_channels_mut(slot)[ch]);
+                }
+            });
         }
         ui.add_space(space::ITEM_GAP);
         w::caption(ui, pal, "Avatar stop parameter");
@@ -576,50 +678,6 @@ fn channel_limits(ui: &mut Ui, pal: &Palette, name: &str, p: &mut RemoteChannelP
     };
     if let Some(v) = row(ui, "Power cap", p.cap as f32, 0.0, 200.0, format!("{}", p.cap)) {
         p.cap = v.round() as u8;
-        changed = true;
-    }
-    if let Some(v) = row(
-        ui,
-        "Freq min",
-        p.freq_bounds[0] as f32,
-        10.0,
-        240.0,
-        format!("{}", p.freq_bounds[0]),
-    ) {
-        p.freq_bounds[0] = (v.round() as u8).min(p.freq_bounds[1]);
-        changed = true;
-    }
-    if let Some(v) = row(
-        ui,
-        "Freq max",
-        p.freq_bounds[1] as f32,
-        10.0,
-        240.0,
-        format!("{}", p.freq_bounds[1]),
-    ) {
-        p.freq_bounds[1] = (v.round() as u8).max(p.freq_bounds[0]);
-        changed = true;
-    }
-    if let Some(v) = row(
-        ui,
-        "Intensity min",
-        p.int_bounds[0] as f32,
-        0.0,
-        100.0,
-        format!("{} %", p.int_bounds[0]),
-    ) {
-        p.int_bounds[0] = (v.round() as u8).min(p.int_bounds[1]);
-        changed = true;
-    }
-    if let Some(v) = row(
-        ui,
-        "Intensity max",
-        p.int_bounds[1] as f32,
-        0.0,
-        100.0,
-        format!("{} %", p.int_bounds[1]),
-    ) {
-        p.int_bounds[1] = (v.round() as u8).max(p.int_bounds[0]);
         changed = true;
     }
     let ramp_text = if p.ramp_per_s <= 0.0 {

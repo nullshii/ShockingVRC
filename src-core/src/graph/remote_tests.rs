@@ -290,11 +290,15 @@ fn the_receivers_cap_always_wins() {
         int_bounds: [10, 60],
         ..RemoteChannelPolicy::default()
     };
+    let sanitized = policy.sanitized();
+    assert_eq!(sanitized.freq_bounds, [10, 240]);
+    assert_eq!(sanitized.int_bounds, [0, 100]);
+
     let s = safety::remote_channel(&full(1.0), &policy, 1.0);
     assert_eq!(s.strength, 25);
     assert!(s.ceiling <= 25 && s.limit_max <= 25 && s.limit_min == 0);
     assert_eq!(s.freq, [100; 4]);
-    assert_eq!(s.intensity, [60; 4]);
+    assert_eq!(s.intensity, [100; 4]);
 
     let mut hostile = full(1.0);
     hostile.power = f32::INFINITY;
@@ -302,7 +306,7 @@ fn the_receivers_cap_always_wins() {
     hostile.freq = [1.0, 999.0, f32::NAN, 50.0];
     let s = safety::remote_channel(&hostile, &policy, 1.0);
     assert!(s.strength <= 25);
-    assert!(s.freq.iter().all(|f| (40..=120).contains(f)), "{:?}", s.freq);
+    assert_eq!(s.freq, [10, 240, 10, 50]);
 
     let off = RemoteChannelPolicy {
         allowed: false,

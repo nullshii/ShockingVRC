@@ -162,10 +162,22 @@ pub struct PolicySnapshot {
     pub channels: [RemoteChannelPolicy; MAX_CHANNELS],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+impl PolicySnapshot {
+    pub fn slot_channels(&self, slot: u8) -> [RemoteChannelPolicy; MAX_CHANNELS] {
+        self.slots
+            .iter()
+            .find(|s| s.slot == slot)
+            .and_then(|s| s.channels)
+            .unwrap_or(self.channels)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SlotInfo {
     pub slot: u8,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channels: Option<[RemoteChannelPolicy; MAX_CHANNELS]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -376,5 +388,42 @@ mod tests {
         assert_eq!(a.power_seg, [0.5, 0.0, 0.5, 0.5]);
         assert_eq!(a.limit_max, 200.0, "a null max means no extra limit");
         assert_eq!(b.unwrap().limit_max, 200.0, "a missing max too");
+    }
+
+    #[test]
+    fn policy_snapshot_resolves_per_slot_and_legacy_channels() {
+        let mut dev1 = [RemoteChannelPolicy::default(); MAX_CHANNELS];
+        dev1[0].cap = 45;
+        let mut dev2 = [RemoteChannelPolicy::default(); MAX_CHANNELS];
+        dev2[0].cap = 80;
+        dev2[1].allowed = false;
+
+        let snap = PolicySnapshot {
+            slots: vec![
+                SlotInfo {
+                    slot: 0,
+                    name: "One".into(),
+                    channels: Some(dev1),
+                },
+                SlotInfo {
+                    slot: 1,
+                    name: "Two".into(),
+                    channels: Some(dev2),
+                },
+            ],
+            channels: dev1,
+        };
+        let bytes = encode(&Message::Policy(snap.clone()));
+        assert_eq!(decode(&bytes), Ok(Message::Policy(snap.clone())));
+        assert_eq!(snap.slot_channels(0)[0].cap, 45);
+        assert_eq!(snap.slot_channels(1)[0].cap, 80);
+        assert!(!snap.slot_channels(1)[1].allowed);
+
+        let legacy_body = r#"{"t":"policy","slots":[{"slot":0,"name":"One"}],"channels":[{"allowed":true,"cap":55,"freq_bounds":[10,240],"int_bounds":[0,100],"ramp_per_s":40.0,"merge":"Max"},{"allowed":false,"cap":10,"freq_bounds":[10,240],"int_bounds":[0,100],"ramp_per_s":40.0,"merge":"Max"}]}"#;
+        let Ok(Message::Policy(legacy)) = decode(&raw(legacy_body)) else {
+            panic!("legacy policy did not decode")
+        };
+        assert_eq!(legacy.slot_channels(0)[0].cap, 55);
+        assert!(!legacy.slot_channels(0)[1].allowed);
     }
 }

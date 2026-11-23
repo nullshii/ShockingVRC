@@ -17,16 +17,16 @@ use crate::graph_store;
 pub const REMOTE_SETTINGS_FILE: &str = "remote_settings.json";
 pub const REMOTE_GRAPH_FILE: &str = "remote_graph.json";
 pub const REMOTE_LOG_FILE: &str = "remote_session_log.txt";
+pub const MAX_REMOTE_SLOTS: usize = 8;
 const AUTOSAVE_DEBOUNCE: Duration = Duration::from_millis(1500);
 const PUBLISH_EVERY: u64 = 2;
 const OUTPUT_EVERY: u64 = 8;
 const POLICY_EVERY: u64 = 40;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RemoteSettings {
     pub config: RemoteConfig,
-    pub channels: [RemoteChannelPolicy; MAX_CHANNELS],
+    pub slot_channels: [[RemoteChannelPolicy; MAX_CHANNELS]; MAX_REMOTE_SLOTS],
     pub slots: Vec<u8>,
     pub stop_param: String,
     pub scheme_asked: bool,
@@ -36,7 +36,7 @@ impl Default for RemoteSettings {
     fn default() -> Self {
         Self {
             config: RemoteConfig::default(),
-            channels: [RemoteChannelPolicy::default(); MAX_CHANNELS],
+            slot_channels: [[RemoteChannelPolicy::default(); MAX_CHANNELS]; MAX_REMOTE_SLOTS],
             slots: vec![0],
             stop_param: "/avatar/parameters/RemoteStop".into(),
             scheme_asked: false,
@@ -44,18 +44,77 @@ impl Default for RemoteSettings {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(default)]
+struct RemoteSettingsRaw {
+    config: RemoteConfig,
+    slot_channels: Option<Vec<[RemoteChannelPolicy; MAX_CHANNELS]>>,
+    channels: Option<[RemoteChannelPolicy; MAX_CHANNELS]>,
+    slots: Vec<u8>,
+    stop_param: String,
+    scheme_asked: bool,
+}
+
+impl Default for RemoteSettingsRaw {
+    fn default() -> Self {
+        let def = RemoteSettings::default();
+        Self {
+            config: def.config,
+            slot_channels: None,
+            channels: None,
+            slots: def.slots,
+            stop_param: def.stop_param,
+            scheme_asked: def.scheme_asked,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RemoteSettings {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = RemoteSettingsRaw::deserialize(deserializer)?;
+        let fallback = raw.channels.unwrap_or([RemoteChannelPolicy::default(); MAX_CHANNELS]);
+        let mut slot_channels = [fallback; MAX_REMOTE_SLOTS];
+        if let Some(list) = raw.slot_channels {
+            for (dst, src) in slot_channels.iter_mut().zip(list) {
+                *dst = src;
+            }
+        }
+        Ok(Self {
+            config: raw.config,
+            slot_channels,
+            slots: raw.slots,
+            stop_param: raw.stop_param,
+            scheme_asked: raw.scheme_asked,
+        })
+    }
+}
+
 impl RemoteSettings {
     pub fn sanitized(mut self) -> Self {
-        self.channels = self.channels.map(RemoteChannelPolicy::sanitized);
+        for chs in &mut self.slot_channels {
+            *chs = chs.map(RemoteChannelPolicy::sanitized);
+        }
         self.slots.sort_unstable();
         self.slots.dedup();
-        self.slots.retain(|s| *s < 8);
+        self.slots.retain(|s| (*s as usize) < MAX_REMOTE_SLOTS);
         self.config.jitter_ms = self.config.jitter_ms.min(500);
         self
     }
 
     pub fn allows(&self, slot: usize) -> bool {
         self.slots.iter().any(|s| *s as usize == slot)
+    }
+
+    pub fn slot_channels(&self, slot: usize) -> [RemoteChannelPolicy; MAX_CHANNELS] {
+        self.slot_channels
+            .get(slot)
+            .copied()
+            .unwrap_or([RemoteChannelPolicy::default(); MAX_CHANNELS])
+    }
+
+    pub fn slot_channels_mut(&mut self, slot: usize) -> &mut [RemoteChannelPolicy; MAX_CHANNELS] {
+        let idx = slot.min(MAX_REMOTE_SLOTS - 1);
+        &mut self.slot_channels[idx]
     }
 }
 
@@ -465,7 +524,7 @@ impl RemoteRuntime {
             let engines = state.engines();
             let receiving = svc.receiving();
             for (i, e) in engines.iter().enumerate() {
-                e.set_remote_policy(settings.channels);
+                e.set_remote_policy(settings.slot_channels(i));
                 e.set_remote_active(receiving && settings.allows(i));
             }
             if let Some(frame) = svc.take_inbound() {
@@ -492,6 +551,11 @@ impl RemoteRuntime {
             }
             if n % POLICY_EVERY == 1 {
                 let names = state.slot_infos();
+                let fallback_channels = settings
+                    .slots
+                    .first()
+                    .map(|s| settings.slot_channels(*s as usize))
+                    .unwrap_or_default();
                 svc.set_policy(PolicySnapshot {
                     slots: settings
                         .slots
@@ -499,9 +563,10 @@ impl RemoteRuntime {
                         .map(|s| SlotInfo {
                             slot: *s,
                             name: names.get(*s as usize).map(|i| i.name.clone()).unwrap_or_default(),
+                            channels: Some(settings.slot_channels(*s as usize)),
                         })
                         .collect(),
-                    channels: settings.channels,
+                    channels: fallback_channels,
                 });
             }
 
@@ -578,17 +643,50 @@ mod tests {
 
     #[test]
     fn settings_are_sanitised_and_round_trip() {
-        let s = RemoteSettings {
+        let mut s = RemoteSettings {
             slots: vec![3, 1, 1, 99],
             ..RemoteSettings::default()
-        }
-        .sanitized();
+        };
+        s.slot_channels_mut(1)[0].cap = 55;
+        s.slot_channels_mut(3)[1].allowed = false;
+        s.slot_channels_mut(3)[0].freq_bounds = [40, 120];
+        s.slot_channels_mut(3)[0].int_bounds = [20, 80];
+        let s = s.sanitized();
+
         assert_eq!(s.slots, vec![1, 3]);
         assert!(s.allows(3) && !s.allows(0));
+        assert_eq!(s.slot_channels(1)[0].cap, 55);
+        assert_eq!(s.slot_channels(3)[0].cap, 30, "slot 1 edits do not leak to slot 3");
+        assert!(!s.slot_channels(3)[1].allowed);
+        assert!(s.slot_channels(1)[1].allowed);
+        assert_eq!(s.slot_channels(3)[0].freq_bounds, [10, 240]);
+        assert_eq!(s.slot_channels(3)[0].int_bounds, [0, 100]);
+
         let back: RemoteSettings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back, s);
         let old: RemoteSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(old.slots, vec![0], "a missing file means slot 1 only");
+    }
+
+    #[test]
+    fn legacy_settings_channels_seed_all_slots_and_reset_bounds() {
+        let legacy_json = r#"{
+            "channels": [
+                {"allowed": true, "cap": 65, "freq_bounds": [30, 90], "int_bounds": [15, 70], "ramp_per_s": 25.0, "merge": "RemoteOnly"},
+                {"allowed": false, "cap": 10, "freq_bounds": [20, 80], "int_bounds": [5, 50], "ramp_per_s": 0.0, "merge": "LocalOnly"}
+            ],
+            "slots": [0, 1]
+        }"#;
+        let loaded: RemoteSettings = serde_json::from_str(legacy_json).unwrap();
+        let loaded = loaded.sanitized();
+        assert_eq!(loaded.slots, vec![0, 1]);
+        for slot in 0..MAX_REMOTE_SLOTS {
+            assert_eq!(loaded.slot_channels(slot)[0].cap, 65);
+            assert_eq!(loaded.slot_channels(slot)[0].freq_bounds, [10, 240]);
+            assert_eq!(loaded.slot_channels(slot)[0].int_bounds, [0, 100]);
+            assert!(!loaded.slot_channels(slot)[1].allowed);
+            assert_eq!(loaded.slot_channels(slot)[1].cap, 10);
+        }
     }
 
     #[test]

@@ -360,16 +360,18 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
             }),
             NodeKind::PartnerDevice(p) => {
                 let session = env.snap.remote.service.controlling();
-                let allowed = session
-                    .and_then(|s| s.partner_policy.as_ref())
-                    .is_some_and(|pol| pol.slots.iter().any(|s| s.slot == p.slot));
+                let policy = session.and_then(|s| s.partner_policy.as_ref());
+                let allowed = policy.is_some_and(|pol| pol.slots.iter().any(|s| s.slot == p.slot));
+                let caps = policy
+                    .map(|pol| pol.slot_channels(p.slot).map(|c| if c.allowed { c.cap } else { 0 }))
+                    .unwrap_or(env.graph.caps);
                 let outputs = session
                     .and_then(|s| s.partner_output.slots.iter().find(|(slot, _)| *slot == p.slot))
                     .map(|(_, o)| {
                         let mut out = [shocking_vrc_core::cli::GraphChannelOutput::default(); 2];
                         for (ch, v) in o.iter().enumerate() {
                             out[ch].safe.strength = *v;
-                            out[ch].safe.limit_max = env.graph.caps[ch];
+                            out[ch].safe.limit_max = caps[ch];
                         }
                         out
                     });
@@ -380,12 +382,12 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
                         session.map(|_| {
                             let mut out = [shocking_vrc_core::cli::GraphChannelOutput::default(); 2];
                             for (ch, o) in out.iter_mut().enumerate() {
-                                o.safe.limit_max = env.graph.caps[ch];
+                                o.safe.limit_max = caps[ch];
                             }
                             out
                         })
                     }),
-                    caps: env.graph.caps,
+                    caps,
                 })
             }
             _ => None,

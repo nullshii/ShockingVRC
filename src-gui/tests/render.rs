@@ -255,6 +255,7 @@ fn remote_snapshot() -> Snapshot {
             slots: vec![SlotInfo {
                 slot: 0,
                 name: "Coyote".into(),
+                ..SlotInfo::default()
             }],
             ..PolicySnapshot::default()
         }),
@@ -300,6 +301,28 @@ fn the_remote_section_and_tab_render() {
         assert_not_blank(&img, &e.id);
         save(&img, &format!("remote-{}", e.id));
     }
+}
+
+#[test]
+fn remote_limits_adapt_to_enabled_device_count() {
+    let mut snap = remote_snapshot();
+    snap.remote_settings.slots = Vec::new();
+    let img = Scene::new(snap).render_section(Section::Remote, "terminal");
+    assert_not_blank(&img, "remote zero devices");
+
+    let mut snap = remote_snapshot();
+    snap.remote_settings.slots = vec![0];
+    let img = Scene::new(snap).render_section(Section::Remote, "terminal");
+    assert_not_blank(&img, "remote one device");
+
+    let mut snap = remote_snapshot();
+    snap.remote_settings.slots = vec![0, 1];
+    snap.remote_settings.slot_channels_mut(0)[0].cap = 35;
+    snap.remote_settings.slot_channels_mut(1)[0].cap = 75;
+    let img = Scene::new(snap).render_section_with(Section::Remote, "terminal", |s| {
+        s.remote_form.limit_slot = 1;
+    });
+    assert_not_blank(&img, "remote two devices");
 }
 
 #[test]

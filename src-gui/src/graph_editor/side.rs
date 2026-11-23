@@ -805,7 +805,14 @@ fn params_inner(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter
             if int_row(ui, pal, "Partner device", &mut slot, 1, 8) {
                 p.slot = (slot.max(1) - 1) as u8;
             }
-            let caps = env.graph.caps;
+            let caps = env
+                .snap
+                .remote
+                .service
+                .controlling()
+                .and_then(|s| s.partner_policy.as_ref())
+                .map(|pol| pol.slot_channels(p.slot).map(|c| if c.allowed { c.cap } else { 0 }))
+                .unwrap_or(env.graph.caps);
             w::dim(
                 ui,
                 pal,
