@@ -2,53 +2,133 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>ShockingVRC Remote</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext x='0' y='13' font-size='12' font-family='monospace' fill='%237ecfa4'%3E%3E_%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <script>try{var v=localStorage.getItem('svrc.vars');if(v)document.documentElement.style.cssText=v}catch(e){}</script>
 </head>
 <body>
-  <header class="bar">
-    <span class="prompt">coyote@vrc:~$ <b>remote</b><i class="cursor"></i></span>
-    <span id="badge" class="badge hidden"></span>
-    <button id="stop" class="danger hidden" type="button">STOP</button>
+  <canvas id="bg" aria-hidden="true"></canvas>
+
+  <header class="topbar">
+    <div class="pr">coyote@vrc:~$ <b id="prompt-cmd" data-i18n="promptCmd">remote</b><span class="cur"></span></div>
+    <div class="bar-right">
+      <span id="badge" class="badge hidden"></span>
+      <button id="stop" class="danger hidden" type="button" data-i18n="stopBtn">STOP</button>
+      <nav class="bar-nav" aria-label="Controls">
+        <button id="lang-toggle" type="button" data-lang-toggle><span class="key shortcut">[R]</span><span data-i18n="navLang">RU</span></button>
+        <button type="button" data-theme-toggle aria-expanded="false"><span class="key shortcut">[T]</span><span data-i18n="navTheme">Theme</span></button>
+      </nav>
+    </div>
   </header>
 
-  <main>
-    <section id="connect" class="sheet">
-      <h2><span>Connect</span></h2>
-      <p class="dim">Enter the control code your partner gave you, or paste their <code>shockingvrc://</code> link.
-        Commands go straight to their device over an encrypted peer-to-peer channel; this server only introduces you.</p>
-      <label class="field">
-        <span>Code or link</span>
-        <input id="code" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX">
-      </label>
-      <label class="field hidden" id="pass-row">
-        <span>Passphrase</span>
-        <input id="pass" type="password" autocomplete="off" placeholder="shared separately">
-      </label>
-      <label class="field">
-        <span>Your name</span>
-        <input id="name" autocomplete="nickname" maxlength="40" placeholder="shown to your partner">
-      </label>
-      <div class="row">
-        <button id="go" class="cta" type="button">Connect</button>
-        <span id="status" class="dim"></span>
-      </div>
-    </section>
+  <div class="wrap">
+    <header id="hero" class="hero short">
+      <h1 data-i18n-html="heroTitle">ShockingVRC<br>Remote</h1>
+      <p class="sub" data-i18n="heroSub">Encrypted peer-to-peer partner control panel · protocol 2. Commands travel straight to your partner's device; this server only introduces you.</p>
+    </header>
 
-    <section id="control" class="hidden">
-      <div class="session">
-        <span><small>Partner</small><b id="partner">—</b></span>
-        <span><small>Latency</small><b id="latency">—</b></span>
-        <span id="verify" class="dim"></span>
-      </div>
-      <div id="devices"></div>
-      <p class="dim hint">Each button turns its channel on for the set time; press it again to stop early. STOP or Esc ends the session.</p>
-    </section>
-  </main>
+    <main>
+      <section id="connect-view">
+        <section id="connect" class="sheet">
+          <h2 class="heading"><span data-i18n="connectHeading">Connect</span></h2>
+          <p class="dim lead" data-i18n-html="connectDesc">Enter the 16-character control code your partner gave you, or paste their <code>shockingvrc://</code> invite link.</p>
 
-  <footer class="bar foot"><span class="dim">ShockingVRC partner remote · protocol 2</span><span id="toast" role="status"></span></footer>
+          <div class="field">
+            <label for="code" data-i18n="fieldCode">Code or link</label>
+            <div class="input-group">
+              <input id="code" autocomplete="off" spellcheck="false" data-i18n-placeholder="placeholderCode" placeholder="XXXX-XXXX-XXXX-XXXX or shockingvrc://2/…">
+              <span id="code-mode" class="mode-pill hidden"></span>
+              <button id="paste-btn" class="inline-btn" type="button" data-i18n="btnPaste">Paste</button>
+            </div>
+          </div>
+
+          <div class="field hidden" id="pass-row">
+            <label for="pass" data-i18n="fieldPass">Passphrase</label>
+            <div class="input-group">
+              <input id="pass" type="password" autocomplete="off" data-i18n-placeholder="placeholderPass" placeholder="shared separately">
+              <button id="pass-toggle" class="inline-btn" type="button" data-i18n="btnShow">Show</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="name" data-i18n="fieldName">Your name</label>
+            <input id="name" autocomplete="nickname" maxlength="40" data-i18n-placeholder="placeholderName" placeholder="shown to your partner">
+          </div>
+
+          <div id="conn-steps" class="steps hidden" aria-live="polite">
+            <span class="step" data-step="1" data-i18n="stepSignal">1. Signal</span>
+            <span class="step" data-step="2" data-i18n="stepP2P">2. P2P</span>
+            <span class="step" data-step="3" data-i18n="stepKeys">3. Verify</span>
+          </div>
+
+          <div class="actions">
+            <button id="go" class="cta" type="button" data-i18n="btnConnect">Connect -></button>
+            <button id="cancel-btn" class="ghost hidden" type="button" data-i18n="btnCancel">Cancel</button>
+            <span id="status" class="dim status-text" role="status"></span>
+          </div>
+        </section>
+
+        <section class="sheet info-sheet">
+          <h2 class="heading"><span data-i18n="infoHeading">How it works &amp; shortcuts</span></h2>
+          <div class="grid">
+            <div><span class="lbl" data-i18n="infoP2PLbl">transport</span><span data-i18n="infoP2PVal">Direct WebRTC data channel with DTLS + Ed25519 key verification.</span></div>
+            <div><span class="lbl" data-i18n="infoSafeLbl">safety</span><span data-i18n="infoSafeVal">Partner device caps are always enforced locally. Press Esc anytime to stop &amp; disconnect.</span></div>
+            <div><span class="lbl" data-i18n="infoKeysLbl">hotkeys</span><span data-i18n="infoKeysVal">Esc — emergency stop · Space — pause all channels · T — theme · R — language.</span></div>
+            <div><span class="lbl" data-i18n="infoZeroLbl">privacy</span><span data-i18n="infoZeroVal">Zero analytics, zero external requests, no server logging of commands.</span></div>
+          </div>
+        </section>
+      </section>
+
+      <section id="control" class="hidden">
+        <div id="feedback-banner" class="feedback-banner hidden" role="alert"></div>
+
+        <section class="sheet session-sheet">
+          <div class="grid session-grid">
+            <div>
+              <span class="lbl" data-i18n="sessionPartner">Partner</span>
+              <b id="partner" class="stat-val">—</b>
+            </div>
+            <div>
+              <span class="lbl" data-i18n="sessionLatency">Latency</span>
+              <span class="latency-wrap"><i id="latency-dot" class="dot"></i><b id="latency" class="stat-val">—</b></span>
+            </div>
+            <div class="session-verify-cell">
+              <span class="lbl" data-i18n="sessionSecurity">Security</span>
+              <span id="verify" class="dim"></span>
+            </div>
+          </div>
+          <div class="session-toolbar">
+            <button id="pause-all" class="ghost" type="button"><span class="key shortcut">[SPACE]</span><span data-i18n="btnPauseAll">Stop all channels</span></button>
+          </div>
+        </section>
+
+        <div id="devices"></div>
+        <p class="dim hint" data-i18n="hintControl">Turn on runs for the set time (press again to stop early). Hold fires only while pressed. Space stops all channels; STOP or Esc ends the session.</p>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <div class="footer-grid">
+      <div class="col">
+        <div data-i18n="footerLeft1">ShockingVRC Partner Remote</div>
+        <div data-i18n="footerLeft2">Protocol 2 · WebRTC P2P</div>
+      </div>
+      <div class="col">
+        <div data-i18n="footerRight1">Esc: emergency stop</div>
+        <div data-i18n="footerRight2">T: theme · R: language</div>
+      </div>
+      <div class="col footer-status">
+        <span id="toast" role="status"></span>
+      </div>
+    </div>
+  </footer>
+
+  <div id="floating-toast" class="floating-toast hidden" role="status" aria-live="polite"></div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

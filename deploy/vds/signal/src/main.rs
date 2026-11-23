@@ -593,6 +593,8 @@ const STYLE: &str = include_str!("../../web/style.css");
 const APP_JS: &str = include_str!("../../web/app.js");
 const PROTO_JS: &str = include_str!("../../web/proto.js");
 const PANEL_JS: &str = include_str!("../../web/panel.js");
+const I18N_JS: &str = include_str!("../../web/i18n.js");
+const THEME_JS: &str = include_str!("../../web/theme.js");
 
 fn page(kind: &'static str, body: &'static str) -> Response {
     (
@@ -613,6 +615,8 @@ fn web_router() -> Router {
         .route("/app.js", get(|| async { page("text/javascript; charset=utf-8", APP_JS) }))
         .route("/proto.js", get(|| async { page("text/javascript; charset=utf-8", PROTO_JS) }))
         .route("/panel.js", get(|| async { page("text/javascript; charset=utf-8", PANEL_JS) }))
+        .route("/i18n.js", get(|| async { page("text/javascript; charset=utf-8", I18N_JS) }))
+        .route("/theme.js", get(|| async { page("text/javascript; charset=utf-8", THEME_JS) }))
 }
 
 async fn healthcheck(addr: SocketAddr) -> bool {
