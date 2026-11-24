@@ -49,6 +49,8 @@ pub struct UiState {
     pub alarm_section_visible: bool,
     pub spoof_guard: bool,
     pub nickname: String,
+    pub nickname_dirty: bool,
+    pub has_seen_tutorial: bool,
 
     pub show_theme_panel: bool,
     pub show_about: bool,
@@ -179,6 +181,8 @@ impl UiState {
             alarm_section_visible: p.alarm_tab,
             spoof_guard: p.spoof_guard,
             nickname: p.nickname.clone(),
+            nickname_dirty: false,
+            has_seen_tutorial: p.has_seen_tutorial,
             show_theme_panel: false,
             show_about: false,
             mode: p.mode,
@@ -788,6 +792,9 @@ impl GuiApp {
 
         if self.tutorial.active {
             self.tutorial.show(&ctx, pal, &mut self.state);
+            if !self.tutorial.active {
+                self.state.has_seen_tutorial = true;
+            }
         }
     }
 
@@ -923,6 +930,7 @@ fn nav_link(ui: &mut Ui, pal: &Palette, key: char, label: &str, current: bool) -
 fn digit_of(key: egui::Key) -> Option<u32> {
     use egui::Key::*;
     Some(match key {
+        Num0 => 0,
         Num1 => 1,
         Num2 => 2,
         Num3 => 3,

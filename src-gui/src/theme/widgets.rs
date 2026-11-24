@@ -224,6 +224,31 @@ pub fn button_enabled(ui: &mut Ui, pal: &Palette, text: &str, enabled: bool) -> 
     button_inner(ui, pal, text, ButtonStyle::Outline, enabled)
 }
 
+pub fn small_button(ui: &mut Ui, pal: &Palette, text: &str) -> Response {
+    let font = font::small();
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_string(), font.clone(), pal.contrast);
+    let size = vec2(galley.size().x + 14.0, galley.size().y + 8.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let hovered = resp.hovered();
+    let p = ui.painter();
+    let (fill, fg, border) = if hovered {
+        (pal.accent, pal.on_solid(), pal.accent)
+    } else {
+        (Color32::TRANSPARENT, pal.contrast, pal.hair)
+    };
+    if fill != Color32::TRANSPARENT {
+        p.rect_filled(rect, SQUARE, fill);
+    }
+    p.rect_stroke(rect, SQUARE, Stroke::new(1.0, border), StrokeKind::Inside);
+    p.text(rect.center(), Align2::CENTER_CENTER, text, font, fg);
+    if resp.has_focus() {
+        focus_corners(ui, rect, pal.accent);
+    }
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 pub fn danger_button(ui: &mut Ui, pal: &Palette, text: &str, enabled: bool) -> Response {
     button_inner(ui, pal, text, ButtonStyle::Danger, enabled)
 }
@@ -298,47 +323,128 @@ fn button_inner(ui: &mut Ui, pal: &Palette, text: &str, style: ButtonStyle, enab
 }
 
 pub fn segmented(ui: &mut Ui, pal: &Palette, options: &[&str], selected: usize) -> Option<usize> {
+    let font = font::small();
+    let widths: Vec<f32> = options
+        .iter()
+        .map(|label| {
+            ui.painter()
+                .layout_no_wrap((*label).to_string(), font.clone(), pal.contrast)
+                .size()
+                .x
+                + 18.0
+        })
+        .collect();
+    let h = ui
+        .painter()
+        .layout_no_wrap("M".to_string(), font.clone(), pal.contrast)
+        .size()
+        .y
+        + 8.0;
+    let overlap = widths.len().saturating_sub(1) as f32;
+    let total_w: f32 = (widths.iter().sum::<f32>() - overlap).max(1.0);
+    let (outer, outer_resp) = ui.allocate_exact_size(vec2(total_w, h), Sense::hover());
+
     let mut picked = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        for (i, label) in options.iter().enumerate() {
-            let font = font::small();
-            let galley = ui
-                .painter()
-                .layout_no_wrap(label.to_string(), font.clone(), pal.contrast);
-            let size = vec2(galley.size().x + 18.0, galley.size().y + 8.0);
-            let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-            let on = i == selected;
-            let hovered = resp.hovered();
-            let p = ui.painter();
-            let (fill, fg) = match (on, hovered) {
-                (true, _) => (pal.accent, pal.on_solid()),
-                (false, true) => (pal.well, pal.contrast),
-                (false, false) => (Color32::TRANSPARENT, pal.dim),
-            };
-            if fill != Color32::TRANSPARENT {
-                p.rect_filled(rect, SQUARE, fill);
-            }
-            p.rect_stroke(
-                rect,
-                SQUARE,
-                Stroke::new(1.0, if on { pal.accent } else { pal.hair }),
-                StrokeKind::Inside,
-            );
-            p.text(rect.center(), Align2::CENTER_CENTER, *label, font, fg);
-            if resp.clicked() {
-                picked = Some(i);
-            }
-            if hovered {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            }
+    let mut x = outer.left();
+    let mut active_stroke = None;
+    for (i, (label, &w)) in options.iter().zip(&widths).enumerate() {
+        let rect = Rect::from_min_size(Pos2::new(x, outer.top()), vec2(w, h));
+        x += w - 1.0;
+        let resp = ui.interact(rect, outer_resp.id.with(i), Sense::click());
+        let on = i == selected;
+        let hovered = resp.hovered();
+        let p = ui.painter();
+        let (fill, fg) = match (on, hovered) {
+            (true, _) => (pal.accent, pal.on_solid()),
+            (false, true) => (pal.well, pal.contrast),
+            (false, false) => (Color32::TRANSPARENT, pal.dim),
+        };
+        if fill != Color32::TRANSPARENT {
+            p.rect_filled(rect, SQUARE, fill);
         }
-    });
+        if on {
+            active_stroke = Some((rect, pal.accent));
+        } else {
+            p.rect_stroke(rect, SQUARE, Stroke::new(1.0, pal.hair), StrokeKind::Inside);
+        }
+        p.text(rect.center(), Align2::CENTER_CENTER, *label, font.clone(), fg);
+        if resp.clicked() {
+            picked = Some(i);
+        }
+        if hovered {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+    }
+    if let Some((rect, color)) = active_stroke {
+        ui.painter()
+            .rect_stroke(rect, SQUARE, Stroke::new(1.0, color), StrokeKind::Inside);
+    }
     picked
 }
 
 pub fn toggle(ui: &mut Ui, pal: &Palette, on: bool) -> Option<bool> {
-    segmented(ui, pal, &["ON", "OFF"], if on { 0 } else { 1 }).map(|i| i == 0)
+    let font = font::small();
+    let labels = ["ON", "OFF"];
+    let widths = [
+        ui.painter()
+            .layout_no_wrap(labels[0].to_string(), font.clone(), pal.contrast)
+            .size()
+            .x
+            + 18.0,
+        ui.painter()
+            .layout_no_wrap(labels[1].to_string(), font.clone(), pal.contrast)
+            .size()
+            .x
+            + 18.0,
+    ];
+    let h = ui
+        .painter()
+        .layout_no_wrap("M".to_string(), font.clone(), pal.contrast)
+        .size()
+        .y
+        + 8.0;
+    let total_w = widths[0] + widths[1] - 1.0;
+    let (outer, outer_resp) = ui.allocate_exact_size(vec2(total_w, h), Sense::hover());
+
+    let mut next = None;
+    let mut x = outer.left();
+    let mut active_stroke = None;
+    for (i, (label, &w)) in labels.iter().zip(&widths).enumerate() {
+        let rect = Rect::from_min_size(Pos2::new(x, outer.top()), vec2(w, h));
+        x += w - 1.0;
+        let is_on_cell = i == 0;
+        let selected = is_on_cell == on;
+        let resp = ui.interact(rect, outer_resp.id.with(i), Sense::click());
+        let hovered = resp.hovered();
+        let p = ui.painter();
+
+        let (fill, fg, border) = match (is_on_cell, selected, hovered) {
+            (true, true, _) => (pal.accent, pal.on_solid(), pal.accent),
+            (false, true, _) => (pal.well, pal.contrast, pal.dim),
+            (_, false, true) => (pal.well, pal.contrast, pal.dim),
+            (_, false, false) => (Color32::TRANSPARENT, pal.dim, pal.hair),
+        };
+        if fill != Color32::TRANSPARENT {
+            p.rect_filled(rect, SQUARE, fill);
+        }
+        if selected {
+            active_stroke = Some((rect, border));
+        } else {
+            p.rect_stroke(rect, SQUARE, Stroke::new(1.0, border), StrokeKind::Inside);
+        }
+        p.text(rect.center(), Align2::CENTER_CENTER, *label, font.clone(), fg);
+        if resp.clicked() && !selected {
+            next = Some(is_on_cell);
+        }
+        if hovered && !selected {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+    }
+    if let Some((rect, color)) = active_stroke {
+        ui.painter()
+            .rect_stroke(rect, SQUARE, Stroke::new(1.0, color), StrokeKind::Inside);
+    }
+    next
 }
 pub struct Slider<'a> {
     pub value: f32,
@@ -597,18 +703,39 @@ pub fn text_in(ui: &Ui, rect: Rect, text: &str, font: FontId, color: Color32, al
 }
 
 pub fn stat_cell(ui: &mut Ui, pal: &Palette, label: &str, value: &str, value_color: Color32) {
+    stat_cell_with(ui, pal, label, value, value_color, None, false);
+}
+
+pub fn stat_cell_with(
+    ui: &mut Ui,
+    pal: &Palette,
+    label: &str,
+    value: &str,
+    value_color: Color32,
+    meta: Option<(&str, Color32)>,
+    clickable: bool,
+) -> Response {
     let size = vec2(ui.available_width(), 46.0);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    dashed_rect(ui, rect, pal.hair);
+    let sense = if clickable { Sense::click() } else { Sense::hover() };
+    let (rect, resp) = ui.allocate_exact_size(size, sense);
+    let hovered = clickable && resp.hovered();
+    if hovered {
+        ui.painter().rect_filled(rect, SQUARE, pal.well);
+    }
+    dashed_rect(ui, rect, if hovered { pal.accent } else { pal.hair });
     let inner = rect.shrink2(vec2(10.0, 6.0));
-    text_in(
-        ui,
-        Rect::from_min_size(inner.min, vec2(inner.width(), 12.0)),
-        &label.to_uppercase(),
-        font::tiny(),
-        pal.dim,
-        Align2::LEFT_CENTER,
-    );
+    let top = Rect::from_min_size(inner.min, vec2(inner.width(), 12.0));
+    text_in(ui, top, &label.to_uppercase(), font::tiny(), pal.dim, Align2::LEFT_CENTER);
+    if let Some((text, color)) = meta {
+        text_in(
+            ui,
+            top,
+            text,
+            font::tiny(),
+            if hovered { pal.accent } else { color },
+            Align2::RIGHT_CENTER,
+        );
+    }
     text_in(
         ui,
         Rect::from_min_max(Pos2::new(inner.left(), inner.top() + 13.0), inner.max),
@@ -617,6 +744,11 @@ pub fn stat_cell(ui: &mut Ui, pal: &Palette, label: &str, value: &str, value_col
         value_color,
         Align2::LEFT_CENTER,
     );
+    if clickable {
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+    } else {
+        resp
+    }
 }
 
 pub fn field_label(ui: &mut Ui, pal: &Palette, text: &str, width: f32, emphasis: bool) {
