@@ -197,6 +197,15 @@ impl AvatarScanner {
     }
 
     pub async fn start(&self) -> Result<()> {
+        self.start_inner(true).await
+    }
+
+    #[cfg(test)]
+    async fn start_without_discovery(&self) -> Result<()> {
+        self.start_inner(false).await
+    }
+
+    async fn start_inner(&self, discover_vrchat: bool) -> Result<()> {
         self.stop().await;
         self.state.output.reset_shutdown();
         self.state.output.ensure_worker();
@@ -232,7 +241,18 @@ impl AvatarScanner {
             log::info!("Legacy fixed-port mode: mDNS self-advertising disabled");
         }
 
-        let client = Arc::new(VrchatClient::start());
+        let client = Arc::new(if discover_vrchat {
+            VrchatClient::start()
+        } else {
+            #[cfg(test)]
+            {
+                VrchatClient::start_manual()
+            }
+            #[cfg(not(test))]
+            {
+                VrchatClient::start()
+            }
+        });
         let mut addr_rx = client.subscribe_address();
         *self.state.client.lock().await = Some(client);
 
@@ -832,7 +852,7 @@ mod tests {
         });
 
         let scanner = AvatarScanner::new(Some(0));
-        scanner.start().await.unwrap();
+        scanner.start_without_discovery().await.unwrap();
         assert!(scanner.probe_vrchat_endpoint(http_addr).await);
 
         for _ in 0..200 {

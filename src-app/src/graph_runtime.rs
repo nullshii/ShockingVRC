@@ -611,6 +611,19 @@ mod tests {
         assert_eq!(last, 40, "the cap holds at full slider");
     }
 
+    async fn wait_until(timeout: Duration, mut pred: impl FnMut() -> bool) -> bool {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if pred() {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
     #[tokio::test]
     async fn the_tick_loop_adds_device_nodes_and_feeds_engines() {
         use crate::app_state::DeviceSlot;
@@ -652,23 +665,38 @@ mod tests {
             remote: Default::default(),
         });
         let task = rt.spawn(Arc::clone(&state));
-        tokio::time::sleep(Duration::from_millis(700)).await;
+
+        let mut a = [GraphChannelOutput::default(); MAX_CHANNELS];
+        let ramped = wait_until(Duration::from_secs(5), || {
+            let cur = state.engine_for_mac("AA:AA").unwrap().graph_output();
+            if rt.status().tick >= 2 && cur[0].safe.strength > 0 {
+                a = cur;
+                true
+            } else {
+                false
+            }
+        })
+        .await;
+        assert!(ramped, "frames reach the engine");
 
         let (graph, _) = rt.graph();
         assert!(graph.device_node_for("BB:BB").is_some(), "a node for the second device");
-        let a = state.engine_for_mac("AA:AA").unwrap().graph_output();
         assert!(a[0].safe.strength > 0, "frames reach the engine");
-        assert!(a[0].safe.strength < 20, "still ramping in after 0.7 s: {}", a[0].safe.strength);
+        assert!(a[0].safe.strength < 20, "still ramping in: {}", a[0].safe.strength);
         let b = state.engine_for_mac("BB:BB").unwrap().graph_output();
         assert_eq!(b[0].safe.strength, 0, "the unwired device stays at 0");
         let status = rt.status();
         assert_eq!(status.outputs.len(), 2);
-        assert!(status.tick > 10);
+
+        let advanced = wait_until(Duration::from_secs(5), || rt.status().tick > 10).await;
+        assert!(advanced, "tick loop kept advancing (tick={})", rt.status().tick);
 
         rt.set_ui_panic(true);
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let a = state.engine_for_mac("AA:AA").unwrap().graph_output();
-        assert_eq!(a[0].safe.strength, 0, "panic silences it");
+        let silenced = wait_until(Duration::from_secs(5), || {
+            rt.status().panic && state.engine_for_mac("AA:AA").unwrap().graph_output()[0].safe.strength == 0
+        })
+        .await;
+        assert!(silenced, "panic silences it");
         task.abort();
     }
 

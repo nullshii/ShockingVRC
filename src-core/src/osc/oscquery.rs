@@ -545,11 +545,20 @@ struct LogScan {
 
 pub struct VrchatClient {
     inner: Arc<ClientInner>,
-    rescan_task: JoinHandle<()>,
+    rescan_task: Option<JoinHandle<()>>,
 }
 
 impl VrchatClient {
     pub fn start() -> Self {
+        Self::start_with_discovery(true)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn start_manual() -> Self {
+        Self::start_with_discovery(false)
+    }
+
+    fn start_with_discovery(discover: bool) -> Self {
         let (addr_tx, _) = watch::channel(None);
         let inner = Arc::new(ClientInner {
             http: reqwest::Client::builder()
@@ -567,24 +576,28 @@ impl VrchatClient {
             stop: AtomicBool::new(false),
         });
 
-        let browse_inner = Arc::clone(&inner);
-        std::thread::spawn(move || browse_worker(browse_inner));
+        let rescan_task = if discover {
+            let browse_inner = Arc::clone(&inner);
+            std::thread::spawn(move || browse_worker(browse_inner));
 
-        let rescan_inner = Arc::clone(&inner);
-        let rescan_task = tokio::spawn(async move {
-            let mut backoff = VRCHAT_RESCAN_MIN;
-            loop {
-                if rescan_inner.stop.load(Ordering::Relaxed) {
-                    return;
+            let rescan_inner = Arc::clone(&inner);
+            Some(tokio::spawn(async move {
+                let mut backoff = VRCHAT_RESCAN_MIN;
+                loop {
+                    if rescan_inner.stop.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    backoff = if rescan(&rescan_inner).await {
+                        VRCHAT_RESCAN_MIN
+                    } else {
+                        (backoff * 2).min(VRCHAT_RESCAN_MAX)
+                    };
+                    tokio::time::sleep(backoff).await;
                 }
-                backoff = if rescan(&rescan_inner).await {
-                    VRCHAT_RESCAN_MIN
-                } else {
-                    (backoff * 2).min(VRCHAT_RESCAN_MAX)
-                };
-                tokio::time::sleep(backoff).await;
-            }
-        });
+            }))
+        } else {
+            None
+        };
 
         Self { inner, rescan_task }
     }
@@ -627,7 +640,9 @@ impl VrchatClient {
 
     pub fn shutdown(&self) {
         self.inner.stop.store(true, Ordering::Relaxed);
-        self.rescan_task.abort();
+        if let Some(task) = &self.rescan_task {
+            task.abort();
+        }
     }
 }
 
