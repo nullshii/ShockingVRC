@@ -249,6 +249,29 @@ pub fn small_button(ui: &mut Ui, pal: &Palette, text: &str) -> Response {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+pub fn small_danger_button(ui: &mut Ui, pal: &Palette, text: &str) -> Response {
+    let font = font::small();
+    let galley = ui.painter().layout_no_wrap(text.to_string(), font.clone(), pal.error);
+    let size = vec2(galley.size().x + 14.0, galley.size().y + 8.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let hovered = resp.hovered();
+    let p = ui.painter();
+    let (fill, fg, border) = if hovered {
+        (pal.error, pal.on_solid(), pal.error)
+    } else {
+        (Color32::TRANSPARENT, pal.error, pal.error)
+    };
+    if fill != Color32::TRANSPARENT {
+        p.rect_filled(rect, SQUARE, fill);
+    }
+    p.rect_stroke(rect, SQUARE, Stroke::new(1.0, border), StrokeKind::Inside);
+    p.text(rect.center(), Align2::CENTER_CENTER, text, font, fg);
+    if resp.has_focus() {
+        focus_corners(ui, rect, pal.accent);
+    }
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 pub fn danger_button(ui: &mut Ui, pal: &Palette, text: &str, enabled: bool) -> Response {
     button_inner(ui, pal, text, ButtonStyle::Danger, enabled)
 }

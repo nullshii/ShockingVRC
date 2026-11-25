@@ -277,7 +277,11 @@ impl ChannelParams {
         match self.freq_mode {
             FreqMode::Normalized => {
                 let span = self.freq_hz[1] - self.freq_hz[0];
-                if span.abs() < 1e-6 { 0.0 } else { ((hz - self.freq_hz[0]) / span).clamp(0.0, 1.0) }
+                if span.abs() < 1e-6 {
+                    0.0
+                } else {
+                    ((hz - self.freq_hz[0]) / span).clamp(0.0, 1.0)
+                }
             }
             FreqMode::Hz => hz.clamp(1.0, 100.0),
             FreqMode::Raw => crate::hz_to_raw(hz) as f32,

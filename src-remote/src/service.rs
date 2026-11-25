@@ -1114,7 +1114,14 @@ impl RemoteService {
                     name: partner.clone(),
                     my_role: role,
                     added: now,
-                    auto_accept: !matches!(grant, Grant::Invite { pairing: true, trusted: false, .. }) || known,
+                    auto_accept: !matches!(
+                        grant,
+                        Grant::Invite {
+                            pairing: true,
+                            trusted: false,
+                            ..
+                        }
+                    ) || known,
                     last_seen: now,
                     routes: None,
                 });

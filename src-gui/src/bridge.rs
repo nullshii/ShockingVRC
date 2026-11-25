@@ -1320,7 +1320,7 @@ impl Worker {
             }
             Command::RemoteConnectLink { link, passphrase } => {
                 if let Some(svc) = self.remote_service() {
-                    let pass = Some(passphrase).filter(|p| !p.is_empty());
+                    let pass = Some(passphrase.trim().to_string()).filter(|p| !p.is_empty());
                     match svc.connect_link(&link, pass) {
                         Ok(()) => self.remote_ui(|r| r.pending_link = None),
                         Err(e) => self.notify(ToastKind::Error, e),

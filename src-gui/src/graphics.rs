@@ -173,14 +173,7 @@ pub fn machine() -> Machine {
     }
 
     let mut animations: i32 = 1;
-    let ok = unsafe {
-        SystemParametersInfoW(
-            SPI_GETCLIENTAREAANIMATION,
-            0,
-            (&mut animations as *mut i32).cast(),
-            0,
-        )
-    };
+    let ok = unsafe { SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&mut animations as *mut i32).cast(), 0) };
     if ok != 0 {
         m.animations_off = animations == 0;
     }

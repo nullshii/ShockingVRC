@@ -86,7 +86,6 @@ impl WaveformV3 {
         )
     }
 
-
     pub fn output(
         strength_a: u8,
         strength_b: u8,
@@ -96,7 +95,11 @@ impl WaveformV3 {
         intensity_b: [u8; 4],
     ) -> Self {
         let silent = |strength: u8, f: [u8; 4], i: [u8; 4]| {
-            if strength == 0 { ([MIN_PULSE_FREQUENCY; 4], [0; 4]) } else { (f, i) }
+            if strength == 0 {
+                ([MIN_PULSE_FREQUENCY; 4], [0; 4])
+            } else {
+                (f, i)
+            }
         };
         let (frequency_a, intensity_a) = silent(strength_a, frequency_a, intensity_a);
         let (frequency_b, intensity_b) = silent(strength_b, frequency_b, intensity_b);
@@ -287,7 +290,9 @@ mod tests {
         let wave = WaveformV3::output(40, 0, [18; 4], [100; 4], [18; 4], [100; 4]);
         assert_eq!(
             wave.to_bytes(),
-            [0xB0, 0x0F, 40, 0, 18, 18, 18, 18, 100, 100, 100, 100, 10, 10, 10, 10, 0, 0, 0, 0]
+            [
+                0xB0, 0x0F, 40, 0, 18, 18, 18, 18, 100, 100, 100, 100, 10, 10, 10, 10, 0, 0, 0, 0
+            ]
         );
         let wave = WaveformV3::output(0, 25, [30; 4], [80; 4], [50; 4], [60; 4]);
         assert_eq!(wave.intensity_a, [0; 4]);

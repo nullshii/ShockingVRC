@@ -154,10 +154,7 @@ fn zone_drag(ui: &mut Ui, rect: Rect, area: Rect, id: egui::Id, zone: &mut DrawR
         ui.ctx().data_mut(|d| d.insert_temp(start_key, p));
     }
     if primary_dragged(ui, &resp)
-        && let (Some(p), Some(a)) = (
-            resp.interact_pointer_pos(),
-            ui.ctx().data(|d| d.get_temp::<Pos2>(start_key)),
-        )
+        && let (Some(p), Some(a)) = (resp.interact_pointer_pos(), ui.ctx().data(|d| d.get_temp::<Pos2>(start_key)))
         && (p - a).length() >= ZONE_COMMIT_PX
     {
         *zone = DrawRect::from_corners(to_unit(rect, a), to_unit(rect, p));
@@ -263,11 +260,8 @@ pub fn xy_pad(ui: &mut Ui, pal: &Palette, rect: Rect, p: &mut XyPadParams, id: N
     well(ui, pal, pad);
     w::hatch(ui, pad.shrink(1.0), pal.faded(pal.contrast, 0.94), z.px(14.0).max(4.0));
     if p.mode == shocking_vrc_core::graph::draw::XyMode::PanPower {
-        ui.painter().vline(
-            pad.center().x,
-            pad.y_range(),
-            Stroke::new(1.0, pal.faded(pal.hair, 0.3)),
-        );
+        ui.painter()
+            .vline(pad.center().x, pad.y_range(), Stroke::new(1.0, pal.faded(pal.hair, 0.3)));
     }
     let resp = ui.interact(pad, ui.id().with(("xy", id.0)), Sense::drag());
     if primary_dragged(ui, &resp)
@@ -563,7 +557,11 @@ pub fn partner_feedback(
     let z = Z(zoom);
     well(ui, pal, rect);
     let o = |k: usize| probe.and_then(|pr| pr.outputs.get(k)).copied().unwrap_or(0.0);
-    let rows = [("their A", o(0), pal.accent), ("their B", o(1), pal.success), ("wish", o(5), pal.warning)];
+    let rows = [
+        ("their A", o(0), pal.accent),
+        ("their B", o(1), pal.success),
+        ("wish", o(5), pal.warning),
+    ];
     let rh = rect.height() / rows.len() as f32;
     let label_w = if z.text() { z.px(52.0) } else { 0.0 };
     for (k, (name, v, color)) in rows.iter().enumerate() {
@@ -579,7 +577,10 @@ pub fn partner_feedback(
             let end = mid + track.width() * 0.5 * v.clamp(-1.0, 1.0);
             Rect::from_min_max(pos2(mid.min(end), track.top()), pos2(mid.max(end), track.bottom()))
         } else {
-            Rect::from_min_max(track.min, pos2(track.left() + track.width() * v.clamp(0.0, 1.0), track.bottom()))
+            Rect::from_min_max(
+                track.min,
+                pos2(track.left() + track.width() * v.clamp(0.0, 1.0), track.bottom()),
+            )
         };
         let fill = match (bipolar, *v < 0.0) {
             (true, true) => pal.warning,

@@ -365,9 +365,16 @@ mod tests {
 
     #[test]
     fn feedback_round_trips() {
-        let msg = Message::Feedback { kind: FeedbackKind::More };
+        let msg = Message::Feedback {
+            kind: FeedbackKind::More,
+        };
         assert_eq!(decode(&encode(&msg)), Ok(msg));
-        assert!(String::from_utf8_lossy(&encode(&Message::Feedback { kind: FeedbackKind::Less })).contains(r#""t":"feedback","kind":"less""#));
+        assert!(
+            String::from_utf8_lossy(&encode(&Message::Feedback {
+                kind: FeedbackKind::Less
+            }))
+            .contains(r#""t":"feedback","kind":"less""#)
+        );
     }
 
     fn raw(body: &str) -> Vec<u8> {
@@ -382,7 +389,9 @@ mod tests {
         let body = r#"{"t":"frame","seq":3,"ts":10,"slots":[{"slot":0,
             "a":{"p":[0.5,null,0.5,0.5],"f":[18,18,18,18],"i":[100,100,100,100],"m":null},
             "b":{"p":[0,0,0,0],"f":[18,18,18,18],"i":[0,0,0,0]}}]}"#;
-        let Ok(Message::Frame(f)) = decode(&raw(body)) else { panic!("frame did not decode") };
+        let Ok(Message::Frame(f)) = decode(&raw(body)) else {
+            panic!("frame did not decode")
+        };
         let [a, b] = f.slots[0].channels();
         let a = a.unwrap();
         assert_eq!(a.power_seg, [0.5, 0.0, 0.5, 0.5]);

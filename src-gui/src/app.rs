@@ -80,8 +80,25 @@ pub enum GraphTab {
     Remote,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RemoteTab {
+    #[default]
+    Connect,
+    Limits,
+    Network,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InviteMode {
+    #[default]
+    Link,
+    WebCode,
+}
+
 #[derive(Clone)]
 pub struct RemoteForm {
+    pub tab: RemoteTab,
+    pub invite_mode: InviteMode,
     pub role: shocking_vrc_remote::link::OfferedRole,
     pub lifetime: shocking_vrc_remote::store::Lifetime,
     pub passphrase: String,
@@ -100,6 +117,8 @@ pub struct RemoteForm {
 impl Default for RemoteForm {
     fn default() -> Self {
         Self {
+            tab: RemoteTab::Connect,
+            invite_mode: InviteMode::Link,
             role: shocking_vrc_remote::link::OfferedRole::Receiver,
             lifetime: shocking_vrc_remote::store::Lifetime::SingleUse,
             passphrase: String::new(),
@@ -342,12 +361,7 @@ pub struct GuiApp {
 }
 
 impl GuiApp {
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        bridge: Bridge,
-        log: LogBuffer,
-        visibility: WindowVisibility,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, bridge: Bridge, log: LogBuffer, visibility: WindowVisibility) -> Self {
         let p = prefs::load_ui_prefs();
         let theme_id = p.theme.clone().unwrap_or_else(|| "terminal".to_string());
         let theme = ThemeState::new(&theme_id);
@@ -490,20 +504,21 @@ impl eframe::App for GuiApp {
 
         self.handle_shortcuts(ui, &snap);
 
-        self.topbar(ui, &pal, &snap);
+        let topbar_bottom = self.topbar(ui, &pal, &snap);
         let footer_h = 26.0;
         let body = Rect::from_min_max(
-            egui::pos2(full.left(), ui.min_rect().bottom()),
+            egui::pos2(full.left(), topbar_bottom),
             egui::pos2(full.right(), full.bottom() - footer_h),
         );
         self.body(ui, body, &pal, &snap);
         self.statusbar(ui, &pal, &snap, footer_h);
 
-        self.overlays(ui, &pal, &snap);
+        self.overlays(ui, &pal, &snap, topbar_bottom);
 
         let backdrop_anim = self.backdrop.is_animating(mode);
-        let wire_anim =
-            mode == GraphicsMode::Full && self.state.section == Section::Graph && has_lit_graph_probe(&snap, self.state.graph_tab);
+        let wire_anim = mode == GraphicsMode::Full
+            && self.state.section == Section::Graph
+            && has_lit_graph_probe(&snap, self.state.graph_tab);
         let animating = mode == GraphicsMode::Full && (theme_animating || backdrop_anim || wire_anim);
 
         if self.graphics_pref == GraphicsPreference::Auto && mode == GraphicsMode::Full && visible && animating {
@@ -653,69 +668,175 @@ impl GuiApp {
         }
     }
 
-    fn topbar(&mut self, ui: &mut Ui, pal: &Palette, snap: &Snapshot) {
+    fn topbar(&mut self, ui: &mut Ui, pal: &Palette, snap: &Snapshot) -> f32 {
         let full = ui.max_rect();
-        let h = 52.0;
-        let bar = Rect::from_min_size(full.min, vec2(full.width(), h));
-        ui.painter().rect_filled(bar, w::SQUARE, pal.sheet);
-        w::dashed_line(
-            ui.painter(),
-            bar.left_bottom(),
-            bar.right_bottom(),
-            Stroke::new(1.0, pal.hair),
-            4.0,
-            4.0,
-        );
-        ui.allocate_rect(bar, Sense::hover());
-
-        let inner = bar.shrink2(vec2(18.0, 0.0));
-        let mut child = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(inner)
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-        );
-        let ui = &mut child;
-
-        ui.label(egui::RichText::new("coyote@vrc:~$ ").font(font::small()).color(pal.dim));
+        let inner_w = (full.width() - 36.0).max(1.0);
         let cmd = self.state.section.title().to_lowercase();
-        ui.label(egui::RichText::new(&cmd).font(font::small()).color(pal.contrast));
         let blink = if self.graphics_decision.mode == GraphicsMode::Lite || self.backdrop.speed <= 0.0 {
             true
         } else {
             (ui.input(|i| i.time) * 0.9).fract() < 0.5
         };
-        let (cur, _) = ui.allocate_exact_size(vec2(7.0, 13.0), Sense::hover());
-        if blink {
-            ui.painter().rect_filled(cur, w::SQUARE, pal.accent);
+
+        let mut nav_items: Vec<(Option<Section>, char, String, bool)> = Vec::with_capacity(Section::ALL.len() + 1);
+        for &s in &Section::ALL {
+            if !self.state.section_visible(s) {
+                continue;
+            }
+            let mut label = s.title().to_string();
+            if s == Section::Alarm && snap.alarm_status.phase.is_ringing() {
+                label.push('!');
+            }
+            nav_items.push((Some(s), s.key(), label, self.state.section == s));
         }
-        if snap.remote_enabled {
-            ui.add_space(16.0);
-            if crate::views::remote::topbar_badge(ui, pal, snap, &self.bridge) {
+        nav_items.push((None, 'T', "Theme".to_string(), self.state.show_theme_panel));
+
+        let prompt_w = ui
+            .painter()
+            .layout_no_wrap("coyote@vrc:~$ ".to_string(), font::small(), pal.dim)
+            .size()
+            .x
+            + ui.painter()
+                .layout_no_wrap(cmd.clone(), font::small(), pal.contrast)
+                .size()
+                .x
+            + 7.0
+            + ui.spacing().item_spacing.x * 2.0;
+        let nav_sum_w: f32 = nav_items
+            .iter()
+            .map(|(_, key, label, _)| nav_link_width(ui, *key, label))
+            .sum();
+        let gaps = nav_items.len().saturating_sub(1) as f32;
+        let single_row_spacing = if prompt_w + 16.0 + nav_sum_w + gaps * 14.0 <= inner_w {
+            Some(14.0)
+        } else if prompt_w + 12.0 + nav_sum_w + gaps * 8.0 <= inner_w {
+            Some(8.0)
+        } else {
+            None
+        };
+
+        let draw_prompt = |ui: &mut Ui| {
+            ui.label(egui::RichText::new("coyote@vrc:~$ ").font(font::small()).color(pal.dim));
+            ui.label(egui::RichText::new(&cmd).font(font::small()).color(pal.contrast));
+            let (cur, _) = ui.allocate_exact_size(vec2(7.0, 13.0), Sense::hover());
+            if blink {
+                ui.painter().rect_filled(cur, w::SQUARE, pal.accent);
+            }
+        };
+
+        let mut clicked_section = None;
+        let mut toggle_theme = false;
+
+        let nav_bar = if let Some(spacing) = single_row_spacing {
+            let h = 52.0;
+            let bar = Rect::from_min_size(full.min, vec2(full.width(), h));
+            ui.painter().rect_filled(bar, w::SQUARE, pal.sheet);
+            w::dashed_line(
+                ui.painter(),
+                bar.left_bottom(),
+                bar.right_bottom(),
+                Stroke::new(1.0, pal.hair),
+                4.0,
+                4.0,
+            );
+            ui.allocate_rect(bar, Sense::hover());
+
+            let inner = bar.shrink2(vec2(18.0, 0.0));
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(inner)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            draw_prompt(&mut child);
+            child.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = spacing;
+                for (sec, key, label, current) in nav_items.iter().rev() {
+                    if nav_link(ui, pal, *key, label, *current) {
+                        match sec {
+                            Some(s) => clicked_section = Some(*s),
+                            None => toggle_theme = true,
+                        }
+                    }
+                }
+            });
+            bar
+        } else {
+            let bg_idx = ui.painter().add(egui::Shape::Noop);
+            let content_origin = egui::pos2(full.left() + 18.0, full.top() + 8.0);
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(Rect::from_min_size(content_origin, vec2(inner_w, 200.0)))
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            );
+            child.horizontal(|ui| draw_prompt(ui));
+            child.add_space(6.0);
+            child.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(12.0, 4.0);
+                for (sec, key, label, current) in &nav_items {
+                    if nav_link(ui, pal, *key, label, *current) {
+                        match sec {
+                            Some(s) => clicked_section = Some(*s),
+                            None => toggle_theme = true,
+                        }
+                    }
+                }
+            });
+            let bar_h = (child.min_rect().height() + 16.0).max(52.0);
+            let bar = Rect::from_min_size(full.min, vec2(full.width(), bar_h));
+            ui.painter()
+                .set(bg_idx, egui::Shape::rect_filled(bar, w::SQUARE, pal.sheet));
+            w::dashed_line(
+                ui.painter(),
+                bar.left_bottom(),
+                bar.right_bottom(),
+                Stroke::new(1.0, pal.hair),
+                4.0,
+                4.0,
+            );
+            ui.advance_cursor_after_rect(bar);
+            bar
+        };
+
+        if let Some(s) = clicked_section {
+            self.state.section = s;
+        }
+        if toggle_theme {
+            self.state.show_theme_panel = !self.state.show_theme_panel;
+        }
+
+        let mut bottom = nav_bar.bottom();
+        if snap.remote_enabled && crate::views::remote::has_topbar_badge(snap) {
+            let accent = crate::views::remote::topbar_accent(pal, snap);
+            let bg_idx = ui.painter().add(egui::Shape::Noop);
+            let pad_y = 5.0;
+            let content_origin = egui::pos2(full.left() + 18.0, bottom + pad_y);
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(Rect::from_min_size(content_origin, vec2(inner_w, 160.0)))
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            );
+            let on_remote = self.state.section == Section::Remote;
+            if crate::views::remote::topbar_badge(&mut child, pal, snap, &self.bridge, on_remote) {
                 self.state.section = Section::Remote;
             }
+            let strip_h = (child.min_rect().height() + pad_y * 2.0).max(32.0);
+            let strip = Rect::from_min_size(egui::pos2(full.left(), bottom), vec2(full.width(), strip_h));
+            ui.painter()
+                .set(bg_idx, egui::Shape::rect_filled(strip, w::SQUARE, pal.faded(accent, 0.91)));
+            let rail = Rect::from_min_size(strip.min, vec2(3.0, strip_h));
+            ui.painter().rect_filled(rail, w::SQUARE, accent);
+            w::dashed_line(
+                ui.painter(),
+                strip.left_bottom(),
+                strip.right_bottom(),
+                Stroke::new(1.0, pal.faded(accent, 0.55)),
+                4.0,
+                4.0,
+            );
+            ui.advance_cursor_after_rect(strip);
+            bottom = strip.bottom();
         }
-
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 14.0;
-
-            if nav_link(ui, pal, 'T', "Theme", self.state.show_theme_panel) {
-                self.state.show_theme_panel = !self.state.show_theme_panel;
-            }
-
-            for s in Section::ALL.iter().rev() {
-                if !self.state.section_visible(*s) {
-                    continue;
-                }
-                let current = self.state.section == *s;
-                let mut label = s.title().to_string();
-                if *s == Section::Alarm && snap.alarm_status.phase.is_ringing() {
-                    label.push('!');
-                }
-                if nav_link(ui, pal, s.key(), &label, current) {
-                    self.state.section = *s;
-                }
-            }
-        });
+        bottom
     }
 
     fn body(&mut self, ui: &mut Ui, rect: Rect, pal: &Palette, snap: &Snapshot) {
@@ -875,11 +996,11 @@ impl GuiApp {
         });
     }
 
-    fn overlays(&mut self, ui: &mut Ui, pal: &Palette, snap: &Snapshot) {
+    fn overlays(&mut self, ui: &mut Ui, pal: &Palette, snap: &Snapshot, topbar_bottom: f32) {
         let ctx = ui.ctx().clone();
 
         if self.state.show_theme_panel {
-            self.theme_panel(&ctx, pal);
+            self.theme_panel(&ctx, pal, topbar_bottom);
         }
         if self.state.show_about {
             crate::overlays::about::show(&ctx, pal, &mut self.state.show_about);
@@ -923,13 +1044,13 @@ impl GuiApp {
         }
     }
 
-    fn theme_panel(&mut self, ctx: &egui::Context, pal: &Palette) {
+    fn theme_panel(&mut self, ctx: &egui::Context, pal: &Palette, topbar_bottom: f32) {
         let mut open = true;
         let swatches = cached_theme_swatches();
         egui::Window::new("theme")
             .title_bar(false)
             .resizable(false)
-            .anchor(Align2::RIGHT_TOP, vec2(-18.0, 58.0))
+            .anchor(Align2::RIGHT_TOP, vec2(-18.0, topbar_bottom + 6.0))
             .frame(egui::Frame::NONE.fill(pal.base).inner_margin(egui::Margin::same(14)))
             .default_width(320.0)
             .show(ctx, |ui| {
@@ -1080,6 +1201,22 @@ fn has_active_telemetry(snap: &Snapshot, bridge: &Bridge) -> bool {
         || snap.remote.service.connecting.is_some()
         || has_toast
         || downloading
+}
+
+fn nav_link_width(ui: &Ui, key: char, label: &str) -> f32 {
+    let key_txt = format!("[{key}] ");
+    let font = font::small();
+    let kw = ui
+        .painter()
+        .layout_no_wrap(key_txt, font.clone(), Color32::WHITE)
+        .size()
+        .x;
+    let lw = ui
+        .painter()
+        .layout_no_wrap(label.to_uppercase(), font, Color32::WHITE)
+        .size()
+        .x;
+    kw + lw
 }
 
 fn nav_link(ui: &mut Ui, pal: &Palette, key: char, label: &str, current: bool) -> bool {

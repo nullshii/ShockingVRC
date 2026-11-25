@@ -279,10 +279,19 @@ fn remote_snapshot() -> Snapshot {
 
 #[test]
 fn the_remote_section_and_tab_render() {
+    use shocking_vrc_gui::app::RemoteTab;
     let scene = Scene::new(remote_snapshot());
-    let img = scene.render_section(Section::Remote, "terminal");
-    assert_not_blank(&img, "remote section");
-    save(&img, "section-remote");
+    for (tab, name) in [
+        (RemoteTab::Connect, "section-remote"),
+        (RemoteTab::Limits, "section-remote-limits"),
+        (RemoteTab::Network, "section-remote-network"),
+    ] {
+        let img = scene.render_section_with(Section::Remote, "terminal", |s| {
+            s.remote_form.tab = tab;
+        });
+        assert_not_blank(&img, name);
+        save(&img, name);
+    }
 
     for e in shocking_vrc_app::graph_presets::builtin_presets_with(true)
         .into_iter()
@@ -305,14 +314,19 @@ fn the_remote_section_and_tab_render() {
 
 #[test]
 fn remote_limits_adapt_to_enabled_device_count() {
+    use shocking_vrc_gui::app::RemoteTab;
     let mut snap = remote_snapshot();
     snap.remote_settings.slots = Vec::new();
-    let img = Scene::new(snap).render_section(Section::Remote, "terminal");
+    let img = Scene::new(snap).render_section_with(Section::Remote, "terminal", |s| {
+        s.remote_form.tab = RemoteTab::Limits;
+    });
     assert_not_blank(&img, "remote zero devices");
 
     let mut snap = remote_snapshot();
     snap.remote_settings.slots = vec![0];
-    let img = Scene::new(snap).render_section(Section::Remote, "terminal");
+    let img = Scene::new(snap).render_section_with(Section::Remote, "terminal", |s| {
+        s.remote_form.tab = RemoteTab::Limits;
+    });
     assert_not_blank(&img, "remote one device");
 
     let mut snap = remote_snapshot();
@@ -320,6 +334,7 @@ fn remote_limits_adapt_to_enabled_device_count() {
     snap.remote_settings.slot_channels_mut(0)[0].cap = 35;
     snap.remote_settings.slot_channels_mut(1)[0].cap = 75;
     let img = Scene::new(snap).render_section_with(Section::Remote, "terminal", |s| {
+        s.remote_form.tab = RemoteTab::Limits;
         s.remote_form.limit_slot = 1;
     });
     assert_not_blank(&img, "remote two devices");
