@@ -4,11 +4,12 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 use crate::dsp::UnscentedKalman;
 use crate::modulation::evaluator::evaluate_with_accumulator;
 use crate::modulation::noise;
+use crate::osc::output::{ChatboxFrame, ChatboxMode, OscOutFrame};
 
 use super::compile::{self, ExternalRequest, Extra, GraphIssue, Plan, Src};
 use super::device::{
-    CEILING_OFF, ChannelFrame, ChannelParams, DEFAULT_CHANNEL, DeviceFrame, DeviceProfile, MAX_CHANNELS,
-    PartnerFrame, PinRole, SEGMENTS,
+    CEILING_OFF, ChannelFrame, ChannelParams, DEFAULT_CHANNEL, DeviceFrame, DeviceProfile, MAX_CHANNELS, PartnerFrame,
+    PinRole, SEGMENTS,
 };
 
 fn finite_or(v: f32, fallback: f32) -> f32 {
@@ -158,6 +159,10 @@ enum NodeState {
         less_t: f32,
         init: bool,
     },
+    Chatbox {
+        prev_send: bool,
+        init: bool,
+    },
 }
 
 impl NodeState {
@@ -259,6 +264,10 @@ impl NodeState {
                 idx: 0,
                 filled: 0,
             },
+            NodeKind::Chatbox(_) => NodeState::Chatbox {
+                prev_send: false,
+                init: false,
+            },
             _ => NodeState::None,
         }
     }
@@ -313,6 +322,8 @@ pub struct GraphEvaluator {
     states: Vec<NodeState>,
     frames: Vec<DeviceFrame>,
     partners: Vec<PartnerFrame>,
+    osc_outs: Vec<OscOutFrame>,
+    chatboxes: Vec<ChatboxFrame>,
     external: Vec<ExternalSample>,
     alarm: AlarmSample,
     partner: PartnerContext,
@@ -336,6 +347,8 @@ impl GraphEvaluator {
             states: Vec::new(),
             frames: Vec::new(),
             partners: Vec::new(),
+            osc_outs: Vec::new(),
+            chatboxes: Vec::new(),
             external: Vec::new(),
             alarm: AlarmSample::default(),
             partner: PartnerContext::default(),
@@ -409,6 +422,44 @@ impl GraphEvaluator {
                 channels: [ChannelFrame::default(); MAX_CHANNELS],
             })
             .collect();
+        self.osc_outs = plan
+            .osc_outs
+            .iter()
+            .map(|p| OscOutFrame {
+                flat: p.flat,
+                root: p.root.0,
+                address: p.params.address.clone(),
+                ty: p.params.ty,
+                map: p.params.map,
+                min: p.params.min,
+                max: p.params.max,
+                rest: p.params.rest,
+                rate_hz: p.params.rate_hz,
+                value: 0.0,
+                enable: false,
+                active: false,
+                refused: p.refused.clone(),
+            })
+            .collect();
+        self.chatboxes = plan
+            .chatboxes
+            .iter()
+            .map(|p| ChatboxFrame {
+                flat: p.flat,
+                root: p.root.0,
+                template: p.params.template.clone(),
+                count: p.params.count,
+                mode: p.params.mode,
+                interval_ms: p.params.interval_ms,
+                notify: p.params.notify,
+                clear_on_stop: p.params.clear_on_stop,
+                muted: p.params.muted,
+                values: [0.0; 4],
+                enable: false,
+                fired: false,
+                active: false,
+            })
+            .collect();
         self.values = vec![0.0; plan.value_count];
         self.in_values = vec![0.0; plan.inputs.len()];
         self.states = states;
@@ -463,6 +514,14 @@ impl GraphEvaluator {
         &self.partners
     }
 
+    pub fn osc_out_frames(&self) -> &[OscOutFrame] {
+        &self.osc_outs
+    }
+
+    pub fn chatbox_frames(&self) -> &[ChatboxFrame] {
+        &self.chatboxes
+    }
+
     pub fn panic_requested(&self) -> bool {
         self.panic
     }
@@ -499,6 +558,16 @@ impl GraphEvaluator {
             for f in &mut self.partners {
                 f.zeroed();
             }
+            for f in &mut self.osc_outs {
+                f.active = false;
+                f.enable = false;
+                f.value = 0.0;
+            }
+            for f in &mut self.chatboxes {
+                f.active = false;
+                f.enable = false;
+                f.fired = false;
+            }
             return &self.frames;
         }
 
@@ -515,11 +584,18 @@ impl GraphEvaluator {
             states,
             frames,
             partners,
+            osc_outs,
+            chatboxes,
             external,
             panic,
             ..
         } = self;
-        let mut sinks = Sinks { frames, partners };
+        let mut sinks = Sinks {
+            frames,
+            partners,
+            osc_outs,
+            chatboxes,
+        };
 
         for (ni, node) in plan.nodes.iter().enumerate() {
             let is = node.in_start as usize;
@@ -605,6 +681,8 @@ struct Ctx {
 struct Sinks<'a> {
     frames: &'a mut [DeviceFrame],
     partners: &'a mut [PartnerFrame],
+    osc_outs: &'a mut [OscOutFrame],
+    chatboxes: &'a mut [ChatboxFrame],
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -703,7 +781,11 @@ fn drive_channels(
                 PinRole::LimitMin => cf.limit_min = finite_or(v0, 0.0).clamp(0.0, 200.0),
                 PinRole::LimitMax => cf.limit_max = finite_or(v0, 0.0).clamp(0.0, 200.0),
                 PinRole::Ceiling => {
-                    cf.ceiling = if v0.is_finite() && v0 >= 0.0 { v0.min(200.0) } else { CEILING_OFF }
+                    cf.ceiling = if v0.is_finite() && v0 >= 0.0 {
+                        v0.min(200.0)
+                    } else {
+                        CEILING_OFF
+                    }
                 }
                 PinRole::Frequency | PinRole::Intensity => {
                     let is_freq = g.role == PinRole::Frequency;
@@ -1462,6 +1544,56 @@ fn eval_node(
                 return;
             };
             drive_channels(p.profile(), &p.channels, ins, &mut frame.channels, (power, freq, int), init);
+        }
+        NodeKind::OscOut(_) => {
+            let Extra::OscOut(idx) = node.extra else {
+                return;
+            };
+            if let Some(frame) = sinks.osc_outs.get_mut(idx) {
+                frame.value = i(0);
+                frame.enable = as_bool(i(1));
+                frame.active = true;
+            }
+        }
+        NodeKind::Chatbox(p) => {
+            let Extra::Chatbox(idx) = node.extra else {
+                return;
+            };
+            let Some(frame) = sinks.chatboxes.get_mut(idx) else {
+                return;
+            };
+            let n = p.count.clamp(1, 4) as usize;
+            for k in 0..4 {
+                frame.values[k] = if k < n { i(k) } else { 0.0 };
+            }
+            let ctrl = as_bool(i(n));
+            match p.mode {
+                ChatboxMode::Live => {
+                    frame.enable = ctrl;
+                    frame.fired = false;
+                    if let NodeState::Chatbox { prev_send, init } = state {
+                        *prev_send = false;
+                        *init = false;
+                    }
+                }
+                ChatboxMode::Trigger => {
+                    frame.enable = false;
+                    frame.fired = if let NodeState::Chatbox { prev_send, init } = state {
+                        if !*init {
+                            *init = true;
+                            *prev_send = ctrl;
+                            false
+                        } else {
+                            let edge = ctrl && !*prev_send;
+                            *prev_send = ctrl;
+                            edge
+                        }
+                    } else {
+                        false
+                    };
+                }
+            }
+            frame.active = true;
         }
         NodeKind::Frame(_) | NodeKind::Group(_) | NodeKind::Missing(_) => {}
     }

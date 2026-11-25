@@ -153,6 +153,7 @@ pub fn demo_snapshot() -> Snapshot {
             }
             zones
         },
+        avatar_schema: Default::default(),
         vrchat_found: true,
         osc_port: 33777,
         oscquery_port: Some(33777),
@@ -308,6 +309,7 @@ pub fn demo_graph_status() -> GraphStatus {
                 channels: Default::default(),
             },
         ],
+        osc_statuses: Default::default(),
         panic: false,
         ui_panic: false,
         caps: [50, 50],

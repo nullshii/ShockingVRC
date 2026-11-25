@@ -133,8 +133,14 @@ const BUILTIN_FILES: &[(&str, &str)] = &[
         include_str!("../../graph-presets/remote-random-storm.json"),
     ),
     ("remote-live-pad.json", include_str!("../../graph-presets/remote-live-pad.json")),
-    ("remote-step-beat.json", include_str!("../../graph-presets/remote-step-beat.json")),
-    ("remote-ping-pong.json", include_str!("../../graph-presets/remote-ping-pong.json")),
+    (
+        "remote-step-beat.json",
+        include_str!("../../graph-presets/remote-step-beat.json"),
+    ),
+    (
+        "remote-ping-pong.json",
+        include_str!("../../graph-presets/remote-ping-pong.json"),
+    ),
     (
         "remote-follow-wish.json",
         include_str!("../../graph-presets/remote-follow-wish.json"),
@@ -228,6 +234,7 @@ pub fn rename_user_graph_preset(id: &str, new_name: &str) -> Result<GraphPresetE
 pub fn import_graph_preset(path: &Path) -> Result<GraphPresetEntry, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut preset = parse_graph_preset(&text)?;
+    preset.graph.mute_chatboxes();
     if preset.name.trim().is_empty() {
         preset.name = path
             .file_stem()

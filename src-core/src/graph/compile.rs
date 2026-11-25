@@ -2,9 +2,10 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::modulation::ModulationConfig;
+use crate::osc::output::{ChatboxMode, render_chatbox_template, validate_osc_out_address};
 
 use super::device::DeviceBinding;
-use super::kind::{ContactParams, NodeKind, OscFloatParams, PinSpec, PortsParams};
+use super::kind::{ChatboxParams, ContactParams, NodeKind, OscFloatParams, OscOutParams, PinSpec, PortsParams};
 use super::model::{Graph, NodeId};
 
 const MAX_GROUP_DEPTH: usize = 8;
@@ -62,6 +63,23 @@ pub enum Extra {
     Modulation(Box<ModulationConfig>),
     Device(usize),
     Partner(usize),
+    OscOut(usize),
+    Chatbox(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct OscOutPlan {
+    pub flat: u64,
+    pub root: NodeId,
+    pub params: OscOutParams,
+    pub refused: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatboxPlan {
+    pub flat: u64,
+    pub root: NodeId,
+    pub params: ChatboxParams,
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +109,8 @@ pub struct Plan {
     pub external: Vec<ExternalRequest>,
     pub devices: Vec<(NodeId, DeviceBinding, Option<u8>)>,
     pub partners: Vec<(NodeId, u8)>,
+    pub osc_outs: Vec<OscOutPlan>,
+    pub chatboxes: Vec<ChatboxPlan>,
     pub issues: Vec<GraphIssue>,
     pub valid: bool,
     pub signature: u64,
@@ -351,7 +371,20 @@ pub fn compile(graph: &Graph) -> Plan {
     };
     let mut seen_macs: HashSet<String> = HashSet::new();
     let mut seen_slots: HashSet<u8> = HashSet::new();
+    let mut seen_osc_outs: HashSet<String> = HashSet::new();
+    let osc_float_addrs: HashSet<String> = flats
+        .iter()
+        .filter_map(|f| match &f.kind {
+            NodeKind::OscFloat(p) => {
+                let a = p.address.trim();
+                (!a.is_empty()).then(|| a.to_string())
+            }
+            _ => None,
+        })
+        .collect();
     let mut wired_devices = 0usize;
+    let mut wired_osc_outputs = 0usize;
+    let mut live_chatboxes = 0usize;
     let top_level: HashSet<NodeId> = graph.nodes.iter().map(|n| n.id).collect();
 
     for &i in &order {
@@ -428,6 +461,85 @@ pub fn compile(graph: &Graph) -> Plan {
                     Extra::None
                 }
             }
+            NodeKind::OscOut(p) => {
+                let mut params = p.clone();
+                params.address = params.address.trim().to_string();
+                match validate_osc_out_address(&params.address) {
+                    Err(reason) => {
+                        issues.push(GraphIssue::new(Severity::Error, Some(f.root), reason.clone()));
+                        plan.osc_outs.push(OscOutPlan {
+                            flat: f.flat,
+                            root: f.root,
+                            params,
+                            refused: Some(reason),
+                        });
+                        Extra::OscOut(plan.osc_outs.len() - 1)
+                    }
+                    Ok(()) => {
+                        if !seen_osc_outs.insert(params.address.clone()) {
+                            issues.push(GraphIssue::new(
+                                Severity::Warning,
+                                Some(f.root),
+                                format!(
+                                    "Another OSC Out node already writes '{}' — this one is ignored",
+                                    params.address
+                                ),
+                            ));
+                            Extra::None
+                        } else {
+                            if any_wired {
+                                wired_osc_outputs += 1;
+                            }
+                            if osc_float_addrs.contains(&params.address) {
+                                issues.push(GraphIssue::new(
+                                    Severity::Warning,
+                                    Some(f.root),
+                                    format!(
+                                        "An OSC Float node also reads '{}' in this graph — VRChat echoes may form a feedback loop",
+                                        params.address
+                                    ),
+                                ));
+                            }
+                            plan.osc_outs.push(OscOutPlan {
+                                flat: f.flat,
+                                root: f.root,
+                                params,
+                                refused: None,
+                            });
+                            Extra::OscOut(plan.osc_outs.len() - 1)
+                        }
+                    }
+                }
+            }
+            NodeKind::Chatbox(p) => {
+                if any_wired {
+                    wired_osc_outputs += 1;
+                }
+                let check = render_chatbox_template(&p.template, p.count, [0.0; 4]);
+                for bad in check.bad_placeholders {
+                    issues.push(GraphIssue::new(
+                        Severity::Info,
+                        Some(f.root),
+                        format!("Unknown or out-of-range placeholder '{bad}' — kept as literal text"),
+                    ));
+                }
+                if p.mode == ChatboxMode::Live {
+                    live_chatboxes += 1;
+                    if live_chatboxes > 1 {
+                        issues.push(GraphIssue::new(
+                            Severity::Warning,
+                            Some(f.root),
+                            "Another Live VRChat Chatbox node appears earlier — the first enabled one wins",
+                        ));
+                    }
+                }
+                plan.chatboxes.push(ChatboxPlan {
+                    flat: f.flat,
+                    root: f.root,
+                    params: p.clone(),
+                });
+                Extra::Chatbox(plan.chatboxes.len() - 1)
+            }
             _ => Extra::None,
         };
         if f.kind.is_delay() {
@@ -445,18 +557,20 @@ pub fn compile(graph: &Graph) -> Plan {
         });
     }
 
-    if plan.devices.is_empty() && plan.partners.is_empty() {
-        issues.push(GraphIssue::new(
-            Severity::Info,
-            None,
-            "No Device node yet — connect a Coyote or add one from the Output menu",
-        ));
-    } else if wired_devices == 0 {
-        issues.push(GraphIssue::new(
-            Severity::Warning,
-            None,
-            "Nothing is wired into a Device node — every output stays at 0",
-        ));
+    if wired_osc_outputs == 0 {
+        if plan.devices.is_empty() && plan.partners.is_empty() {
+            issues.push(GraphIssue::new(
+                Severity::Info,
+                None,
+                "No Device node yet — connect a Coyote or add one from the Output menu",
+            ));
+        } else if wired_devices == 0 {
+            issues.push(GraphIssue::new(
+                Severity::Warning,
+                None,
+                "Nothing is wired into a Device node — every output stays at 0",
+            ));
+        }
     }
 
     let mut h = DefaultHasher::new();

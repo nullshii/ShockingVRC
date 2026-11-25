@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::{Duration, Instant};
@@ -7,6 +8,7 @@ use shocking_vrc_core::graph::device::MAX_CHANNELS;
 use shocking_vrc_core::graph::kind::{self, ConstantParams, FaderParams, PartnerDeviceParams, XyPadParams};
 use shocking_vrc_core::graph::safety::RemoteChannelPolicy;
 use shocking_vrc_core::graph::{AlarmSample, Graph, GraphEvaluator, GraphIssue, GraphProbe, NodeKind, PinRef};
+use shocking_vrc_core::osc::{OutputNodeStatus, OutputSource};
 use shocking_vrc_remote::protocol::{OutputReport, PolicySnapshot, SlotFrame, SlotInfo, WireChannel};
 use shocking_vrc_remote::service::{RemoteConfig, RemoteService, RemoteStatus};
 
@@ -239,6 +241,7 @@ pub struct RemoteRuntimeStatus {
     pub valid: bool,
     pub doc_rev: u64,
     pub my_remote_output: Vec<(usize, [u8; MAX_CHANNELS])>,
+    pub osc_statuses: BTreeMap<u64, OutputNodeStatus>,
 }
 
 struct Doc {
@@ -307,6 +310,14 @@ impl RemoteRuntime {
 
     pub fn settings(&self) -> RemoteSettings {
         self.inner.settings.read().map(|s| s.clone()).unwrap_or_default()
+    }
+
+    pub fn stop_param(&self) -> String {
+        self.inner
+            .settings
+            .read()
+            .map(|s| s.stop_param.clone())
+            .unwrap_or_default()
     }
 
     pub fn set_settings(&self, settings: RemoteSettings) {
@@ -464,6 +475,7 @@ impl RemoteRuntime {
         if let Some(t) = self.inner.task.lock().ok().and_then(|mut t| t.take()) {
             t.abort();
         }
+        state.scanner.release_outputs(OutputSource::Remote);
         for e in state.engines() {
             e.set_remote_active(false);
         }
@@ -499,6 +511,7 @@ impl RemoteRuntime {
         if let Some(svc) = self.service() {
             svc.stop_all(reason);
         }
+        state.scanner.release_outputs(OutputSource::Remote);
         for e in state.engines() {
             e.set_remote_active(false);
         }
@@ -585,7 +598,8 @@ impl RemoteRuntime {
             }
 
             let controlling = svc.controlling();
-            let published = {
+            let ui_panic = state.graph.ui_panic();
+            let (active_out, osc_outs, chatboxes, published) = {
                 let Ok(mut ev) = self.inner.eval.lock() else { continue };
                 let guard = shocking_vrc_core::cli::spoof_guard_enabled();
                 state
@@ -594,8 +608,9 @@ impl RemoteRuntime {
                 ev.set_alarm(AlarmSample::default());
                 ev.set_partner(svc.partner_context());
                 ev.step(dt);
+                let ok = ev.is_valid() && !ev.panic_requested();
                 if controlling {
-                    let slots: Vec<SlotFrame> = if ev.is_valid() && !ev.panic_requested() {
+                    let slots: Vec<SlotFrame> = if ok {
                         ev.partner_frames()
                             .iter()
                             .map(|f| SlotFrame {
@@ -609,17 +624,34 @@ impl RemoteRuntime {
                     };
                     svc.send_frame(slots);
                 }
-                n.is_multiple_of(PUBLISH_EVERY)
-                    .then(|| (ev.probe(), ev.issues().to_vec(), ev.is_valid()))
+                let active_out = controlling && !ui_panic && ok;
+                let (osc_outs, chatboxes) = if active_out {
+                    (ev.osc_out_frames().to_vec(), ev.chatbox_frames().to_vec())
+                } else {
+                    (Vec::new(), Vec::new())
+                };
+                let published = n
+                    .is_multiple_of(PUBLISH_EVERY)
+                    .then(|| (ev.probe(), ev.issues().to_vec(), ev.is_valid()));
+                (active_out, osc_outs, chatboxes, published)
             };
+            if active_out {
+                state
+                    .scanner
+                    .submit_outputs(OutputSource::Remote, osc_outs, chatboxes, Some(&settings.stop_param));
+            } else {
+                state.scanner.release_outputs(OutputSource::Remote);
+            }
             if let Some((probe, issues, valid)) = published {
                 let rev = self.doc_rev();
+                let osc_statuses = state.scanner.output_statuses(OutputSource::Remote);
                 if let Ok(mut s) = self.inner.status.write() {
                     s.probe = Arc::new(probe);
                     s.issues = issues;
                     s.valid = valid;
                     s.doc_rev = rev;
                     s.my_remote_output = mine;
+                    s.osc_statuses = osc_statuses;
                 }
             }
         }

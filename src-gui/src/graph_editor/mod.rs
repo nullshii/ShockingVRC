@@ -555,6 +555,7 @@ impl GraphEditor {
         } else {
             let mut frag = preset.graph.clone();
             frag.nodes.retain(|n| !n.kind.is_device());
+            frag.mute_chatboxes();
             frag.prune_dangling_edges();
             let offset = frag
                 .bounds()

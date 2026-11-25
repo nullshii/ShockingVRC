@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -9,7 +9,11 @@ use tokio::sync::{Mutex, RwLock, broadcast};
 use tokio::task::JoinHandle;
 
 use super::game_device::GameDevice;
-use super::oscquery::{MdnsBroadcaster, OscQueryServer, VrchatClient, select_port};
+use super::oscquery::{
+    AvatarSchema, MAX_PARAMS, MdnsBroadcaster, OscQueryServer, SchemaAccept, SchemaStore, VrchatAddress, VrchatClient,
+    select_port,
+};
+use super::output::{ChatboxFrame, OscOutFrame, OscOutput, OutputNodeStatus, OutputSource};
 use super::types::{OldZoneType, OscValue, ZoneEvent};
 use crate::dsp::UkfParams;
 use crate::error::{DGLabError, Result};
@@ -20,11 +24,10 @@ const BULK_DEBOUNCE: Duration = Duration::from_millis(500);
 const BULK_RETRY_MIN: Duration = Duration::from_millis(250);
 const BULK_RETRY_MAX: Duration = Duration::from_secs(5);
 const BULK_MAX_ATTEMPTS: u32 = 20;
+const AVATAR_CHANGE_FOLLOWUP: Duration = Duration::from_secs(2);
 
 const OGB_ENABLED_PARAM: &str = "OGB_ENABLED";
 const OGB_ENABLED_INTERVAL: Duration = Duration::from_secs(5);
-
-const MAX_PARAMS: usize = 4096;
 
 #[derive(Debug, Clone)]
 pub struct RawContact {
@@ -101,14 +104,17 @@ struct ScannerState {
     http: Mutex<Option<OscQueryServer>>,
     mdns: Mutex<Option<MdnsBroadcaster>>,
     client: Mutex<Option<Arc<VrchatClient>>>,
+    addr_watcher: Mutex<Option<JoinHandle<()>>>,
     keepalive: Mutex<Option<JoinHandle<()>>>,
-    send_socket: tokio::sync::OnceCell<UdpSocket>,
+    send_socket: Arc<tokio::sync::OnceCell<UdpSocket>>,
     ukf_params: RwLock<UkfParams>,
     epoch: Instant,
     last_packet_ms: AtomicU64,
     has_received: AtomicBool,
     bulk_attempt: AtomicU64,
     raw: std::sync::RwLock<RawInputs>,
+    schema: std::sync::RwLock<SchemaStore>,
+    output: OscOutput,
 }
 
 #[derive(Clone)]
@@ -120,6 +126,8 @@ impl AvatarScanner {
     pub fn new(port: Option<u16>) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         let (refresh_tx, _) = broadcast::channel(16);
+        let send_socket = Arc::new(tokio::sync::OnceCell::new());
+        let output = OscOutput::new(Arc::clone(&send_socket));
         Self {
             state: Arc::new(ScannerState {
                 devices: RwLock::new(HashMap::new()),
@@ -131,14 +139,17 @@ impl AvatarScanner {
                 http: Mutex::new(None),
                 mdns: Mutex::new(None),
                 client: Mutex::new(None),
+                addr_watcher: Mutex::new(None),
                 keepalive: Mutex::new(None),
-                send_socket: tokio::sync::OnceCell::new(),
+                send_socket,
                 ukf_params: RwLock::new(UkfParams::default()),
                 epoch: Instant::now(),
                 last_packet_ms: AtomicU64::new(0),
                 has_received: AtomicBool::new(false),
                 bulk_attempt: AtomicU64::new(0),
                 raw: std::sync::RwLock::new(RawInputs::default()),
+                schema: std::sync::RwLock::new(SchemaStore::default()),
+                output,
             }),
         }
     }
@@ -187,6 +198,8 @@ impl AvatarScanner {
 
     pub async fn start(&self) -> Result<()> {
         self.stop().await;
+        self.state.output.reset_shutdown();
+        self.state.output.ensure_worker();
         let (osc_port, http_port, advertise) = match self.state.requested_port {
             None => {
                 let p = select_port()?;
@@ -219,7 +232,18 @@ impl AvatarScanner {
             log::info!("Legacy fixed-port mode: mDNS self-advertising disabled");
         }
 
-        *self.state.client.lock().await = Some(Arc::new(VrchatClient::start()));
+        let client = Arc::new(VrchatClient::start());
+        let mut addr_rx = client.subscribe_address();
+        *self.state.client.lock().await = Some(client);
+
+        let me = self.clone();
+        let watcher = tokio::spawn(async move {
+            while addr_rx.changed().await.is_ok() {
+                let addr = addr_rx.borrow_and_update().clone();
+                me.on_vrchat_address_changed(addr);
+            }
+        });
+        *self.state.addr_watcher.lock().await = Some(watcher);
 
         let me = self.clone();
         let keepalive = tokio::spawn(async move {
@@ -244,6 +268,9 @@ impl AvatarScanner {
         if let Some(mdns) = self.state.mdns.lock().await.take() {
             mdns.shutdown();
         }
+        if let Some(handle) = self.state.addr_watcher.lock().await.take() {
+            handle.abort();
+        }
         if let Some(client) = self.state.client.lock().await.take() {
             client.shutdown();
         }
@@ -251,6 +278,69 @@ impl AvatarScanner {
             handle.abort();
         }
         self.state.bulk_attempt.fetch_add(1, Ordering::Relaxed);
+        self.state.output.set_vrchat_address(None);
+    }
+
+    pub async fn probe_vrchat_endpoint(&self, http_addr: std::net::SocketAddr) -> bool {
+        let Some(client) = self.state.client.lock().await.clone() else {
+            return false;
+        };
+        client.probe_endpoint(http_addr).await
+    }
+
+    pub fn avatar_schema(&self) -> Arc<AvatarSchema> {
+        self.with_schema(|s| s.snapshot())
+    }
+
+    pub fn refresh_schema(&self) {
+        self.trigger_bulk(None, false);
+    }
+
+    pub fn submit_outputs(
+        &self,
+        source: OutputSource,
+        osc: Vec<OscOutFrame>,
+        chat: Vec<ChatboxFrame>,
+        stop_param: Option<&str>,
+    ) {
+        self.state.output.submit(source, osc, chat, stop_param);
+    }
+
+    pub fn release_outputs(&self, source: OutputSource) {
+        self.state.output.release(source);
+    }
+
+    pub fn output_statuses(&self, source: OutputSource) -> BTreeMap<u64, OutputNodeStatus> {
+        self.state.output.statuses(source)
+    }
+
+    pub async fn shutdown_outputs(&self, budget: Duration) {
+        self.state.output.shutdown_and_flush(budget).await;
+    }
+
+    fn on_vrchat_address_changed(&self, addr: Option<VrchatAddress>) {
+        self.state.output.set_vrchat_address(addr.clone());
+        self.with_schema_mut(|s| {
+            s.clear_and_bump();
+        });
+        self.state.output.set_schema(self.avatar_schema());
+        if addr.is_some() {
+            self.trigger_bulk(None, false);
+        }
+    }
+
+    fn with_schema<R>(&self, f: impl FnOnce(&SchemaStore) -> R) -> R {
+        match self.state.schema.read() {
+            Ok(s) => f(&s),
+            Err(poisoned) => f(&poisoned.into_inner()),
+        }
+    }
+
+    fn with_schema_mut<R>(&self, f: impl FnOnce(&mut SchemaStore) -> R) -> R {
+        match self.state.schema.write() {
+            Ok(mut s) => f(&mut s),
+            Err(poisoned) => f(&mut poisoned.into_inner()),
+        }
     }
 
     pub async fn send_param(&self, param: &str, value: f32) -> Result<()> {
@@ -264,21 +354,7 @@ impl AvatarScanner {
             .vrchat_address()
             .await
             .ok_or_else(|| DGLabError::OscError("VRChat address unknown".to_string()))?;
-        let target = format!("{}:{}", addr.osc_ip, addr.osc_port);
-
-        let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage {
-            addr: format!("/avatar/parameters/{param}"),
-            args: vec![arg],
-        }))
-        .map_err(|e| DGLabError::OscError(e.to_string()))?;
-
-        let socket = self
-            .state
-            .send_socket
-            .get_or_try_init(|| UdpSocket::bind("0.0.0.0:0"))
-            .await?;
-        socket.send_to(&msg, &target).await?;
-        Ok(())
+        encode_and_send(&self.state.send_socket, &addr, format!("/avatar/parameters/{param}"), vec![arg]).await
     }
 
     async fn send_ogb_enabled(&self) {
@@ -343,18 +419,27 @@ impl AvatarScanner {
 
         if !self.state.has_received.swap(true, Ordering::Relaxed) {
             log::info!("First OSC packet received — starting bulk parameter sync");
-            self.trigger_bulk();
+            self.trigger_bulk(None, true);
         }
 
         if msg.addr == "/avatar/change" {
-            log::info!("Avatar changed — clearing zone cache");
+            log::info!("Avatar changed — clearing zone cache and schema");
+            let avatar_id = match msg.args.first() {
+                Some(OscType::String(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            };
             self.state.devices.write().await.clear();
             self.with_raw_mut(|raw| {
                 raw.contacts.clear();
                 raw.params.clear();
             });
+            self.with_schema_mut(|s| {
+                s.clear_and_bump();
+            });
+            self.state.output.on_avatar_change();
+            self.state.output.set_schema(self.avatar_schema());
             let _ = self.state.refresh_tx.send(Vec::new());
-            self.trigger_bulk();
+            self.trigger_bulk(avatar_id, true);
             let me = self.clone();
             tokio::spawn(async move {
                 me.send_ogb_enabled().await;
@@ -402,19 +487,39 @@ impl AvatarScanner {
             let _ = self.state.refresh_tx.send(zones);
         }
     }
-    fn trigger_bulk(&self) {
+
+    fn trigger_bulk(&self, expected_avatar: Option<String>, debounce: bool) {
         let attempt = self.state.bulk_attempt.fetch_add(1, Ordering::Relaxed) + 1;
+        let request_epoch = self.with_schema(|s| s.epoch());
         let me = self.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(BULK_DEBOUNCE).await;
+            if debounce {
+                tokio::time::sleep(BULK_DEBOUNCE).await;
+            }
 
             let mut delay = BULK_RETRY_MIN;
             for try_no in 1..=BULK_MAX_ATTEMPTS {
-                if me.state.bulk_attempt.load(Ordering::Relaxed) != attempt {
+                if me.state.bulk_attempt.load(Ordering::Relaxed) != attempt
+                    || me.with_schema(|s| s.epoch()) != request_epoch
+                {
                     return;
                 }
-                match me.fetch_bulk().await {
-                    Ok(()) => return,
+                match me.fetch_bulk(request_epoch, expected_avatar.as_deref()).await {
+                    Ok(SchemaAccept::Accepted | SchemaAccept::Stale) => return,
+                    Ok(SchemaAccept::AcceptedNeedsFollowUp) => {
+                        tokio::time::sleep(AVATAR_CHANGE_FOLLOWUP).await;
+                        if me.state.bulk_attempt.load(Ordering::Relaxed) == attempt
+                            && me.with_schema(|s| s.epoch()) == request_epoch
+                        {
+                            let _ = me.fetch_bulk(request_epoch, None).await;
+                        }
+                        return;
+                    }
+                    Ok(SchemaAccept::AvatarMismatch) => {
+                        log::debug!("Bulk OSCQuery schema still on previous avatar (try {try_no}/{BULK_MAX_ATTEMPTS})");
+                        tokio::time::sleep(delay).await;
+                        delay = (delay * 2).min(BULK_RETRY_MAX);
+                    }
                     Err(e) => {
                         log::debug!("Bulk fetch not ready (try {try_no}/{BULK_MAX_ATTEMPTS}): {e}");
                         tokio::time::sleep(delay).await;
@@ -426,11 +531,19 @@ impl AvatarScanner {
         });
     }
 
-    async fn fetch_bulk(&self) -> Result<()> {
+    async fn fetch_bulk(&self, request_epoch: u64, expected_avatar: Option<&str>) -> Result<SchemaAccept> {
         let Some(client) = self.state.client.lock().await.clone() else {
             return Err(DGLabError::OscError("scanner stopped".into()));
         };
-        let params = client.get_bulk().await?;
+        let (params, schema) = client.get_bulk_with_schema(request_epoch).await?;
+
+        let outcome = self.with_schema_mut(|s| s.accept(request_epoch, expected_avatar, schema));
+        match outcome {
+            SchemaAccept::Stale | SchemaAccept::AvatarMismatch => return Ok(outcome),
+            SchemaAccept::Accepted | SchemaAccept::AcceptedNeedsFollowUp => {
+                self.state.output.set_schema(self.avatar_schema());
+            }
+        }
 
         log::debug!("Bulk OSCQuery: {} values received", params.len());
         for (path, value) in params {
@@ -443,8 +556,37 @@ impl AvatarScanner {
 
         let zones = self.zones().await;
         let _ = self.state.refresh_tx.send(zones);
-        Ok(())
+        Ok(outcome)
     }
+}
+
+pub(crate) fn osc_target(addr: &VrchatAddress) -> String {
+    let ip = if addr.osc_ip == "0.0.0.0" {
+        "127.0.0.1"
+    } else {
+        addr.osc_ip.as_str()
+    };
+    format!("{ip}:{}", addr.osc_port)
+}
+
+pub(crate) async fn encode_and_send(
+    socket_cell: &tokio::sync::OnceCell<UdpSocket>,
+    addr: &VrchatAddress,
+    osc_addr: String,
+    args: Vec<OscType>,
+) -> Result<()> {
+    let target = osc_target(addr);
+    let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage { addr: osc_addr, args }))
+        .map_err(|e| DGLabError::OscError(e.to_string()))?;
+
+    let socket = socket_cell.get_or_try_init(|| UdpSocket::bind("0.0.0.0:0")).await?;
+    socket.send_to(&msg, &target).await?;
+    Ok(())
+}
+
+pub fn is_sps_param(param: &str) -> bool {
+    let parts: Vec<&str> = param.split('/').collect();
+    parse_sps_param(&parts).is_some()
 }
 
 // Helpers
@@ -610,5 +752,149 @@ mod tests {
         assert_eq!(parse("DGB"), None);
         assert_eq!(parse("DGB/Front/R"), None);
         assert_eq!(parse("Control/OGB/Bogus/Cock/PenOthers"), None);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn end_to_end_oscquery_discovery_sends_typed_osc_and_rest_on_stop() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let udp = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let udp_port = udp.local_addr().unwrap().port();
+
+        let tcp = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let http_addr = tcp.local_addr().unwrap();
+
+        let host_info = serde_json::json!({
+            "NAME": "VRChat-Client-E2ETest",
+            "OSC_IP": "0.0.0.0",
+            "OSC_PORT": udp_port,
+            "OSC_TRANSPORT": "UDP"
+        })
+        .to_string();
+        let tree = serde_json::json!({
+            "FULL_PATH": "/",
+            "ACCESS": 0,
+            "CONTENTS": {
+                "avatar": {
+                    "FULL_PATH": "/avatar",
+                    "ACCESS": 0,
+                    "CONTENTS": {
+                        "parameters": {
+                            "FULL_PATH": "/avatar/parameters",
+                            "ACCESS": 0,
+                            "CONTENTS": {
+                                "Glow": {
+                                    "FULL_PATH": "/avatar/parameters/Glow",
+                                    "TYPE": "f",
+                                    "ACCESS": 3,
+                                    "VALUE": [0.0]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        .to_string();
+
+        let server = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = tcp.accept().await else { break };
+                let hi = host_info.clone();
+                let tr = tree.clone();
+                tokio::spawn(async move {
+                    let mut buf = Vec::with_capacity(512);
+                    let mut tmp = [0u8; 512];
+                    loop {
+                        match stream.read(&mut tmp).await {
+                            Ok(0) | Err(_) => break,
+                            Ok(n) => {
+                                buf.extend_from_slice(&tmp[..n]);
+                                if buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.len() > 8192 {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let req = String::from_utf8_lossy(&buf);
+                    let body = if req.contains("HOST_INFO") { hi } else { tr };
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    let _ = stream.flush().await;
+                    let _ = stream.shutdown().await;
+                });
+            }
+        });
+
+        let scanner = AvatarScanner::new(Some(0));
+        scanner.start().await.unwrap();
+        assert!(scanner.probe_vrchat_endpoint(http_addr).await);
+
+        for _ in 0..200 {
+            if scanner.avatar_schema().params.contains_key("/avatar/parameters/Glow") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        assert!(
+            scanner.avatar_schema().params.contains_key("/avatar/parameters/Glow"),
+            "schema populated from fake OSCQuery HTTP server"
+        );
+
+        let frame = OscOutFrame {
+            flat: 1,
+            root: 1,
+            address: "/avatar/parameters/Glow".into(),
+            ty: crate::osc::output::OscOutType::Auto,
+            map: false,
+            min: -1.0,
+            max: 1.0,
+            rest: 0.125,
+            rate_hz: 10.0,
+            value: 0.75,
+            enable: true,
+            active: true,
+            refused: None,
+        };
+
+        scanner.submit_outputs(OutputSource::Local, vec![frame.clone()], vec![], None);
+        tokio::time::sleep(Duration::from_millis(430)).await;
+        scanner.submit_outputs(OutputSource::Local, vec![frame], vec![], None);
+
+        async fn recv_glow(udp: &UdpSocket, stage: &str) -> OscMessage {
+            let mut buf = [0u8; 1024];
+            let deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                let rem = deadline.saturating_duration_since(Instant::now());
+                assert!(!rem.is_zero(), "timed out waiting for /avatar/parameters/Glow ({stage})");
+                let (len, _) = tokio::time::timeout(rem, udp.recv_from(&mut buf))
+                    .await
+                    .unwrap_or_else(|_| panic!("udp timeout ({stage})"))
+                    .unwrap();
+                let (_, pkt) = rosc::decoder::decode_udp(&buf[..len]).unwrap();
+                for msg in flatten_packet(pkt) {
+                    if msg.addr == "/avatar/parameters/Glow" {
+                        return msg;
+                    }
+                }
+            }
+        }
+
+        let live_msg = recv_glow(&udp, "live").await;
+        assert_eq!(live_msg.addr, "/avatar/parameters/Glow");
+        assert_eq!(live_msg.args, vec![OscType::Float(0.75)]);
+
+        scanner.shutdown_outputs(Duration::from_millis(300)).await;
+        let rest_msg = recv_glow(&udp, "rest").await;
+        assert_eq!(rest_msg.addr, "/avatar/parameters/Glow");
+        assert_eq!(rest_msg.args, vec![OscType::Float(0.125)]);
+
+        scanner.stop().await;
+        server.abort();
     }
 }

@@ -492,5 +492,180 @@ fn a_gate_faster_than_a_packet_keeps_its_rhythm_inside_the_packet() {
     }
 }
 
+#[test]
+fn osc_out_refusal_rules_never_invalidate_plan_or_alter_device_frames() {
+    let mut base = Graph::default();
+    let c = contact(&mut base);
+    let d = device(&mut base, "AA");
+    wire(&mut base, c, "level", d, "a.power");
+    let mut base_ev = GraphEvaluator::new(&base);
+    feed(&mut base_ev, 0.65);
+    let base_frames = base_ev.step(DT).to_vec();
+
+    let refused_addrs = [
+        "/input/Jump",
+        "/tracking/trackers/head/position",
+        "/avatar/parameters/",
+        "/avatar/parameters/OGB_ENABLED",
+        "/avatar/parameters/DGB/TouchAreaA",
+        "/avatar/parameters/OGB/Pen/Cock/PenOthers",
+        "/avatar/parameters/TPS_Internal/Orf/Anal/Depth_In",
+        "/avatar/parameters/VFH/Zone/Touch/Chest/TouchOthers",
+        "not_even_a_path",
+    ];
+    for addr in refused_addrs {
+        let mut g = base.clone();
+        let o = g.add_kind(
+            NodeKind::OscOut(OscOutParams {
+                address: addr.into(),
+                ..OscOutParams::default()
+            }),
+            [400.0, 200.0],
+        );
+        wire(&mut g, c, "level", o, "value");
+        let mut ev = GraphEvaluator::new(&g);
+        assert!(ev.is_valid(), "refused '{addr}' must NOT set plan.valid = false");
+        assert!(
+            ev.issues()
+                .iter()
+                .any(|i| i.severity == Severity::Error && i.node == Some(o)),
+            "refused '{addr}' must emit Error on the node"
+        );
+        feed(&mut ev, 0.65);
+        let frames = ev.step(DT);
+        assert_eq!(frames, base_frames.as_slice(), "Device frames identical for '{addr}'");
+        assert!(ev.osc_out_frames()[0].refused.is_some());
+    }
+}
+
+#[test]
+fn osc_out_works_inside_a_group_warns_on_duplicate_and_feedback_and_suppresses_no_device() {
+    let mut g = Graph::default();
+    let k = g.add_kind(NodeKind::Constant(ConstantParams { value: 0.42 }), [0.0, 0.0]);
+    let o1 = g.add_kind(
+        NodeKind::OscOut(OscOutParams {
+            address: "/avatar/parameters/Glow".into(),
+            ..OscOutParams::default()
+        }),
+        [200.0, 0.0],
+    );
+    wire(&mut g, k, "out", o1, "value");
+
+    let ev_solo = GraphEvaluator::new(&g);
+    assert!(
+        !ev_solo
+            .issues()
+            .iter()
+            .any(|i| i.message.contains("No Device node yet")),
+        "wired OscOut suppresses No Device info"
+    );
+
+    let gid = g.group(&[o1].into_iter().collect(), "OutGroup").unwrap();
+    let mut ev_grp = GraphEvaluator::new(&g);
+    assert!(ev_grp.is_valid());
+    assert!(!ev_grp.osc_out_frames()[0].active, "inactive before first step");
+    ev_grp.step(DT);
+    assert_eq!(ev_grp.osc_out_frames().len(), 1);
+    assert!(ev_grp.osc_out_frames()[0].active);
+    assert_eq!(ev_grp.osc_out_frames()[0].root, gid.0);
+    assert!((ev_grp.osc_out_frames()[0].value - 0.42).abs() < 1e-6);
+
+    let o2 = g.add_kind(
+        NodeKind::OscOut(OscOutParams {
+            address: "/avatar/parameters/Glow".into(),
+            ..OscOutParams::default()
+        }),
+        [200.0, 200.0],
+    );
+    let _of = g.add_kind(
+        NodeKind::OscFloat(OscFloatParams {
+            address: "/avatar/parameters/Glow".into(),
+            stale_ms: 5000,
+        }),
+        [0.0, 200.0],
+    );
+    let ev2 = GraphEvaluator::new(&g);
+    assert_eq!(ev2.osc_out_frames().len(), 1, "second duplicate OscOut is ignored");
+    assert!(
+        ev2.issues()
+            .iter()
+            .any(|i| i.severity == Severity::Warning && i.node == Some(o2)),
+        "duplicate OscOut warns"
+    );
+    assert!(
+        ev2.issues()
+            .iter()
+            .any(|i| i.severity == Severity::Warning && i.node == Some(gid)),
+        "feedback warning points at root group node"
+    );
+}
+
+#[test]
+fn chatbox_trigger_high_at_load_does_not_fire_and_mode_switch_prunes_dangling_edge() {
+    let mut g = Graph::default();
+    let val = g.add_kind(NodeKind::Constant(ConstantParams { value: 0.75 }), [0.0, 0.0]);
+    let trig = g.add_kind(
+        NodeKind::Toggle(ToggleParams {
+            on: true,
+            ..Default::default()
+        }),
+        [0.0, 100.0],
+    );
+    let chat = g.add_kind(
+        NodeKind::Chatbox(ChatboxParams {
+            mode: ChatboxMode::Trigger,
+            template: "V={1:%}".into(),
+            ..ChatboxParams::default()
+        }),
+        [200.0, 0.0],
+    );
+    wire(&mut g, val, "out", chat, "in1");
+    wire(&mut g, trig, "out", chat, "send");
+
+    let mut ev = GraphEvaluator::new(&g);
+    ev.step(DT);
+    assert_eq!(ev.chatbox_frames().len(), 1);
+    assert!(!ev.chatbox_frames()[0].fired, "send already high at load must not fire");
+
+    if let NodeKind::Toggle(t) = &mut g.node_mut(trig).unwrap().kind {
+        t.on = false;
+    }
+    ev.rebuild(&g);
+    ev.step(DT);
+    assert!(!ev.chatbox_frames()[0].fired);
+
+    if let NodeKind::Toggle(t) = &mut g.node_mut(trig).unwrap().kind {
+        t.on = true;
+    }
+    ev.rebuild(&g);
+    ev.step(DT);
+    assert!(ev.chatbox_frames()[0].fired, "rising edge fires");
+    assert!((ev.chatbox_frames()[0].values[0] - 0.75).abs() < 1e-6);
+
+    ev.step(DT);
+    assert!(!ev.chatbox_frames()[0].fired);
+
+    if let NodeKind::Chatbox(c) = &mut g.node_mut(chat).unwrap().kind {
+        c.mode = ChatboxMode::Live;
+    }
+    assert_eq!(g.prune_dangling_edges(), 1, "send wire pruned on mode switch");
+    assert!(!g.edges.iter().any(|e| e.to.pin == "send"));
+}
+
+#[test]
+fn old_graph_json_without_new_nodes_still_loads_unchanged() {
+    let legacy = r#"{
+        "version": 1,
+        "nodes": [
+            {"id": 1, "kind": {"type": "Constant", "value": 0.5}, "pos": [0.0, 0.0]},
+            {"id": 2, "kind": {"type": "OscFloat", "address": "/avatar/parameters/Old", "stale_ms": 5000}, "pos": [100.0, 0.0]}
+        ],
+        "edges": []
+    }"#;
+    let g = parse_graph(legacy).expect("legacy graph loads");
+    assert_eq!(g.version, 1);
+    assert_eq!(g.nodes.len(), 2);
+}
+
 #[path = "remote_tests.rs"]
 mod remote;

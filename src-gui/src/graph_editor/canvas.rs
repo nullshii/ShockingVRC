@@ -403,6 +403,7 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
             selected: ed.selection.contains(id),
             hovered_wire_target: wire_target == Some(*id),
             device,
+            osc_status: env.graph.osc_statuses.get(&flat),
             traces: &ed.traces,
             flat,
             scope: probe.scopes.get(&flat),

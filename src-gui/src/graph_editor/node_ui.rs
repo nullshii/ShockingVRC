@@ -10,6 +10,7 @@ use shocking_vrc_core::graph::kind::*;
 use shocking_vrc_core::graph::{
     DeviceBinding, GraphIssue, Node, NodeId, NodeKind, NodeProbe, NodeTint, PinType, ScopeTrace, Severity,
 };
+use shocking_vrc_core::osc::output::{OutputNodeStatus, render_chatbox_template};
 
 use super::{PinEnd, Typing};
 use crate::theme::Palette;
@@ -107,10 +108,10 @@ pub fn resizable(kind: &NodeKind) -> bool {
 
 pub fn width(kind: &NodeKind) -> f32 {
     match kind {
-        NodeKind::Device(_) | NodeKind::PartnerDevice(_) => 236.0,
+        NodeKind::Device(_) | NodeKind::PartnerDevice(_) | NodeKind::Chatbox(_) => 236.0,
         NodeKind::DrawZone(_) | NodeKind::ShapeFill(_) | NodeKind::SegmentPainter(_) => 260.0,
         NodeKind::XyPad(p) => p.size[0],
-        NodeKind::Fader(_) | NodeKind::Pan(_) | NodeKind::PartnerFeedback(_) => 220.0,
+        NodeKind::Fader(_) | NodeKind::Pan(_) | NodeKind::PartnerFeedback(_) | NodeKind::OscOut(_) => 220.0,
         NodeKind::StepSequencer(p) => {
             if p.steps > 8 {
                 340.0
@@ -127,7 +128,10 @@ pub fn width(kind: &NodeKind) -> f32 {
 
 fn body_rows(kind: &NodeKind) -> f32 {
     match kind {
-        NodeKind::Contact(_) | NodeKind::Ukf(_) | NodeKind::Combine(_) | NodeKind::Delay(_) => 2.0,
+        NodeKind::Contact(_) | NodeKind::Ukf(_) | NodeKind::Combine(_) | NodeKind::Delay(_) | NodeKind::OscOut(_) => {
+            2.0
+        }
+        NodeKind::Chatbox(_) => 4.0,
         NodeKind::Compare(_) | NodeKind::Function(_) | NodeKind::Lfo(_) | NodeKind::Smooth(_) => 2.0,
         NodeKind::OscFloat(_)
         | NodeKind::Constant(_)
@@ -357,6 +361,7 @@ pub struct NodeView<'a> {
     pub selected: bool,
     pub hovered_wire_target: bool,
     pub device: Option<DeviceView>,
+    pub osc_status: Option<&'a OutputNodeStatus>,
     pub traces: &'a HashMap<(u64, usize), VecDeque<f32>>,
     pub flat: u64,
     pub scope: Option<&'a ScopeTrace>,
@@ -731,25 +736,46 @@ pub fn draw(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView, typing
     ui.painter().rect_filled(chip, w::SQUARE, header_fill);
     let resp = ui.interact(lay.header, base_id.with("hdr"), Sense::click_and_drag());
     let title_rect = chip.shrink2(z.v(6.0, 0.0));
+    let header_right: Option<String> = if let Some(d) = &v.device {
+        Some(match (d.online, d.battery) {
+            (true, Some(b)) => format!("{b}%"),
+            (true, None) => "online".to_string(),
+            (false, _) => "offline".to_string(),
+        })
+    } else if matches!(node.kind, NodeKind::OscOut(_) | NodeKind::Chatbox(_)) {
+        v.osc_status.map(|s| s.state.label().to_string()).or_else(|| {
+            if let NodeKind::Chatbox(p) = &node.kind
+                && p.muted
+            {
+                Some("muted".to_string())
+            } else {
+                None
+            }
+        })
+    } else if node.collapsed {
+        Some("▸".to_string())
+    } else {
+        None
+    };
+
     if z.text() {
+        let left_rect = if header_right.is_some() {
+            let reserve = z.px(68.0).min(title_rect.width() * 0.45);
+            Rect::from_min_max(title_rect.min, pos2(title_rect.right() - reserve, title_rect.bottom()))
+        } else {
+            title_rect
+        };
         w::text_in(
             ui,
-            title_rect,
+            left_rect,
             &node.display_title().to_uppercase(),
             z.font(font::small()),
             pal.on_solid(),
             Align2::LEFT_CENTER,
         );
     }
-    if let Some(d) = &v.device {
-        let state = match (d.online, d.battery) {
-            (true, Some(b)) => format!("{b}%"),
-            (true, None) => "online".to_string(),
-            (false, _) => "offline".to_string(),
-        };
-        small(ui, z, title_rect, &state, pal.on_solid(), Align2::RIGHT_CENTER);
-    } else if node.collapsed {
-        small(ui, z, title_rect, "▸", pal.on_solid(), Align2::RIGHT_CENTER);
+    if let Some(state) = &header_right {
+        small(ui, z, title_rect, state, pal.on_solid(), Align2::RIGHT_CENTER);
     }
     if !node.comment.is_empty() && !node.collapsed {
         let resp2 = resp.clone();
@@ -769,7 +795,10 @@ pub fn draw(ui: &mut Ui, node: &mut Node, lay: &NodeLayout, v: &NodeView, typing
             ui.painter()
                 .line_segment([grip.left_bottom(), grip.right_top()], Stroke::new(1.0, pal.dim));
             ui.painter().line_segment(
-                [grip.left_bottom() + vec2(g * 0.5, 0.0), grip.right_top() + vec2(0.0, g * 0.5)],
+                [
+                    grip.left_bottom() + vec2(g * 0.5, 0.0),
+                    grip.right_top() + vec2(0.0, g * 0.5),
+                ],
                 Stroke::new(1.0, pal.dim),
             );
             if resp.dragged_by(egui::PointerButton::Primary) {
@@ -930,11 +959,26 @@ fn body(
     let pal = v.pal;
     let z = Z(v.zoom);
     let row_h = z.px(ROW_H);
-    let rows: Vec<Rect> = (0..3)
+    let rows: Vec<Rect> = (0..4)
         .map(|i| Rect::from_min_size(lay.body.min + vec2(0.0, i as f32 * row_h), vec2(lay.body.width(), row_h)))
         .collect();
     let id = node.id;
     let bid = |s: &str| base_id.with(("body", s));
+    let chat_vals: [f32; 4] = if let NodeKind::Chatbox(p) = &node.kind {
+        let n = p.count.clamp(1, 4) as usize;
+        let mut vals = [0.0f32; 4];
+        for (k, slot) in vals.iter_mut().enumerate().take(n) {
+            let key = format!("in{}", k + 1);
+            *slot = v
+                .probe
+                .and_then(|pr| pr.inputs.get(k).copied())
+                .or_else(|| node.defaults.get(&key).copied())
+                .unwrap_or(0.0);
+        }
+        vals
+    } else {
+        [0.0; 4]
+    };
     match &mut node.kind {
         NodeKind::Contact(p) => {
             let types = [
@@ -966,6 +1010,80 @@ fn body(
                     Align2::RIGHT_CENTER,
                 );
             }
+        }
+        NodeKind::OscOut(p) => {
+            let c = cells(z, rows[0], 1)[0];
+            node_text_edit(ui, z, c, &mut p.address, "/avatar/parameters/…");
+            let c = cells(z, rows[1], 2);
+            let ty_label = match (p.ty, v.osc_status.and_then(|s| s.resolved_type)) {
+                (OscOutType::Auto, Some(rt)) => format!("AUTO·{}", rt.tag()),
+                (ty, _) => ty.label().to_string(),
+            };
+            let by = cycle(ui, pal, z, c[0], bid("ty"), &ty_label);
+            if by != 0 {
+                let next = step(&OscOutType::ALL, p.ty, by);
+                p.ty = next;
+                if next == OscOutType::Int {
+                    p.min = 0.0;
+                    p.max = 255.0;
+                }
+            }
+            let sent_txt = v
+                .osc_status
+                .and_then(|s| s.last_sent.as_ref())
+                .map(|val| val.display_short())
+                .unwrap_or_else(|| "—".to_string());
+            let sent_col = if v.osc_status.is_some_and(|s| s.last_sent.is_some()) {
+                pal.contrast
+            } else {
+                pal.dim
+            };
+            small(ui, z, c[1], &sent_txt, sent_col, Align2::RIGHT_CENTER);
+        }
+        NodeKind::Chatbox(p) => {
+            let c = cells(z, rows[0], 1)[0];
+            node_text_edit(ui, z, c, &mut p.template, "Power {1:%}");
+            count_row(ui, pal, z, rows[1], bid("n"), &mut p.count, 1, 4);
+            let c = cells(z, rows[2], 2);
+            let by = cycle(ui, pal, z, c[0], bid("mode"), p.mode.label());
+            if by != 0 {
+                p.mode = step(&ChatboxMode::ALL, p.mode, by);
+            }
+            let mute_resp = ui.interact(c[1], bid("mute"), Sense::click());
+            let (fill, border, fg, label) = if p.muted {
+                (pal.warning, pal.warning, pal.on_solid(), "MUTED")
+            } else {
+                (pal.success, pal.success, pal.on_solid(), "LIVE")
+            };
+            ui.painter().rect_filled(c[1], w::SQUARE, fill);
+            ui.painter()
+                .rect_stroke(c[1], w::SQUARE, Stroke::new(1.0, border), StrokeKind::Inside);
+            small(ui, z, c[1], label, fg, Align2::CENTER_CENTER);
+            if mute_resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if mute_resp.clicked() {
+                p.muted = !p.muted;
+            }
+            let preview_rect = cells(z, rows[3], 1)[0];
+            ui.painter().rect_filled(preview_rect, w::SQUARE, pal.well);
+            ui.painter()
+                .rect_stroke(preview_rect, w::SQUARE, Stroke::new(1.0, pal.hair), StrokeKind::Inside);
+            let rendered = render_chatbox_template(&p.template, p.count, chat_vals);
+            let single = rendered.text.replace('\n', " ↵ ");
+            let shown = if single.is_empty() { "(empty)" } else { single.as_str() };
+            small(
+                ui,
+                z,
+                preview_rect.shrink2(z.v(4.0, 0.0)),
+                shown,
+                if p.muted || single.is_empty() {
+                    pal.dim
+                } else {
+                    pal.contrast
+                },
+                Align2::LEFT_CENTER,
+            );
         }
         NodeKind::Constant(p) => {
             let c = cells(z, rows[0], 1)[0];

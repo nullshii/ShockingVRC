@@ -736,6 +736,16 @@ impl Graph {
         }
         out
     }
+
+    pub fn mute_chatboxes(&mut self) {
+        for n in &mut self.nodes {
+            match &mut n.kind {
+                NodeKind::Chatbox(p) => p.muted = true,
+                NodeKind::Group(g) => g.graph.mute_chatboxes(),
+                _ => {}
+            }
+        }
+    }
 }
 
 pub fn device_title(name: &str, mac: &str) -> String {

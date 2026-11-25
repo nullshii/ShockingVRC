@@ -36,7 +36,7 @@ fn out(ev: &GraphEvaluator, id: NodeId, key: &str) -> f32 {
 #[test]
 fn the_catalog_is_unchanged_while_remote_is_off() {
     let off = catalog_with(false);
-    assert_eq!(off.len(), 64, "the pre-remote catalog has 64 entries");
+    assert_eq!(off.len(), 66, "the base catalog has 66 entries");
     assert!(off.iter().all(|e| e.category != Category::Remote));
     assert_eq!(off.first().map(|e| e.label), Some("OSC Float"));
     assert_eq!(off.last().map(|e| e.label), Some("Frame / Comment"));
@@ -438,7 +438,14 @@ fn xy_pad_modes_change_its_outputs() {
 #[test]
 fn xy_pad_speed_follows_movement() {
     let mut g = Graph::default();
-    let id = g.add_kind(NodeKind::XyPad(XyPadParams { mode: XyMode::Position, x: 0.0, ..XyPadParams::default() }), [0.0, 0.0]);
+    let id = g.add_kind(
+        NodeKind::XyPad(XyPadParams {
+            mode: XyMode::Position,
+            x: 0.0,
+            ..XyPadParams::default()
+        }),
+        [0.0, 0.0],
+    );
     let mut ev = GraphEvaluator::new(&g);
     ev.step(DT);
     for k in 1..=10 {
@@ -457,7 +464,13 @@ fn pan_laws_split_the_level() {
     let run_pan = |law, pan: f32| {
         let mut g = Graph::default();
         let c = g.add_kind(NodeKind::Constant(ConstantParams { value: pan }), [0.0, 0.0]);
-        let p = g.add_kind(NodeKind::Pan(PanParams { law, ..PanParams::default() }), [0.0, 0.0]);
+        let p = g.add_kind(
+            NodeKind::Pan(PanParams {
+                law,
+                ..PanParams::default()
+            }),
+            [0.0, 0.0],
+        );
         wire(&mut g, c, "out", p, "pan");
         let mut ev = GraphEvaluator::new(&g);
         ev.step(DT);
@@ -519,7 +532,11 @@ fn partner_feedback_reports_strength_and_wishes() {
     ev.step(DT);
     assert_eq!(out(&ev, id, "str_a"), 0.5);
     assert_eq!(out(&ev, id, "live"), 1.0);
-    assert_eq!(out(&ev, id, "wish"), 0.0, "wish starts in the centre; earlier presses are not counted");
+    assert_eq!(
+        out(&ev, id, "wish"),
+        0.0,
+        "wish starts in the centre; earlier presses are not counted"
+    );
     ev.set_partner(ctx(5, 1));
     ev.step(DT);
     assert!((out(&ev, id, "wish") - 0.2).abs() < 1e-4);
@@ -546,7 +563,10 @@ fn partner_feedback_reports_strength_and_wishes() {
 
 #[test]
 fn an_old_wish_start_is_kept_in_range() {
-    let mut p = FeedbackParams { start: 4.0, ..FeedbackParams::default() };
+    let mut p = FeedbackParams {
+        start: 4.0,
+        ..FeedbackParams::default()
+    };
     p.sanitize();
     assert_eq!(p.start, 1.0);
     p.start = -3.0;
@@ -557,10 +577,16 @@ fn an_old_wish_start_is_kept_in_range() {
 
 #[test]
 fn live_controls_are_not_saved() {
-    let pad = XyPadParams { touching: true, ..XyPadParams::default() };
+    let pad = XyPadParams {
+        touching: true,
+        ..XyPadParams::default()
+    };
     let back: XyPadParams = serde_json::from_value(serde_json::to_value(&pad).unwrap()).unwrap();
     assert!(!back.touching);
-    let fader = FaderParams { pressed: true, ..FaderParams::default() };
+    let fader = FaderParams {
+        pressed: true,
+        ..FaderParams::default()
+    };
     let back: FaderParams = serde_json::from_value(serde_json::to_value(&fader).unwrap()).unwrap();
     assert!(!back.pressed);
 }

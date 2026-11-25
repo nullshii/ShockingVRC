@@ -208,6 +208,7 @@ pub async fn start_session(opts: &SessionOptions) -> Arc<AppState> {
 pub async fn shutdown_session(state: &Arc<AppState>) {
     state.graph.flush_on_exit();
     state.remote.shutdown();
+    state.scanner.shutdown_outputs(Duration::from_millis(300)).await;
     state.disconnect_all();
     state.scanner.stop().await;
     tokio::time::sleep(Duration::from_millis(600)).await;

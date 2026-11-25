@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,10 +9,13 @@ use serde::Deserialize;
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 use super::types::OscValue;
 use crate::error::{DGLabError, Result};
+
+pub const MAX_PARAMS: usize = 4096;
 
 const PORT_SEARCH_START: u16 = 33776;
 const PORT_SEARCH_RANGE: u16 = 512;
@@ -329,11 +332,120 @@ fn build_mdns_packet(service_name: &str, port: u16) -> Vec<u8> {
     p
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VrchatAddress {
     pub osc_ip: String,
     pub osc_port: u16,
     pub http_addr: SocketAddr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ParamType {
+    Float,
+    Int,
+    Bool,
+}
+
+impl ParamType {
+    pub fn tag(self) -> &'static str {
+        match self {
+            ParamType::Float => "f",
+            ParamType::Int => "i",
+            ParamType::Bool => "b",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParamInfo {
+    pub ty: Option<ParamType>,
+    pub access: Option<u8>,
+    pub range: Option<(f32, f32)>,
+}
+
+impl ParamInfo {
+    pub fn is_writable(&self) -> bool {
+        self.access.is_none_or(|a| (a & 2) != 0)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AvatarSchema {
+    pub generation: u64,
+    pub avatar_id: Option<String>,
+    pub params: BTreeMap<String, ParamInfo>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchemaAccept {
+    Accepted,
+    AcceptedNeedsFollowUp,
+    Stale,
+    AvatarMismatch,
+}
+
+pub struct SchemaStore {
+    epoch: u64,
+    generation: u64,
+    current: Arc<AvatarSchema>,
+}
+
+impl Default for SchemaStore {
+    fn default() -> Self {
+        Self {
+            epoch: 0,
+            generation: 0,
+            current: Arc::new(AvatarSchema::default()),
+        }
+    }
+}
+
+impl SchemaStore {
+    pub fn snapshot(&self) -> Arc<AvatarSchema> {
+        Arc::clone(&self.current)
+    }
+
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    pub fn clear_and_bump(&mut self) -> u64 {
+        self.epoch = self.epoch.wrapping_add(1);
+        self.generation = self.generation.wrapping_add(1);
+        self.current = Arc::new(AvatarSchema {
+            generation: self.generation,
+            avatar_id: None,
+            params: BTreeMap::new(),
+        });
+        self.epoch
+    }
+
+    pub fn accept(
+        &mut self,
+        request_epoch: u64,
+        expected_avatar: Option<&str>,
+        mut fetched: AvatarSchema,
+    ) -> SchemaAccept {
+        if request_epoch != self.epoch {
+            return SchemaAccept::Stale;
+        }
+        let mut needs_follow_up = false;
+        if let Some(want) = expected_avatar.filter(|s| !s.is_empty()) {
+            match fetched.avatar_id.as_deref() {
+                Some(got) if got != want => return SchemaAccept::AvatarMismatch,
+                Some(_) => {}
+                None => needs_follow_up = true,
+            }
+        }
+        self.generation = self.generation.wrapping_add(1);
+        fetched.generation = self.generation;
+        self.current = Arc::new(fetched);
+        if needs_follow_up {
+            SchemaAccept::AcceptedNeedsFollowUp
+        } else {
+            SchemaAccept::Accepted
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -346,20 +458,78 @@ struct HostInfo {
     osc_port: u16,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 struct OscQueryNode {
-    #[serde(rename = "FULL_PATH")]
     full_path: Option<String>,
-    #[serde(rename = "VALUE")]
+    ty: Option<ParamType>,
+    access: Option<u8>,
+    range: Option<(f32, f32)>,
     value: Option<Vec<serde_json::Value>>,
-    #[serde(rename = "CONTENTS")]
     contents: Option<HashMap<String, OscQueryNode>>,
+}
+
+impl OscQueryNode {
+    fn from_json(raw: &serde_json::Value) -> Option<Self> {
+        let obj = raw.as_object()?;
+        let full_path = obj.get("FULL_PATH").and_then(|v| v.as_str()).map(str::to_string);
+        let ty = obj.get("TYPE").and_then(|v| v.as_str()).and_then(parse_param_type);
+        let access = obj
+            .get("ACCESS")
+            .and_then(|v| v.as_u64())
+            .filter(|&a| a <= 3)
+            .map(|a| a as u8);
+        let range = obj.get("RANGE").and_then(parse_range);
+        let value = obj.get("VALUE").and_then(|v| v.as_array()).cloned();
+        let contents = obj.get("CONTENTS").and_then(|v| v.as_object()).map(|map| {
+            map.iter()
+                .filter_map(|(k, v)| OscQueryNode::from_json(v).map(|child| (k.clone(), child)))
+                .collect()
+        });
+        Some(Self {
+            full_path,
+            ty,
+            access,
+            range,
+            value,
+            contents,
+        })
+    }
+}
+
+fn parse_param_type(tag: &str) -> Option<ParamType> {
+    match tag {
+        "f" => Some(ParamType::Float),
+        "i" => Some(ParamType::Int),
+        "T" | "F" => Some(ParamType::Bool),
+        _ => None,
+    }
+}
+
+fn parse_range(raw: &serde_json::Value) -> Option<(f32, f32)> {
+    let first = raw.as_array()?.first()?.as_object()?;
+    let min = first.get("MIN")?.as_f64()? as f32;
+    let max = first.get("MAX")?.as_f64()? as f32;
+    (min.is_finite() && max.is_finite()).then_some((min, max))
+}
+
+pub fn parse_oscquery_tree(raw: &serde_json::Value, generation: u64) -> (Vec<(String, OscValue)>, AvatarSchema) {
+    let mut values = Vec::new();
+    let mut schema = AvatarSchema {
+        generation,
+        avatar_id: None,
+        params: BTreeMap::new(),
+    };
+    if let Some(root) = OscQueryNode::from_json(raw) {
+        collect_tree(&root, &mut values, &mut schema);
+    }
+    (values, schema)
 }
 
 struct ClientInner {
     http: reqwest::Client,
     probe: reqwest::Client,
     address: std::sync::RwLock<Option<VrchatAddress>>,
+    addr_tx: watch::Sender<Option<VrchatAddress>>,
     services: std::sync::Mutex<HashMap<String, (Vec<IpAddr>, u16)>>,
     log_scan: std::sync::Mutex<LogScan>,
     stop: AtomicBool,
@@ -380,6 +550,7 @@ pub struct VrchatClient {
 
 impl VrchatClient {
     pub fn start() -> Self {
+        let (addr_tx, _) = watch::channel(None);
         let inner = Arc::new(ClientInner {
             http: reqwest::Client::builder()
                 .timeout(HTTP_TIMEOUT)
@@ -390,6 +561,7 @@ impl VrchatClient {
                 .build()
                 .unwrap_or_default(),
             address: std::sync::RwLock::new(None),
+            addr_tx,
             services: std::sync::Mutex::new(HashMap::new()),
             log_scan: std::sync::Mutex::new(LogScan::default()),
             stop: AtomicBool::new(false),
@@ -421,13 +593,25 @@ impl VrchatClient {
         self.inner.address.read().ok().and_then(|a| a.clone())
     }
 
+    pub fn subscribe_address(&self) -> watch::Receiver<Option<VrchatAddress>> {
+        self.inner.addr_tx.subscribe()
+    }
+
+    pub async fn probe_endpoint(&self, http_addr: SocketAddr) -> bool {
+        check_endpoint(&self.inner, http_addr).await
+    }
+
     pub async fn get_bulk(&self) -> Result<Vec<(String, OscValue)>> {
+        self.get_bulk_with_schema(0).await.map(|(v, _)| v)
+    }
+
+    pub async fn get_bulk_with_schema(&self, generation: u64) -> Result<(Vec<(String, OscValue)>, AvatarSchema)> {
         let addr = self
             .address()
             .ok_or_else(|| DGLabError::OscError("VRChat OSCQuery not discovered yet".into()))?;
 
         let url = format!("http://{}/", addr.http_addr);
-        let node: OscQueryNode = self
+        let raw: serde_json::Value = self
             .inner
             .http
             .get(&url)
@@ -438,9 +622,7 @@ impl VrchatClient {
             .await
             .map_err(|e| DGLabError::OscError(e.to_string()))?;
 
-        let mut params = Vec::new();
-        collect_values(&node, &mut params);
-        Ok(params)
+        Ok(parse_oscquery_tree(&raw, generation))
     }
 
     pub fn shutdown(&self) {
@@ -507,7 +689,7 @@ fn browse_worker(inner: Arc<ClientInner>) {
 
 async fn rescan(inner: &Arc<ClientInner>) -> bool {
     let cached = inner.address.read().ok().and_then(|a| a.clone());
-    if let Some(addr) = cached
+    if let Some(ref addr) = cached
         && check_endpoint(inner, addr.http_addr).await
     {
         return true;
@@ -538,7 +720,20 @@ async fn rescan(inner: &Arc<ClientInner>) -> bool {
 
     if let Some(port) = oscquery_port_from_logs(inner).await {
         log::debug!("Found VRChat OSCQuery port {port} in log file");
-        return check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await;
+        if check_endpoint(inner, SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await {
+            return true;
+        }
+    }
+    if cached.is_some() {
+        let changed = inner
+            .address
+            .write()
+            .map(|mut slot| slot.take().is_some())
+            .unwrap_or(false);
+        if changed {
+            log::info!("VRChat OSCQuery endpoint no longer reachable");
+            let _ = inner.addr_tx.send(None);
+        }
     }
     false
 }
@@ -558,31 +753,76 @@ async fn check_endpoint(inner: &Arc<ClientInner>, http_addr: SocketAddr) -> bool
         return false;
     }
 
-    let had_address = inner.address.read().is_ok_and(|a| a.is_some());
-    if !had_address {
-        log::info!("VRChat OSCQuery found at {http_addr} (OSC {}:{})", info.osc_ip, info.osc_port);
-    }
-    if let Ok(mut slot) = inner.address.write() {
-        *slot = Some(VrchatAddress {
-            osc_ip: info.osc_ip,
-            osc_port: info.osc_port,
-            http_addr,
-        });
+    let next = VrchatAddress {
+        osc_ip: info.osc_ip,
+        osc_port: info.osc_port,
+        http_addr,
+    };
+    let changed = inner
+        .address
+        .write()
+        .map(|mut slot| {
+            let prev = slot.as_ref();
+            let changed = prev != Some(&next);
+            if prev.is_none() {
+                log::info!(
+                    "VRChat OSCQuery found at {} (OSC {}:{})",
+                    next.http_addr,
+                    next.osc_ip,
+                    next.osc_port
+                );
+            } else if changed {
+                log::info!(
+                    "VRChat OSCQuery address changed to {} (OSC {}:{})",
+                    next.http_addr,
+                    next.osc_ip,
+                    next.osc_port
+                );
+            }
+            *slot = Some(next.clone());
+            changed
+        })
+        .unwrap_or(false);
+    if changed {
+        let _ = inner.addr_tx.send(Some(next));
     }
     true
 }
 
-fn collect_values(node: &OscQueryNode, out: &mut Vec<(String, OscValue)>) {
-    if let Some(path) = &node.full_path
-        && let Some(values) = &node.value
-        && let Some(first) = values.first()
-        && let Some(v) = json_to_osc_value(first)
-    {
-        out.push((path.clone(), v));
+fn collect_tree(node: &OscQueryNode, values: &mut Vec<(String, OscValue)>, schema: &mut AvatarSchema) {
+    let is_leaf = node.contents.as_ref().is_none_or(|c| c.is_empty());
+    if let Some(path) = &node.full_path {
+        if path == "/avatar/change"
+            && let Some(vals) = &node.value
+            && let Some(serde_json::Value::String(id)) = vals.first()
+            && !id.is_empty()
+        {
+            schema.avatar_id = Some(id.clone());
+        }
+        if let Some(vals) = &node.value
+            && let Some(first) = vals.first()
+            && let Some(v) = json_to_osc_value(first)
+        {
+            values.push((path.clone(), v));
+        }
+        if is_leaf
+            && let Some(suffix) = path.strip_prefix("/avatar/parameters/")
+            && !suffix.is_empty()
+            && schema.params.len() < MAX_PARAMS
+        {
+            schema.params.insert(
+                path.clone(),
+                ParamInfo {
+                    ty: node.ty,
+                    access: node.access,
+                    range: node.range,
+                },
+            );
+        }
     }
     if let Some(contents) = &node.contents {
         for child in contents.values() {
-            collect_values(child, out);
+            collect_tree(child, values, schema);
         }
     }
 }
@@ -848,5 +1088,177 @@ mod tests {
         assert!(send("POST / HTTP/1.1\r\nHost: x\r\n\r\n".into()).await.contains("405"));
 
         server.shutdown();
+    }
+
+    #[test]
+    fn schema_parses_types_access_ranges_and_malformed_nodes() {
+        let raw = json!({
+            "FULL_PATH": "/",
+            "ACCESS": 0,
+            "CONTENTS": {
+                "avatar": {
+                    "FULL_PATH": "/avatar",
+                    "ACCESS": 0,
+                    "CONTENTS": {
+                        "change": {
+                            "FULL_PATH": "/avatar/change",
+                            "TYPE": "s",
+                            "ACCESS": 1,
+                            "VALUE": ["avtr_1234"]
+                        },
+                        "parameters": {
+                            "FULL_PATH": "/avatar/parameters",
+                            "ACCESS": 0,
+                            "CONTENTS": {
+                                "FloatParam": {
+                                    "FULL_PATH": "/avatar/parameters/FloatParam",
+                                    "TYPE": "f",
+                                    "ACCESS": 3,
+                                    "VALUE": [0.5],
+                                    "RANGE": [{"MIN": -1.0, "MAX": 1.0}]
+                                },
+                                "IntParam": {
+                                    "FULL_PATH": "/avatar/parameters/IntParam",
+                                    "TYPE": "i",
+                                    "ACCESS": 2,
+                                    "RANGE": [{"MIN": 0, "MAX": 255}]
+                                },
+                                "BoolTrue": {
+                                    "FULL_PATH": "/avatar/parameters/BoolTrue",
+                                    "TYPE": "T",
+                                    "VALUE": [true]
+                                },
+                                "BoolFalse": {
+                                    "FULL_PATH": "/avatar/parameters/BoolFalse",
+                                    "TYPE": "F",
+                                    "ACCESS": 1,
+                                    "VALUE": [false]
+                                },
+                                "StringParam": {
+                                    "FULL_PATH": "/avatar/parameters/StringParam",
+                                    "TYPE": "s",
+                                    "ACCESS": 3,
+                                    "VALUE": ["hello"]
+                                },
+                                "Malformed": {
+                                    "FULL_PATH": "/avatar/parameters/Malformed",
+                                    "TYPE": 123,
+                                    "ACCESS": "bad",
+                                    "VALUE": "not_an_array",
+                                    "RANGE": "not_a_range",
+                                    "CONTENTS": "not_an_object"
+                                },
+                                "JunkChild": 42,
+                                "ReadOnlyNone": {
+                                    "FULL_PATH": "/avatar/parameters/ReadOnlyNone",
+                                    "TYPE": "f",
+                                    "ACCESS": 0
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let (values, schema) = parse_oscquery_tree(&raw, 7);
+        assert_eq!(schema.generation, 7);
+        assert_eq!(schema.avatar_id.as_deref(), Some("avtr_1234"));
+
+        let fp = &schema.params["/avatar/parameters/FloatParam"];
+        assert_eq!(fp.ty, Some(ParamType::Float));
+        assert_eq!(fp.access, Some(3));
+        assert!(fp.is_writable());
+        assert_eq!(fp.range, Some((-1.0, 1.0)));
+
+        let ip = &schema.params["/avatar/parameters/IntParam"];
+        assert_eq!(ip.ty, Some(ParamType::Int));
+        assert_eq!(ip.access, Some(2));
+        assert!(ip.is_writable());
+        assert_eq!(ip.range, Some((0.0, 255.0)));
+
+        let bt = &schema.params["/avatar/parameters/BoolTrue"];
+        assert_eq!(bt.ty, Some(ParamType::Bool));
+        assert_eq!(bt.access, None);
+        assert!(bt.is_writable());
+
+        let bf = &schema.params["/avatar/parameters/BoolFalse"];
+        assert_eq!(bf.ty, Some(ParamType::Bool));
+        assert_eq!(bf.access, Some(1));
+        assert!(!bf.is_writable());
+
+        let sp = &schema.params["/avatar/parameters/StringParam"];
+        assert_eq!(sp.ty, None);
+        assert!(sp.is_writable());
+
+        let mf = &schema.params["/avatar/parameters/Malformed"];
+        assert_eq!(mf.ty, None);
+        assert_eq!(mf.access, None);
+        assert!(mf.is_writable());
+
+        assert!(!schema.params["/avatar/parameters/ReadOnlyNone"].is_writable());
+
+        assert!(!schema.params.contains_key("/avatar/parameters"));
+
+        assert!(values.iter().any(|(p, _)| p == "/avatar/parameters/FloatParam"));
+        assert!(values.iter().any(|(p, _)| p == "/avatar/parameters/BoolTrue"));
+        assert!(values.iter().any(|(p, _)| p == "/avatar/parameters/BoolFalse"));
+    }
+
+    #[test]
+    fn schema_store_discards_stale_generations_and_checks_avatar_id() {
+        let mut store = SchemaStore::default();
+        let e1 = store.clear_and_bump();
+        let e2 = store.clear_and_bump();
+        assert_ne!(e1, e2);
+
+        let mut old = AvatarSchema {
+            avatar_id: Some("avtr_old".into()),
+            ..AvatarSchema::default()
+        };
+        old.params.insert(
+            "/avatar/parameters/Old".into(),
+            ParamInfo {
+                ty: Some(ParamType::Float),
+                access: Some(3),
+                range: None,
+            },
+        );
+        assert_eq!(store.accept(e1, Some("avtr_old"), old.clone()), SchemaAccept::Stale);
+        assert!(store.snapshot().params.is_empty());
+
+        assert_eq!(store.accept(e2, Some("avtr_new"), old), SchemaAccept::AvatarMismatch);
+        assert!(store.snapshot().params.is_empty());
+
+        let mut no_id = AvatarSchema::default();
+        no_id.params.insert(
+            "/avatar/parameters/Maybe".into(),
+            ParamInfo {
+                ty: Some(ParamType::Bool),
+                access: None,
+                range: None,
+            },
+        );
+        assert_eq!(store.accept(e2, Some("avtr_new"), no_id), SchemaAccept::AcceptedNeedsFollowUp);
+        assert!(store.snapshot().params.contains_key("/avatar/parameters/Maybe"));
+        let g_mid = store.snapshot().generation;
+
+        let mut matching = AvatarSchema {
+            avatar_id: Some("avtr_new".into()),
+            ..AvatarSchema::default()
+        };
+        matching.params.insert(
+            "/avatar/parameters/New".into(),
+            ParamInfo {
+                ty: Some(ParamType::Int),
+                access: Some(3),
+                range: None,
+            },
+        );
+        assert_eq!(store.accept(e2, Some("avtr_new"), matching), SchemaAccept::Accepted);
+        let snap = store.snapshot();
+        assert!(snap.generation > g_mid);
+        assert_eq!(snap.avatar_id.as_deref(), Some("avtr_new"));
+        assert!(snap.params.contains_key("/avatar/parameters/New"));
     }
 }

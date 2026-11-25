@@ -132,6 +132,7 @@ impl GraphPreset {
                 };
             }
         }
+        g.mute_chatboxes();
         g.sanitize();
         g
     }
@@ -153,7 +154,8 @@ impl GraphPreset {
             .map(|n| n.id)
             .filter(|id| !redirect.contains_key(id))
             .collect();
-        let body = self.graph.extract(&keep);
+        let mut body = self.graph.extract(&keep);
+        body.mute_chatboxes();
         let offset = match body.bounds() {
             Some((min, _)) => [at[0] - min[0], at[1] - min[1]],
             None => at,
@@ -265,5 +267,86 @@ mod tests {
         assert_eq!(back.node_count(), 3);
         assert!(parse_graph_preset("[]").is_err());
         assert_eq!(parse_graph_preset(r#"{"name":"bare"}"#).unwrap().version, GRAPH_PRESET_VERSION);
+    }
+
+    #[test]
+    fn preset_instantiate_and_insert_mute_nested_chatboxes_but_saved_graph_does_not() {
+        use crate::graph::kind::{ChatboxParams, GroupParams};
+        use crate::graph::model::parse_graph;
+
+        let mut inner = Graph::default();
+        inner.add_kind(
+            NodeKind::Chatbox(ChatboxParams {
+                muted: false,
+                ..ChatboxParams::default()
+            }),
+            [0.0, 0.0],
+        );
+        let mut g = Graph::default();
+        g.add_kind(
+            NodeKind::Chatbox(ChatboxParams {
+                muted: false,
+                ..ChatboxParams::default()
+            }),
+            [0.0, 0.0],
+        );
+        g.add_kind(
+            NodeKind::Group(GroupParams {
+                name: "Nested".into(),
+                graph: Box::new(inner),
+            }),
+            [100.0, 0.0],
+        );
+
+        let json = serde_json::to_string(&g).unwrap();
+        let reloaded = parse_graph(&json).unwrap();
+        let top_chat = reloaded.nodes.iter().find_map(|n| match &n.kind {
+            NodeKind::Chatbox(p) => Some(p.muted),
+            _ => None,
+        });
+        assert_eq!(top_chat, Some(false), "own saved graph preserves unmuted state");
+
+        let p = GraphPreset::from_graph("WithChat", "someone", &g);
+        let inst = p.instantiate(&[]);
+        for n in &inst.nodes {
+            match &n.kind {
+                NodeKind::Chatbox(cp) => assert!(cp.muted, "top-level chatbox muted on instantiate"),
+                NodeKind::Group(gp) => {
+                    for inner_n in &gp.graph.nodes {
+                        if let NodeKind::Chatbox(cp) = &inner_n.kind {
+                            assert!(cp.muted, "nested chatbox muted on instantiate");
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut target = Graph::default();
+        let existing = target.add_kind(
+            NodeKind::Chatbox(ChatboxParams {
+                muted: false,
+                ..ChatboxParams::default()
+            }),
+            [0.0, 0.0],
+        );
+        let added = p.insert_into(&mut target, [200.0, 0.0], &[]);
+        assert_eq!(added.len(), 2);
+        if let NodeKind::Chatbox(cp) = &target.node(existing).unwrap().kind {
+            assert!(!cp.muted, "existing user chatbox stays unmuted");
+        }
+        for id in added {
+            match &target.node(id).unwrap().kind {
+                NodeKind::Chatbox(cp) => assert!(cp.muted, "inserted chatbox muted"),
+                NodeKind::Group(gp) => {
+                    for inner_n in &gp.graph.nodes {
+                        if let NodeKind::Chatbox(cp) = &inner_n.kind {
+                            assert!(cp.muted, "inserted nested chatbox muted");
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }

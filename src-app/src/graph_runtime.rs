@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -7,7 +8,7 @@ use shocking_vrc_core::cli::{CliEngine, EngineMode, GraphChannelOutput, spoof_gu
 use shocking_vrc_core::graph::compile::ExternalRequest;
 use shocking_vrc_core::graph::device::{ChannelFrame, MAX_CHANNELS};
 use shocking_vrc_core::graph::{AlarmSample, ExternalSample, Graph, GraphEvaluator, GraphIssue, GraphProbe};
-use shocking_vrc_core::osc::RawInputs;
+use shocking_vrc_core::osc::{OutputNodeStatus, OutputSource, RawInputs};
 
 use crate::app_state::AppState;
 use crate::graph_store;
@@ -34,6 +35,7 @@ pub struct GraphStatus {
     pub issues: Vec<GraphIssue>,
     pub valid: bool,
     pub outputs: Vec<DeviceOutput>,
+    pub osc_statuses: BTreeMap<u64, OutputNodeStatus>,
     pub panic: bool,
     pub ui_panic: bool,
     pub caps: [u8; MAX_CHANNELS],
@@ -218,6 +220,7 @@ impl GraphRuntime {
         if let Ok(mut s) = self.inner.status.write() {
             s.mode = mode;
             s.outputs.clear();
+            s.osc_statuses.clear();
         }
     }
 
@@ -285,6 +288,7 @@ impl GraphRuntime {
         let mut eyes: Vec<Option<u8>> = Vec::new();
         let mut outs: Vec<[GraphChannelOutput; MAX_CHANNELS]> = Vec::new();
         let mut was_panic = false;
+        let mut was_graph_mode = self.mode() == EngineMode::Graph;
         let mut n: u64 = 0;
 
         loop {
@@ -302,8 +306,13 @@ impl GraphRuntime {
                 }
             }
             if self.mode() != EngineMode::Graph {
+                if was_graph_mode {
+                    state.scanner.release_outputs(OutputSource::Local);
+                    was_graph_mode = false;
+                }
                 continue;
             }
+            was_graph_mode = true;
 
             let slot_count = state.device_slots.read().map(|s| s.len()).unwrap_or(0);
             if n % DEVICE_REFRESH_EVERY == 1 || slot_count != engines.len() {
@@ -323,7 +332,8 @@ impl GraphRuntime {
             };
             let publish = n.is_multiple_of(PUBLISH_EVERY);
             let mut published = None;
-            let panic = {
+            let ui_panic = self.ui_panic();
+            let (panic, valid, osc_outs, chatboxes) = {
                 let Ok(mut ev) = self.inner.eval.lock() else {
                     continue;
                 };
@@ -334,8 +344,9 @@ impl GraphRuntime {
                 ev.step(dt);
                 frames.clear();
                 eyes.clear();
+                let valid = ev.is_valid();
                 for (mac, _) in &engines {
-                    eyes.push(if ev.is_valid() {
+                    eyes.push(if valid {
                         ev.frames()
                             .iter()
                             .find(|f| f.binding.mac().is_some_and(|m| m.eq_ignore_ascii_case(mac)))
@@ -343,7 +354,7 @@ impl GraphRuntime {
                     } else {
                         None
                     });
-                    let f = if ev.is_valid() {
+                    let f = if valid {
                         ev.frames()
                             .iter()
                             .find(|f| f.binding.mac().is_some_and(|m| m.eq_ignore_ascii_case(mac)))
@@ -353,11 +364,29 @@ impl GraphRuntime {
                     };
                     frames.push(f);
                 }
+                let panic = ev.panic_requested() || ui_panic;
+                let (osc_outs, chatboxes) = if valid && !panic {
+                    (ev.osc_out_frames().to_vec(), ev.chatbox_frames().to_vec())
+                } else {
+                    (Vec::new(), Vec::new())
+                };
                 if publish {
-                    published = Some((ev.probe(), ev.issues().to_vec(), ev.is_valid()));
+                    published = Some((ev.probe(), ev.issues().to_vec(), valid));
                 }
-                ev.panic_requested() || self.ui_panic()
+                (panic, valid, osc_outs, chatboxes)
             };
+
+            if valid && !panic {
+                let stop_param = state.remote.stop_param();
+                state
+                    .scanner
+                    .submit_outputs(OutputSource::Local, osc_outs, chatboxes, Some(&stop_param));
+            } else {
+                state.scanner.release_outputs(OutputSource::Local);
+                if ui_panic {
+                    state.scanner.release_outputs(OutputSource::Remote);
+                }
+            }
 
             let ramp = self.inner.ramp_pending.swap(false, Ordering::AcqRel) || (was_panic && !panic);
             was_panic = panic;
@@ -395,6 +424,7 @@ impl GraphRuntime {
                         }
                     })
                     .collect();
+                let osc_statuses = state.scanner.output_statuses(OutputSource::Local);
                 let notes = self.inner.notes.lock().map(|n| n.clone()).unwrap_or_default();
                 let doc_rev = self.doc_rev();
                 if let Ok(mut s) = self.inner.status.write() {
@@ -404,6 +434,7 @@ impl GraphRuntime {
                     s.issues = issues;
                     s.valid = valid;
                     s.outputs = outputs;
+                    s.osc_statuses = osc_statuses;
                     s.panic = panic;
                     s.ui_panic = self.ui_panic();
                     s.caps = self.caps();

@@ -16,6 +16,7 @@ use shocking_vrc_core::cli::{
 };
 use shocking_vrc_core::graph::{Graph, GraphPreset, GraphPresetEntry};
 use shocking_vrc_core::modulation::config::ModulationConfig;
+use shocking_vrc_core::osc::{AvatarSchema, OutputSource};
 use shocking_vrc_core::presets::{ChannelPreset, PresetEntry, ZonePresetEntry};
 use shocking_vrc_core::{DownloadProgress, ReleaseInfo, ZoneEvent};
 use shocking_vrc_remote::link::OfferedRole;
@@ -31,6 +32,7 @@ pub struct Snapshot {
     pub alarm: AlarmConfig,
     pub alarm_status: AlarmStatus,
     pub avatar_zones: Vec<ZoneEvent>,
+    pub avatar_schema: Arc<AvatarSchema>,
     pub vrchat_found: bool,
     pub osc_port: u16,
     pub oscquery_port: Option<u16>,
@@ -57,6 +59,7 @@ impl Snapshot {
             alarm: AlarmConfig::default(),
             alarm_status: AlarmStatus::default(),
             avatar_zones: Vec::new(),
+            avatar_schema: Arc::new(AvatarSchema::default()),
             vrchat_found: false,
             osc_port: 0,
             oscquery_port: None,
@@ -327,6 +330,7 @@ pub enum Command {
     RenameGraphPreset(String, String),
     ImportGraphPreset(std::path::PathBuf),
     ExportGraphPreset(String),
+    RefreshAvatarSchema,
 
     CheckUpdate,
     StartUpdateDownload,
@@ -489,6 +493,7 @@ fn snapshot_sig(snap: &Snapshot) -> SnapshotSig {
         z.zone_type.hash(&mut sh);
         z.id.hash(&mut sh);
     }
+    snap.avatar_schema.generation.hash(&mut sh);
     std::mem::discriminant(&snap.alarm_status.phase).hash(&mut sh);
     snap.alarm_status.attempt.hash(&mut sh);
     snap.alarm_status.test.hash(&mut sh);
@@ -551,9 +556,19 @@ fn snapshot_sig(snap: &Snapshot) -> SnapshotSig {
                 v.to_bits().hash(&mut th);
             }
         }
+        snap.graph.osc_statuses.len().hash(&mut th);
+        for (id, st) in &snap.graph.osc_statuses {
+            id.hash(&mut th);
+            st.hash_into(&mut th);
+        }
     }
     if snap.remote_enabled {
         snap.remote.my_remote_output.hash(&mut th);
+        snap.remote.osc_statuses.len().hash(&mut th);
+        for (id, st) in &snap.remote.osc_statuses {
+            id.hash(&mut th);
+            st.hash_into(&mut th);
+        }
         for s in &snap.remote.service.sessions {
             s.id.hash(&mut th);
             s.secs.hash(&mut th);
@@ -669,6 +684,7 @@ impl Worker {
             alarm: self.state.alarm.config(),
             alarm_status: self.state.alarm.status(),
             avatar_zones: self.state.scanner.zones().await,
+            avatar_schema: self.state.scanner.avatar_schema(),
             vrchat_found: self.state.scanner.vrchat_connected().await,
             osc_port: self.state.scanner.port().await,
             oscquery_port: self.state.scanner.oscquery_port().await,
@@ -1213,6 +1229,9 @@ impl Worker {
             }
 
             Command::SetMode(mode) => {
+                if mode != EngineMode::Graph {
+                    self.state.scanner.release_outputs(OutputSource::Local);
+                }
                 let engines = self.state.engines();
                 self.state.graph.set_mode(mode, &engines).await;
                 if let Err(e) = prefs::update_ui_prefs(|p| p.mode = mode) {
@@ -1352,7 +1371,13 @@ impl Worker {
                 r.link = None;
                 r.code = None;
             }),
-            Command::GraphPanic(on) => self.state.graph.set_ui_panic(on),
+            Command::GraphPanic(on) => {
+                self.state.graph.set_ui_panic(on);
+                if on {
+                    self.state.scanner.release_outputs(OutputSource::Local);
+                    self.state.scanner.release_outputs(OutputSource::Remote);
+                }
+            }
             Command::SetGraphCaps(caps) => {
                 let caps = caps.map(|c| c.min(200));
                 self.state.graph.set_caps(caps, &self.state.engines());
@@ -1393,7 +1418,8 @@ impl Worker {
                 }
             }
             Command::ImportGraph(path) => match graph_store::load_graph_from(&path) {
-                Ok(g) => {
+                Ok(mut g) => {
+                    g.mute_chatboxes();
                     self.state.graph.set_graph(g);
                     self.publish_graph_doc(true);
                     log::info!("[graph] Imported {}", path.display());
@@ -1442,6 +1468,9 @@ impl Worker {
                     Ok(path) => self.notify(ToastKind::Success, format!("Exported to {}", path.display())),
                     Err(e) => self.notify(ToastKind::Error, format!("Export failed: {e}")),
                 }
+            }
+            Command::RefreshAvatarSchema => {
+                self.state.scanner.refresh_schema();
             }
 
             Command::CheckUpdate => self.start_update_check(),
@@ -1691,6 +1720,7 @@ fn remote_graph_status(snap: &Snapshot) -> GraphStatus {
         issues: r.issues.clone(),
         valid: r.valid,
         outputs: Vec::new(),
+        osc_statuses: r.osc_statuses.clone(),
         panic: false,
         ui_panic: false,
         caps,

@@ -11,10 +11,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use super::curve::Curve;
 use super::device::{self, ChannelParams, DeviceBinding};
 pub use super::draw::{
-    DrawZoneParams, FaderParams, FeedbackParams, PanParams, SegmentPainterParams, ShapeFillParams,
-    StepSeqParams, XyMode, XyPadParams,
+    DrawZoneParams, FaderParams, FeedbackParams, PanParams, SegmentPainterParams, ShapeFillParams, StepSeqParams,
+    XyMode, XyPadParams,
 };
 use super::model::Graph;
+pub use crate::osc::output::{ChatboxMode, OscOutType};
 
 static REMOTE_NODES: AtomicBool = AtomicBool::new(false);
 
@@ -974,6 +975,58 @@ impl PartnerDeviceParams {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OscOutParams {
+    pub address: String,
+    pub ty: OscOutType,
+    pub map: bool,
+    pub min: f32,
+    pub max: f32,
+    pub rest: f32,
+    pub rate_hz: f32,
+}
+
+impl Default for OscOutParams {
+    fn default() -> Self {
+        Self {
+            address: "/avatar/parameters/".into(),
+            ty: OscOutType::Auto,
+            map: false,
+            min: -1.0,
+            max: 1.0,
+            rest: 0.0,
+            rate_hz: 10.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChatboxParams {
+    pub template: String,
+    pub count: u8,
+    pub mode: ChatboxMode,
+    pub interval_ms: u32,
+    pub notify: bool,
+    pub clear_on_stop: bool,
+    pub muted: bool,
+}
+
+impl Default for ChatboxParams {
+    fn default() -> Self {
+        Self {
+            template: "Power {1:%}".into(),
+            count: 1,
+            mode: ChatboxMode::Live,
+            interval_ms: 2000,
+            notify: false,
+            clear_on_stop: true,
+            muted: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MissingParams {
     pub type_name: String,
@@ -1032,6 +1085,8 @@ pub enum NodeKind {
     Panic(PanicParams),
     Scope(ScopeParams),
     Device(DeviceParams),
+    OscOut(OscOutParams),
+    Chatbox(ChatboxParams),
     PartnerDevice(PartnerDeviceParams),
     DrawZone(DrawZoneParams),
     ShapeFill(ShapeFillParams),
@@ -1119,6 +1174,8 @@ impl NodeKind {
             NodeKind::Panic(_) => "Panic",
             NodeKind::Scope(_) => "Scope",
             NodeKind::Device(_) => "Device",
+            NodeKind::OscOut(_) => "OscOut",
+            NodeKind::Chatbox(_) => "Chatbox",
             NodeKind::PartnerDevice(_) => "PartnerDevice",
             NodeKind::DrawZone(_) => "DrawZone",
             NodeKind::ShapeFill(_) => "ShapeFill",
@@ -1193,6 +1250,16 @@ impl NodeKind {
             NodeKind::Panic(_) => "Panic".into(),
             NodeKind::Scope(_) => "Scope".into(),
             NodeKind::Device(_) => "Device".into(),
+            NodeKind::OscOut(p) => {
+                let short = p.address.strip_prefix("/avatar/parameters/").unwrap_or("");
+                let short = short.rsplit('/').next().unwrap_or("");
+                if short.is_empty() {
+                    "OSC Out".into()
+                } else {
+                    format!("OSC Out {short}")
+                }
+            }
+            NodeKind::Chatbox(_) => "VRChat Chatbox".into(),
             NodeKind::PartnerDevice(p) => format!("Partner Device {}", p.slot as u32 + 1),
             NodeKind::DrawZone(_) => "Draw Zone".into(),
             NodeKind::ShapeFill(p) => format!("Shape Fill {}", p.shape.label()),
@@ -1253,7 +1320,7 @@ impl NodeKind {
             NodeKind::HardLimit(_) | NodeKind::RampLimiter(_) | NodeKind::Deadman(_) | NodeKind::Panic(_) => {
                 Category::Safety
             }
-            NodeKind::Scope(_) | NodeKind::Device(_) => Category::Output,
+            NodeKind::Scope(_) | NodeKind::Device(_) | NodeKind::OscOut(_) | NodeKind::Chatbox(_) => Category::Output,
             NodeKind::PartnerDevice(_)
             | NodeKind::DrawZone(_)
             | NodeKind::ShapeFill(_)
@@ -1309,7 +1376,10 @@ impl NodeKind {
             | NodeKind::PartnerFeedback(_)
             | NodeKind::Missing(_) => Vec::new(),
             NodeKind::StepSequencer(_) => vec![fl("rate", "Speed", 1.0, (0.0, 4.0)), bl("reset", "Reset", 0.0)],
-            NodeKind::Pan(_) => vec![fl("level", "Level", 1.0, (0.0, 1.0)), fl("pan", "Pan A→B", 0.5, (0.0, 1.0))],
+            NodeKind::Pan(_) => vec![
+                fl("level", "Level", 1.0, (0.0, 1.0)),
+                fl("pan", "Pan A→B", 0.5, (0.0, 1.0)),
+            ],
             NodeKind::DrawZone(_) => {
                 vec![fl("rate", "Speed", 1.0, (0.0, 4.0)), bl("reset", "Reset", 0.0)]
             }
@@ -1446,6 +1516,17 @@ impl NodeKind {
                 .map(|i| owned(format!("in{}", i + 1), format!("In {}", i + 1), 0.0, (0.0, 1.0)))
                 .collect(),
             NodeKind::Device(p) => p.pins(),
+            NodeKind::OscOut(_) => vec![fl("value", "Value", 0.0, (0.0, 1.0)), bl("enable", "Enable", 1.0)],
+            NodeKind::Chatbox(p) => {
+                let mut v: Vec<PinSpec> = (0..p.count.clamp(1, 4))
+                    .map(|i| owned(format!("in{}", i + 1), format!("In {}", i + 1), 0.0, (0.0, 1.0)))
+                    .collect();
+                match p.mode {
+                    ChatboxMode::Live => v.push(bl("enable", "Enable", 1.0)),
+                    ChatboxMode::Trigger => v.push(bl("send", "Send", 0.0)),
+                }
+                v
+            }
         }
     }
 
@@ -1547,6 +1628,8 @@ impl NodeKind {
             | NodeKind::GroupOutput(_)
             | NodeKind::Scope(_)
             | NodeKind::Device(_)
+            | NodeKind::OscOut(_)
+            | NodeKind::Chatbox(_)
             | NodeKind::PartnerDevice(_)
             | NodeKind::Missing(_) => Vec::new(),
             _ => vec![out()],
@@ -1673,6 +1756,21 @@ impl NodeKind {
                     *m = m.to_uppercase();
                 }
             }
+            NodeKind::OscOut(p) => {
+                p.address = p.address.trim().to_string();
+                fin(&mut p.min, -1.0);
+                fin(&mut p.max, 1.0);
+                if p.max < p.min {
+                    std::mem::swap(&mut p.min, &mut p.max);
+                }
+                fin(&mut p.rest, 0.0);
+                fin(&mut p.rate_hz, 10.0);
+                p.rate_hz = p.rate_hz.clamp(1.0, 40.0);
+            }
+            NodeKind::Chatbox(p) => {
+                p.count = p.count.clamp(1, 4);
+                p.interval_ms = p.interval_ms.clamp(1500, 30_000);
+            }
             NodeKind::PartnerDevice(p) => {
                 p.slot = p.slot.min(7);
                 let n = p.profile().channels.len();
@@ -1752,12 +1850,18 @@ fn remote_catalog() -> Vec<CatalogEntry> {
         entry!("Step Sequencer", Remote, "step sequencer bpm rhythm beat grid pattern", || {
             NodeKind::StepSequencer(StepSeqParams::default())
         }),
-        entry!("A↔B Pan", Remote, "pan crossfader balance channel a b swing one at a time", || {
-            NodeKind::Pan(PanParams::default())
-        }),
-        entry!("Partner Feedback", Remote, "partner feedback more less wish strength reaction", || {
-            NodeKind::PartnerFeedback(FeedbackParams::default())
-        }),
+        entry!(
+            "A↔B Pan",
+            Remote,
+            "pan crossfader balance channel a b swing one at a time",
+            || { NodeKind::Pan(PanParams::default()) }
+        ),
+        entry!(
+            "Partner Feedback",
+            Remote,
+            "partner feedback more less wish strength reaction",
+            || { NodeKind::PartnerFeedback(FeedbackParams::default()) }
+        ),
     ]
 }
 
@@ -1917,6 +2021,18 @@ fn base_catalog() -> Vec<CatalogEntry> {
         entry!("Device (Coyote)", Output, "device coyote output", || {
             NodeKind::Device(DeviceParams::default())
         }),
+        entry!(
+            "OSC Out (Avatar)",
+            Output,
+            "osc out avatar parameter send write float int bool",
+            || NodeKind::OscOut(OscOutParams::default())
+        ),
+        entry!(
+            "VRChat Chatbox",
+            Output,
+            "vrchat chatbox text message template live trigger",
+            || NodeKind::Chatbox(ChatboxParams::default())
+        ),
         entry!("Frame / Comment", Layout, "frame comment note box", || {
             NodeKind::Frame(FrameParams::default())
         }),

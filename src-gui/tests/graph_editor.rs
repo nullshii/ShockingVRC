@@ -345,7 +345,10 @@ fn side_overflow(h: &Harness<Scene>) -> Option<String> {
 
 #[test]
 fn the_side_panel_fits_every_inspector() {
-    use shocking_vrc_core::graph::kind::{GroupParams, GroupPort, PortsParams, catalog};
+    use shocking_vrc_core::graph::kind::{
+        ChatboxMode, ChatboxParams, GroupParams, GroupPort, OscOutParams, OscOutType, PortsParams, catalog,
+    };
+    use shocking_vrc_core::osc::{AvatarSchema, OutputNodeState, OutputNodeStatus, ParamInfo, ParamType, SentValue};
     use shocking_vrc_gui::graph_editor::SideTab;
 
     let mut g = graph();
@@ -353,6 +356,46 @@ fn the_side_panel_fits_every_inspector() {
     for (i, e) in catalog().into_iter().enumerate() {
         let mut n = Node::new((e.make)(), [40.0, 400.0 + i as f32 * 40.0]);
         n.id = NodeId(100 + i as u64);
+        ids.push(g.add(n));
+    }
+    for (k, ty) in OscOutType::ALL.iter().enumerate() {
+        let mut n = Node::new(
+            NodeKind::OscOut(OscOutParams {
+                address: "/avatar/parameters/LongCustomParameterName".into(),
+                ty: *ty,
+                map: *ty != OscOutType::Bool,
+                min: if *ty == OscOutType::Int { 0.0 } else { -1.0 },
+                max: if *ty == OscOutType::Int { 255.0 } else { 1.0 },
+                rest: 0.0,
+                rate_hz: 10.0,
+            }),
+            [40.0, 200.0 + k as f32 * 30.0],
+        );
+        n.id = NodeId(500 + k as u64);
+        ids.push(g.add(n));
+    }
+    for (k, (mode, muted)) in [
+        (ChatboxMode::Live, false),
+        (ChatboxMode::Live, true),
+        (ChatboxMode::Trigger, false),
+        (ChatboxMode::Trigger, true),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let mut n = Node::new(
+            NodeKind::Chatbox(ChatboxParams {
+                template: "Power {1:%} · A {2:.2} · B {3:0}\\nLine 2 {4:.4}".into(),
+                count: 4,
+                mode: *mode,
+                interval_ms: 2000,
+                notify: *mode == ChatboxMode::Trigger,
+                clear_on_stop: true,
+                muted: *muted,
+            }),
+            [40.0, 260.0 + k as f32 * 30.0],
+        );
+        n.id = NodeId(520 + k as u64);
         ids.push(g.add(n));
     }
     let port = |key: &str| GroupPort {
@@ -387,10 +430,57 @@ fn the_side_panel_fits_every_inspector() {
         ids.push(g.add(n));
     }
 
+    let mut schema = AvatarSchema {
+        generation: 1,
+        ..AvatarSchema::default()
+    };
+    schema.params.insert(
+        "/avatar/parameters/LongCustomParameterName".into(),
+        ParamInfo {
+            ty: Some(ParamType::Float),
+            access: Some(3),
+            range: Some((-1.0, 1.0)),
+        },
+    );
+    schema.params.insert(
+        "/avatar/parameters/VelocityX".into(),
+        ParamInfo {
+            ty: Some(ParamType::Float),
+            access: Some(1),
+            range: None,
+        },
+    );
+    let schema = std::sync::Arc::new(schema);
+
     for width in [1280.0, 900.0] {
         let mut h = harness_sized(width);
         {
             let s = h.state_mut();
+            s.snap.avatar_schema = std::sync::Arc::clone(&schema);
+            s.snap.graph.seen_params = std::sync::Arc::new(vec![
+                ("/avatar/parameters/LongCustomParameterName".into(), 0.42),
+                ("/avatar/parameters/VelocityX".into(), 0.0),
+            ]);
+            for k in 0..4u64 {
+                s.snap.graph.osc_statuses.insert(
+                    500 + k,
+                    OutputNodeStatus {
+                        state: OutputNodeState::Live,
+                        resolved_type: Some(ParamType::Float),
+                        last_sent: Some(SentValue::Float(0.42)),
+                        warning: Some("Parameter not in avatar schema".into()),
+                    },
+                );
+                s.snap.graph.osc_statuses.insert(
+                    520 + k,
+                    OutputNodeStatus {
+                        state: OutputNodeState::Live,
+                        resolved_type: None,
+                        last_sent: Some(SentValue::Text("Power 42%".into())),
+                        warning: None,
+                    },
+                );
+            }
             if let Ok(mut d) = s.bridge.shared.graph_doc.write() {
                 d.graph = std::sync::Arc::new(g.clone());
                 d.rev = 2;
@@ -429,4 +519,53 @@ fn the_side_panel_fits_every_inspector() {
         }
         assert!(problems.is_empty(), "{}", problems.join("\n"));
     }
+}
+
+#[test]
+fn osc_out_and_chatbox_appear_in_local_and_remote_add_menus_and_render_on_canvas() {
+    use shocking_vrc_core::graph::kind::{ChatboxParams, OscOutParams, catalog_with};
+    use shocking_vrc_gui::app::GraphTab;
+
+    let entries = catalog_with(true);
+    let osc_out = entries
+        .iter()
+        .find(|e| e.label == "OSC Out (Avatar)")
+        .expect("OSC Out in catalog");
+    let chatbox = entries
+        .iter()
+        .find(|e| e.label == "VRChat Chatbox")
+        .expect("Chatbox in catalog");
+    assert!(!osc_out.label.starts_with("Device"));
+    assert!(!chatbox.label.starts_with("Device"));
+
+    let mut h = harness_sized(1280.0);
+    {
+        let s = h.state_mut();
+        s.snap.remote_enabled = true;
+        let mut g = graph();
+        let mut o = Node::new(NodeKind::OscOut(OscOutParams::default()), [200.0, 200.0]);
+        o.id = NodeId(700);
+        g.add(o);
+        let mut c = Node::new(NodeKind::Chatbox(ChatboxParams::default()), [200.0, 360.0]);
+        c.id = NodeId(701);
+        g.add(c);
+        if let Ok(mut d) = s.bridge.shared.graph_doc.write() {
+            d.graph = std::sync::Arc::new(g.clone());
+            d.rev = 2;
+            d.replaced = 1;
+        }
+        if let Ok(mut d) = s.bridge.shared.remote_graph_doc.write() {
+            d.graph = std::sync::Arc::new(g);
+            d.rev = 2;
+            d.replaced = 1;
+        }
+    }
+    h.run_steps(3);
+    assert!(h.state().state.graph.doc.node(NodeId(700)).is_some());
+    assert!(h.state().state.graph.doc.node(NodeId(701)).is_some());
+
+    h.state_mut().state.graph_tab = GraphTab::Remote;
+    h.run_steps(3);
+    assert!(h.state().state.remote_graph.doc.node(NodeId(700)).is_some());
+    assert!(h.state().state.remote_graph.doc.node(NodeId(701)).is_some());
 }

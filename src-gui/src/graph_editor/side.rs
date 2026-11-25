@@ -8,11 +8,13 @@ use shocking_vrc_core::graph::kind::*;
 use shocking_vrc_core::graph::{
     DeviceBinding, GraphPresetEntry, GraphPresetKind, Node, NodeKind, NodeTint, PinType, Severity,
 };
+use shocking_vrc_core::osc::output::{OutputNodeState, render_chatbox_template};
 use shocking_vrc_core::protocol::eye;
 use shocking_vrc_core::raw_to_hz;
 
 use super::{Env, GraphEditor, SideTab, node_ui};
 use crate::app::short_mac;
+use crate::bridge::Command;
 use crate::model::{NormField, UkfField, mod_function_list};
 use crate::overlays::graph_dialogs::GraphDialog;
 use crate::theme::Palette;
@@ -459,57 +461,311 @@ fn params(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut
     }
 }
 
+struct ParamRow<'a> {
+    address: &'a str,
+    type_tag: Option<&'static str>,
+    value: Option<f32>,
+    writable: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn param_picker_list(
+    ui: &mut Ui,
+    pal: &Palette,
+    id_salt: &str,
+    filter_key: &str,
+    selected: &str,
+    rows: &[ParamRow<'_>],
+    empty_msg: &str,
+) -> Option<String> {
+    let filter_id = egui::Id::new(filter_key);
+    let mut filter = ui.ctx().data(|d| d.get_temp::<String>(filter_id)).unwrap_or_default();
+    ui.horizontal(|ui| {
+        w::text_field(ui, pal, &mut filter, "filter…", ui.available_width());
+    });
+    let needle = filter.to_lowercase();
+    let mut picked = None;
+    egui::ScrollArea::vertical()
+        .max_height(160.0)
+        .id_salt(id_salt)
+        .show(ui, |ui| {
+            if rows.is_empty() {
+                empty_note(ui, pal, empty_msg);
+            }
+            for row in rows
+                .iter()
+                .filter(|r| needle.is_empty() || r.address.to_lowercase().contains(&needle))
+                .take(200)
+            {
+                let short = row.address.strip_prefix("/avatar/parameters/").unwrap_or(row.address);
+                let (rect, clicked) = if row.writable {
+                    let (r, resp) = w::row(ui, pal, row.address == selected, 18.0);
+                    (r, resp.clicked())
+                } else {
+                    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
+                    (r, false)
+                };
+                let inner = rect.shrink2(vec2(6.0, 0.0));
+                let fg = if row.writable {
+                    pal.contrast
+                } else {
+                    pal.faded(pal.dim, 0.55)
+                };
+                let meta_col = if row.writable {
+                    pal.dim
+                } else {
+                    pal.faded(pal.dim, 0.55)
+                };
+
+                let mut right_edge = inner.right();
+                if let Some(val) = row.value {
+                    let val_w = 48.0;
+                    let vr = Rect::from_min_max(
+                        egui::pos2((right_edge - val_w).max(inner.left()), inner.top()),
+                        egui::pos2(right_edge, inner.bottom()),
+                    );
+                    w::text_in(ui, vr, &node_ui::fmt_value(val), font::tiny(), meta_col, Align2::RIGHT_CENTER);
+                    right_edge = vr.left() - 4.0;
+                }
+                if let Some(tag) = row.type_tag {
+                    let tag_w = 16.0;
+                    let tr = Rect::from_min_max(
+                        egui::pos2((right_edge - tag_w).max(inner.left()), inner.top()),
+                        egui::pos2(right_edge, inner.bottom()),
+                    );
+                    w::text_in(ui, tr, tag, font::tiny(), meta_col, Align2::RIGHT_CENTER);
+                    right_edge = tr.left() - 4.0;
+                }
+                let name_r = Rect::from_min_max(inner.min, egui::pos2(right_edge.max(inner.left()), inner.bottom()));
+                w::text_in(ui, name_r, short, font::tiny(), fg, Align2::LEFT_CENTER);
+                if clicked {
+                    picked = Some(row.address.to_string());
+                }
+            }
+        });
+    ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter));
+    picked
+}
+
 fn params_inner(ui: &mut Ui, ed: &GraphEditor, env: &Env, node: &mut Node, enter: &mut bool, ungroup: &mut bool) {
     let pal = env.pal;
+    let flat = ed.flat(node.id);
+    let osc_status = env.graph.osc_statuses.get(&flat);
+    let chat_preview_vals: [f32; 4] = if let NodeKind::Chatbox(p) = &node.kind {
+        let probe = super::node_probe(&env.graph.probe, &ed.path, node);
+        let n = p.count.clamp(1, 4) as usize;
+        let mut vals = [0.0f32; 4];
+        for (k, slot) in vals.iter_mut().enumerate().take(n) {
+            let key = format!("in{}", k + 1);
+            *slot = probe
+                .as_ref()
+                .and_then(|pr| pr.inputs.get(k).copied())
+                .or_else(|| node.defaults.get(&key).copied())
+                .unwrap_or(0.0);
+        }
+        vals
+    } else {
+        [0.0; 4]
+    };
     match &mut node.kind {
         NodeKind::OscFloat(p) => {
             text_row(ui, pal, "Address", &mut p.address, "/avatar/parameters/…");
             int_row(ui, pal, "Stale after ms", &mut p.stale_ms, 50, 60_000);
             ui.add_space(4.0);
             w::caption(ui, pal, "Seen parameters");
-            let filter_id = egui::Id::new("graph_param_filter");
-            let mut filter = ui.ctx().data(|d| d.get_temp::<String>(filter_id)).unwrap_or_default();
+            let seen = env.graph.seen_params.clone();
+            let rows: Vec<ParamRow<'_>> = seen
+                .iter()
+                .map(|(addr, val)| ParamRow {
+                    address: addr.as_str(),
+                    type_tag: None,
+                    value: Some(*val),
+                    writable: true,
+                })
+                .collect();
+            if let Some(addr) = param_picker_list(
+                ui,
+                pal,
+                "osc_params",
+                "graph_param_filter",
+                &p.address,
+                &rows,
+                "nothing yet — VRChat sends parameters once connected",
+            ) {
+                p.address = addr;
+            }
+        }
+        NodeKind::OscOut(p) => {
+            if let Some(st) = osc_status {
+                let col = match st.state {
+                    OutputNodeState::Live => pal.success,
+                    OutputNodeState::Refused | OutputNodeState::ReadOnly => pal.error,
+                    OutputNodeState::NoParam
+                    | OutputNodeState::UnknownType
+                    | OutputNodeState::UsedByGraph
+                    | OutputNodeState::Limited => pal.warning,
+                    _ => pal.dim,
+                };
+                let mut summary = st.state.label().to_string();
+                if let Some(rt) = st.resolved_type {
+                    summary.push_str(&format!(" · {}", rt.tag()));
+                }
+                if let Some(v) = &st.last_sent {
+                    summary.push_str(&format!(" · sent {}", v.display_short()));
+                }
+                ui.add(egui::Label::new(egui::RichText::new(summary).font(font::small()).color(col)).wrap());
+                if let Some(warn) = &st.warning {
+                    ui.add(egui::Label::new(egui::RichText::new(warn).font(font::small()).color(pal.warning)).wrap());
+                }
+                ui.add_space(2.0);
+            }
+            text_row(ui, pal, "Address", &mut p.address, "/avatar/parameters/…");
+            let ty_labels: Vec<&str> = OscOutType::ALL.iter().map(|t| t.label()).collect();
+            let sel = OscOutType::ALL.iter().position(|t| *t == p.ty).unwrap_or(0);
+            if let Some(i) = seg_row(ui, pal, "Type", &ty_labels, sel) {
+                p.ty = OscOutType::ALL[i];
+                if p.ty == OscOutType::Int {
+                    p.min = 0.0;
+                    p.max = 255.0;
+                }
+            }
+            if p.ty != OscOutType::Bool {
+                toggle_row(ui, pal, "Map 0–1", &mut p.map, "0..1 → min..max");
+                num_row(ui, pal, "Min", &mut p.min, -10.0, 255.0);
+                num_row(ui, pal, "Max", &mut p.max, -10.0, 255.0);
+            }
+            num_row(ui, pal, "Rest value", &mut p.rest, -1.0, 255.0);
+            num_row_clamped(ui, pal, "Rate Hz", &mut p.rate_hz, 1.0, 40.0);
+
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
-                w::text_field(ui, pal, &mut filter, "filter…", ui.available_width());
-            });
-            let needle = filter.to_lowercase();
-            egui::ScrollArea::vertical()
-                .max_height(160.0)
-                .id_salt("osc_params")
-                .show(ui, |ui| {
-                    let params = env.graph.seen_params.clone();
-                    if params.is_empty() {
-                        empty_note(ui, pal, "nothing yet — VRChat sends parameters once connected");
-                    }
-                    for (addr, value) in params
-                        .iter()
-                        .filter(|(a, _)| needle.is_empty() || a.to_lowercase().contains(&needle))
-                        .take(200)
-                    {
-                        let (rect, resp) = w::row(ui, pal, *addr == p.address, 18.0);
-                        let short = addr.strip_prefix("/avatar/parameters/").unwrap_or(addr);
-                        w::text_in(
-                            ui,
-                            rect.shrink2(vec2(6.0, 0.0)),
-                            short,
-                            font::tiny(),
-                            pal.contrast,
-                            Align2::LEFT_CENTER,
-                        );
-                        w::text_in(
-                            ui,
-                            rect.shrink2(vec2(6.0, 0.0)),
-                            &node_ui::fmt_value(*value),
-                            font::tiny(),
-                            pal.dim,
-                            Align2::RIGHT_CENTER,
-                        );
-                        if resp.clicked() {
-                            p.address = addr.clone();
-                        }
+                w::caption(ui, pal, "Avatar parameters");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if w::small_button(ui, pal, "Refresh").clicked() {
+                        env.bridge.send(Command::RefreshAvatarSchema);
                     }
                 });
-            ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter));
+            });
+            let ro_id = egui::Id::new("osc_out_show_ro");
+            let mut show_ro = ui.ctx().data(|d| d.get_temp::<bool>(ro_id)).unwrap_or(false);
+            toggle_row(ui, pal, "Show read-only", &mut show_ro, "");
+            ui.ctx().data_mut(|d| d.insert_temp(ro_id, show_ro));
+
+            let schema = &env.snap.avatar_schema;
+            let seen = &env.graph.seen_params;
+            let rows: Vec<ParamRow<'_>> = schema
+                .params
+                .iter()
+                .filter(|(_, info)| show_ro || info.is_writable())
+                .map(|(addr, info)| {
+                    let val = seen
+                        .binary_search_by(|(a, _)| a.as_str().cmp(addr.as_str()))
+                        .ok()
+                        .map(|idx| seen[idx].1);
+                    ParamRow {
+                        address: addr.as_str(),
+                        type_tag: Some(info.ty.map_or("?", |t| t.tag())),
+                        value: val,
+                        writable: info.is_writable(),
+                    }
+                })
+                .collect();
+            if let Some(addr) = param_picker_list(
+                ui,
+                pal,
+                "osc_out_schema_params",
+                "osc_out_param_filter",
+                &p.address,
+                &rows,
+                "no avatar parameters yet — connect VRChat or click Refresh",
+            ) {
+                p.address = addr;
+                p.ty = OscOutType::Auto;
+            }
+        }
+        NodeKind::Chatbox(p) => {
+            if let Some(st) = osc_status {
+                let col = match st.state {
+                    OutputNodeState::Live => pal.success,
+                    OutputNodeState::Muted | OutputNodeState::Limited | OutputNodeState::UsedByGraph => pal.warning,
+                    _ => pal.dim,
+                };
+                ui.add(egui::Label::new(egui::RichText::new(st.state.label()).font(font::small()).color(col)).wrap());
+                if let Some(warn) = &st.warning {
+                    ui.add(egui::Label::new(egui::RichText::new(warn).font(font::small()).color(pal.warning)).wrap());
+                }
+            }
+            toggle_row(ui, pal, "Muted", &mut p.muted, "blocks public chatbox sends");
+            ui.add_space(2.0);
+            w::caption(ui, pal, "Template");
+            ui.add(
+                egui::TextEdit::multiline(&mut p.template)
+                    .font(font::small())
+                    .desired_rows(3)
+                    .desired_width(ui.available_width()),
+            );
+            let render = render_chatbox_template(&p.template, p.count, chat_preview_vals);
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                w::caption(ui, pal, "Preview");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let col = if render.truncated { pal.warning } else { pal.dim };
+                    ui.label(
+                        egui::RichText::new(format!("{}/144", render.utf16_len))
+                            .font(font::tiny())
+                            .color(col),
+                    );
+                });
+            });
+            let frame = egui::Frame::NONE
+                .fill(pal.well)
+                .inner_margin(egui::Margin::same(6))
+                .stroke(Stroke::new(1.0, pal.hair));
+            frame.show(ui, |ui| {
+                ui.set_width((ui.available_width()).max(10.0));
+                let txt = if render.text.is_empty() {
+                    "(empty)"
+                } else {
+                    render.text.as_str()
+                };
+                let col = if render.text.is_empty() || p.muted {
+                    pal.dim
+                } else {
+                    pal.contrast
+                };
+                ui.add(egui::Label::new(egui::RichText::new(txt).font(font::small()).color(col)).wrap());
+            });
+            row_hint(
+                ui,
+                pal,
+                "{1} 2 dec · {1:.0}–{1:.4} · {1:0} int · {1:%} % · \\n newline · {{ }} literal",
+            );
+            ui.add_space(2.0);
+            let mut n = p.count as u32;
+            if int_row_clamped(ui, pal, "Inputs", &mut n, 1, 4) {
+                p.count = n as u8;
+            }
+            let modes = ["Live", "Trigger"];
+            let sel = match p.mode {
+                ChatboxMode::Live => 0,
+                ChatboxMode::Trigger => 1,
+            };
+            if let Some(i) = seg_row(ui, pal, "Mode", &modes, sel) {
+                p.mode = if i == 0 {
+                    ChatboxMode::Live
+                } else {
+                    ChatboxMode::Trigger
+                };
+            }
+            match p.mode {
+                ChatboxMode::Live => {
+                    int_row_clamped(ui, pal, "Interval ms", &mut p.interval_ms, 1500, 30_000);
+                    toggle_row(ui, pal, "Clear on stop", &mut p.clear_on_stop, "send empty on stop");
+                }
+                ChatboxMode::Trigger => {
+                    toggle_row(ui, pal, "Notify", &mut p.notify, "play chatbox sound");
+                }
+            }
         }
         NodeKind::Contact(p) => {
             let types = [
@@ -1063,12 +1319,19 @@ fn convert_freq_defaults(node: &mut Node, before: &[ChannelParams]) {
         _ => return,
     };
     for (ci, ch) in profile.channels.iter().enumerate() {
-        let (Some(old), Some(new)) = (before.get(ci), after.get(ci)) else { continue };
+        let (Some(old), Some(new)) = (before.get(ci), after.get(ci)) else {
+            continue;
+        };
         if old.freq_mode == new.freq_mode && old.freq_hz == new.freq_hz {
             continue;
         }
         let prefix = format!("{}.freq", ch.key);
-        let keys: Vec<String> = node.defaults.keys().filter(|k| k.starts_with(&prefix)).cloned().collect();
+        let keys: Vec<String> = node
+            .defaults
+            .keys()
+            .filter(|k| k.starts_with(&prefix))
+            .cloned()
+            .collect();
         for k in keys {
             let hz = old.freq_to_hz(node.defaults[&k]);
             node.defaults.insert(k, new.freq_from_hz(hz));
