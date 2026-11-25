@@ -49,6 +49,19 @@ impl ThemeState {
         }
     }
 
+    pub fn is_fading(&self) -> bool {
+        self.started.is_some()
+    }
+
+    pub fn snap(&mut self) -> bool {
+        if self.started.take().is_some() {
+            self.current = self.target;
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn tick(&mut self) -> bool {
         let Some(started) = self.started else {
             return false;

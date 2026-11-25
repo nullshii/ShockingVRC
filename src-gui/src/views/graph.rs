@@ -29,6 +29,8 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
         bridge: cx.bridge,
         graph: if remote { &cx.snap.remote_graph } else { &cx.snap.graph },
         remote,
+        graphics_mode: cx.ui_state.graphics_mode,
+        visible: cx.ui_state.window_visible,
     };
     let UiState {
         graph: local_ed,
@@ -75,7 +77,7 @@ pub fn show(ui: &mut Ui, cx: &mut Ctx) {
     side::show(&mut side_ui, ed, &env, graph_dialog, nickname);
 
     menu::show(ui.ctx(), ed, &env);
-    ed.flush(env.bridge, ui.ctx());
+    ed.flush(env.bridge, ui.ctx(), env.visible);
 }
 
 fn add_button(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
@@ -115,7 +117,7 @@ fn remote_toolbar(ui: &mut Ui, ed: &mut GraphEditor, env: &Env) {
             .on_hover_text("Write remote_graph.json now")
             .clicked()
         {
-            ed.flush(env.bridge, ui.ctx());
+            ed.flush(env.bridge, ui.ctx(), env.visible);
             env.bridge.send(Command::SaveRemoteGraph);
         }
         if w::button(ui, pal, "Load")
@@ -187,7 +189,7 @@ fn toolbar(ui: &mut Ui, ed: &mut GraphEditor, env: &Env, dialog: &mut Option<Gra
             .on_hover_text("Write graph.json now")
             .clicked()
         {
-            ed.flush(env.bridge, ui.ctx());
+            ed.flush(env.bridge, ui.ctx(), env.visible);
             env.bridge.send(Command::SaveGraph);
         }
         if w::button(ui, pal, "Load")

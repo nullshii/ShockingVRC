@@ -1,3 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -170,6 +173,8 @@ pub struct Shared {
     pub known_devices: RwLock<Vec<String>>,
     pub remote_graph_doc: RwLock<GraphDocShared>,
     pub remote_ui: RwLock<RemoteUiShared>,
+    aux_rev: AtomicU64,
+    graphics_mode: AtomicU8,
 }
 
 #[derive(Clone, Debug)]
@@ -199,7 +204,29 @@ impl Shared {
             known_devices: RwLock::new(Vec::new()),
             remote_graph_doc: RwLock::new(GraphDocShared::default()),
             remote_ui: RwLock::new(RemoteUiShared::default()),
+            aux_rev: AtomicU64::new(0),
+            graphics_mode: AtomicU8::new(0),
         }
+    }
+
+    pub fn set_graphics_mode(&self, mode: crate::graphics::Mode) {
+        let v = match mode {
+            crate::graphics::Mode::Full => 0,
+            crate::graphics::Mode::Lite => 1,
+        };
+        self.graphics_mode.store(v, Ordering::Relaxed);
+    }
+
+    pub fn graphics_mode(&self) -> crate::graphics::Mode {
+        if self.graphics_mode.load(Ordering::Relaxed) == 1 {
+            crate::graphics::Mode::Lite
+        } else {
+            crate::graphics::Mode::Full
+        }
+    }
+
+    fn bump_aux(&self) {
+        self.aux_rev.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn graph_doc(&self) -> GraphDocShared {
@@ -228,6 +255,7 @@ impl Shared {
                 kind,
                 at: Instant::now(),
             });
+            self.bump_aux();
         }
     }
 }
@@ -418,10 +446,127 @@ pub fn spawn(state: Arc<AppState>, repaint: impl Fn() + Send + Sync + 'static) -
         auto_save: prefs::load_ui_prefs().auto_save,
         dirty: false,
         repaint: Box::new(repaint),
+        last_sig: None,
+        last_aux_rev: 0,
+        last_telemetry_repaint: Instant::now(),
     };
     tokio::spawn(worker.run(rx));
 
     bridge
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct SnapshotSig {
+    structural: u64,
+    telemetry: u64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PublishChange {
+    None,
+    Telemetry,
+    Immediate,
+}
+
+fn snapshot_sig(snap: &Snapshot) -> SnapshotSig {
+    let mut sh = DefaultHasher::new();
+    snap.vrchat_found.hash(&mut sh);
+    snap.osc_port.hash(&mut sh);
+    snap.oscquery_port.hash(&mut sh);
+    snap.active_device.hash(&mut sh);
+    std::mem::discriminant(&snap.mode).hash(&mut sh);
+    snap.remote_enabled.hash(&mut sh);
+    snap.devices.len().hash(&mut sh);
+    for d in &snap.devices {
+        d.mac.hash(&mut sh);
+        d.name.hash(&mut sh);
+        d.battery.hash(&mut sh);
+        d.connected.hash(&mut sh);
+        d.reconnecting.hash(&mut sh);
+    }
+    snap.avatar_zones.len().hash(&mut sh);
+    for z in &snap.avatar_zones {
+        z.zone_type.hash(&mut sh);
+        z.id.hash(&mut sh);
+    }
+    std::mem::discriminant(&snap.alarm_status.phase).hash(&mut sh);
+    snap.alarm_status.attempt.hash(&mut sh);
+    snap.alarm_status.test.hash(&mut sh);
+    snap.alarm.enabled.hash(&mut sh);
+    snap.alarm.hour.hash(&mut sh);
+    snap.alarm.minute.hash(&mut sh);
+    snap.graph.valid.hash(&mut sh);
+    snap.graph.panic.hash(&mut sh);
+    snap.graph.ui_panic.hash(&mut sh);
+    snap.graph.doc_rev.hash(&mut sh);
+    snap.graph.caps.hash(&mut sh);
+    snap.graph.issues.len().hash(&mut sh);
+    snap.remote.service.sessions.len().hash(&mut sh);
+    snap.remote.service.consent.is_some().hash(&mut sh);
+    snap.remote.service.connecting.hash(&mut sh);
+    snap.remote.service.last_error.hash(&mut sh);
+    snap.remote.service.invites.len().hash(&mut sh);
+    snap.remote.service.partners.len().hash(&mut sh);
+    snap.remote.service.listening.hash(&mut sh);
+    std::mem::discriminant(&snap.remote.service.vds).hash(&mut sh);
+
+    let mut th = DefaultHasher::new();
+    for ch in [&snap.status.channel_a, &snap.status.channel_b] {
+        ch.raw_level.to_bits().hash(&mut th);
+        ch.strength.hash(&mut th);
+        ch.frequency.hash(&mut th);
+        ch.active_zones.len().hash(&mut th);
+        for (id, lv) in &ch.active_zones {
+            id.hash(&mut th);
+            lv.to_bits().hash(&mut th);
+        }
+        ch.kinematics.depth.to_bits().hash(&mut th);
+        ch.kinematics.speed.to_bits().hash(&mut th);
+        ch.kinematics.acc.to_bits().hash(&mut th);
+        ch.kinematics.recoil.to_bits().hash(&mut th);
+    }
+    snap.status.device_connected.hash(&mut th);
+    snap.alarm_status.strength.hash(&mut th);
+    snap.alarm_status.elapsed_secs.hash(&mut th);
+    snap.alarm_status.snooze_left_secs.hash(&mut th);
+    snap.alarm_status.auto_stop_in_secs.hash(&mut th);
+    snap.alarm_status.next_fire_in_mins.hash(&mut th);
+    for z in &snap.avatar_zones {
+        z.level.to_bits().hash(&mut th);
+        z.velocity.to_bits().hash(&mut th);
+    }
+    if snap.mode == EngineMode::Graph {
+        snap.graph.outputs.len().hash(&mut th);
+        for o in &snap.graph.outputs {
+            o.mac.hash(&mut th);
+            for ch in &o.channels {
+                ch.safe.strength.hash(&mut th);
+                ch.safe.limit_max.hash(&mut th);
+            }
+        }
+        snap.graph.probe.nodes.len().hash(&mut th);
+        for (id, p) in &snap.graph.probe.nodes {
+            id.hash(&mut th);
+            for v in &p.outputs {
+                v.to_bits().hash(&mut th);
+            }
+        }
+    }
+    if snap.remote_enabled {
+        snap.remote.my_remote_output.hash(&mut th);
+        for s in &snap.remote.service.sessions {
+            s.id.hash(&mut th);
+            s.secs.hash(&mut th);
+            s.latency_ms.hash(&mut th);
+            s.live.hash(&mut th);
+            s.partner_output.slots.hash(&mut th);
+        }
+    }
+
+    SnapshotSig {
+        structural: sh.finish(),
+        telemetry: th.finish(),
+    }
 }
 
 struct Worker {
@@ -431,6 +576,9 @@ struct Worker {
     auto_save: bool,
     dirty: bool,
     repaint: Box<dyn Fn() + Send + Sync>,
+    last_sig: Option<SnapshotSig>,
+    last_aux_rev: u64,
+    last_telemetry_repaint: Instant,
 }
 
 impl Worker {
@@ -447,6 +595,7 @@ impl Worker {
                 .to_vec();
         }
         self.publish().await;
+        self.last_aux_rev = self.shared.aux_rev.load(Ordering::Relaxed);
 
         let mut ticker = tokio::time::interval(Duration::from_millis(50));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -461,13 +610,35 @@ impl Worker {
                     }
                     self.flush_persist().await;
                     self.publish().await;
+                    self.last_aux_rev = self.shared.aux_rev.load(Ordering::Relaxed);
+                    self.last_telemetry_repaint = Instant::now();
                     (self.repaint)();
                 }
                 _ = ticker.tick() => {
-                    self.publish().await;
-                    self.expire_toast();
-                    self.check_download_stall();
-                    (self.repaint)();
+                    let change = self.publish().await;
+                    let toast_expired = self.expire_toast();
+                    let download_stalled = self.check_download_stall();
+                    let aux_rev = self.shared.aux_rev.load(Ordering::Relaxed);
+                    let aux_changed = aux_rev != self.last_aux_rev || toast_expired || download_stalled;
+                    self.last_aux_rev = aux_rev;
+
+                    let should_repaint = if aux_changed || change == PublishChange::Immediate {
+                        true
+                    } else if change == PublishChange::Telemetry {
+                        match self.shared.graphics_mode() {
+                            crate::graphics::Mode::Full => true,
+                            crate::graphics::Mode::Lite => {
+                                self.last_telemetry_repaint.elapsed() >= crate::graphics::TELEMETRY_INTERVAL_LITE
+                            }
+                        }
+                    } else {
+                        false
+                    };
+
+                    if should_repaint {
+                        self.last_telemetry_repaint = Instant::now();
+                        (self.repaint)();
+                    }
                 }
             }
         }
@@ -481,7 +652,7 @@ impl Worker {
         self.state.slot_infos().get(self.active_device).map(|d| d.mac.clone())
     }
 
-    async fn publish(&mut self) {
+    async fn publish(&mut self) -> PublishChange {
         let devices = self.state.slot_infos();
         if !devices.is_empty() && self.active_device >= devices.len() {
             self.active_device = devices.len() - 1;
@@ -520,11 +691,21 @@ impl Worker {
         if snap.remote_enabled {
             snap.remote_graph = remote_graph_status(&snap);
         }
+        let sig = snapshot_sig(&snap);
+        let change = match self.last_sig {
+            None => PublishChange::Immediate,
+            Some(prev) if prev.structural != sig.structural => PublishChange::Immediate,
+            Some(prev) if prev.telemetry != sig.telemetry => PublishChange::Telemetry,
+            Some(_) => PublishChange::None,
+        };
+        self.last_sig = Some(sig);
+
         if let Ok(mut slot) = self.shared.snapshot.write() {
             *slot = snap;
         }
         self.publish_graph_doc(false);
         self.publish_remote_graph_doc(false);
+        change
     }
 
     fn publish_remote_graph_doc(&self, replaced: bool) {
@@ -591,7 +772,7 @@ impl Worker {
             .and_then(|p| p.entries.iter().find(|e| e.id == id).cloned())
     }
 
-    fn expire_toast(&self) {
+    fn expire_toast(&self) -> bool {
         let stale = self
             .shared
             .toast
@@ -601,7 +782,10 @@ impl Worker {
             .is_some_and(|t| t.at.elapsed() > Duration::from_secs(4));
         if stale && let Ok(mut slot) = self.shared.toast.write() {
             *slot = None;
+            self.shared.bump_aux();
+            return true;
         }
+        false
     }
 
     fn notify(&self, kind: ToastKind, text: impl Into<String>) {
@@ -1355,6 +1539,7 @@ impl Worker {
                         p.error = Some(e);
                     }
                 }
+                shared.bump_aux();
             }
         });
     }
@@ -1388,6 +1573,7 @@ impl Worker {
                     Ok(None) => log::debug!("[update] up to date"),
                     Err(e) => log::debug!("[update] check failed: {e}"),
                 }
+                shared.bump_aux();
             }
         });
     }
@@ -1421,6 +1607,7 @@ impl Worker {
                 if let Ok(mut u) = progress_shared.update.write() {
                     u.progress = Some(p);
                     u.last_progress_at = Some(Instant::now());
+                    progress_shared.bump_aux();
                 }
             })
             .await;
@@ -1440,22 +1627,23 @@ impl Worker {
                         u.progress = None;
                     }
                 }
+                shared.bump_aux();
             }
         });
     }
 
-    fn check_download_stall(&self) {
+    fn check_download_stall(&self) -> bool {
         let Ok(mut u) = self.shared.update.write() else {
-            return;
+            return false;
         };
         if !u.downloading || u.error.is_some() {
-            return;
+            return false;
         }
         let Some(last) = u.last_progress_at else {
-            return;
+            return false;
         };
         if last.elapsed() < Duration::from_secs(20) {
-            return;
+            return false;
         }
         let at_start = u.progress.as_ref().is_none_or(|p| p.downloaded == 0);
         u.error = Some(
@@ -1469,6 +1657,8 @@ impl Worker {
         u.downloading = false;
         u.progress = None;
         log::warn!("[update] {}", u.error.as_deref().unwrap_or_default());
+        self.shared.bump_aux();
+        true
     }
 
     fn dismiss_update(&self) {
@@ -1565,6 +1755,9 @@ mod tests {
             auto_save: false,
             dirty: false,
             repaint: Box::new(|| {}),
+            last_sig: None,
+            last_aux_rev: 0,
+            last_telemetry_repaint: Instant::now(),
         }
     }
 

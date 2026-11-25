@@ -4,6 +4,21 @@ use shocking_vrc_core::graph::safety::DEFAULT_POWER_CAP;
 pub const CONFIG_FILE: &str = "cli_config.json";
 pub const PREFS_FILE: &str = "shockingvrc_prefs.json";
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GraphicsPreference {
+    #[default]
+    Auto,
+    Full,
+    Lite,
+}
+
+impl GraphicsPreference {
+    fn is_auto(&self) -> bool {
+        matches!(self, Self::Auto)
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UiPrefs {
     #[serde(default = "default_auto_save")]
@@ -30,6 +45,8 @@ pub struct UiPrefs {
     pub graph_power_cap: [u8; 2],
     #[serde(default, skip_serializing_if = "is_false")]
     pub remote_enabled: bool,
+    #[serde(default, skip_serializing_if = "GraphicsPreference::is_auto")]
+    pub graphics: GraphicsPreference,
 }
 
 fn is_false(v: &bool) -> bool {
@@ -63,6 +80,7 @@ impl Default for UiPrefs {
             mode: EngineMode::default(),
             graph_power_cap: default_graph_power_cap(),
             remote_enabled: false,
+            graphics: GraphicsPreference::Auto,
         }
     }
 }
@@ -161,5 +179,23 @@ mod tests {
         };
         let back: UiPrefs = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
         assert_eq!(back.mode, EngineMode::Graph);
+    }
+
+    #[test]
+    fn graphics_preference_round_trips() {
+        for pref in [
+            GraphicsPreference::Auto,
+            GraphicsPreference::Full,
+            GraphicsPreference::Lite,
+        ] {
+            let p = UiPrefs {
+                graphics: pref,
+                ..UiPrefs::default()
+            };
+            let back: UiPrefs = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+            assert_eq!(back.graphics, pref);
+        }
+        let explicit_auto: UiPrefs = serde_json::from_str(r#"{"graphics":"auto"}"#).unwrap();
+        assert_eq!(explicit_auto.graphics, GraphicsPreference::Auto);
     }
 }

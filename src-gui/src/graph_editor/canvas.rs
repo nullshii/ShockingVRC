@@ -283,7 +283,11 @@ pub fn show(ui: &mut Ui, rect: Rect, ed: &mut GraphEditor, env: &Env) {
         paint_wire(&cui, sa, sb, col, width, zoom);
         if lit > 0.02 {
             let pts = bezier(a.pos, b.pos);
-            let phase = ((time * 0.6 + (i as f64) * 0.137).fract()) as f32;
+            let phase = if env.graphics_mode == crate::graphics::Mode::Lite {
+                0.5
+            } else {
+                ((time * 0.6 + (i as f64) * 0.137).fract()) as f32
+            };
             let dot = to_screen(bezier_at(&pts, phase));
             let size = (4.0 * zoom).clamp(3.0, 6.0);
             cui.painter()

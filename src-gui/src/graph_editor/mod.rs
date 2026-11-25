@@ -164,6 +164,8 @@ pub struct Env<'a> {
     pub bridge: &'a Bridge,
     pub graph: &'a shocking_vrc_app::graph_runtime::GraphStatus,
     pub remote: bool,
+    pub graphics_mode: crate::graphics::Mode,
+    pub visible: bool,
 }
 
 impl Env<'_> {
@@ -317,7 +319,7 @@ impl GraphEditor {
         }
     }
 
-    pub fn flush(&mut self, bridge: &Bridge, ctx: &egui::Context) {
+    pub fn flush(&mut self, bridge: &Bridge, ctx: &egui::Context, visible: bool) {
         if let Some(t) = self.view_changed
             && t.elapsed() >= VIEW_SETTLE
             && !ctx.input(|i| i.pointer.any_down())
@@ -326,13 +328,15 @@ impl GraphEditor {
             self.dirty = true;
         }
         if !self.dirty {
-            if self.view_changed.is_some() {
+            if visible && self.view_changed.is_some() {
                 ctx.request_repaint_after(VIEW_SETTLE);
             }
             return;
         }
         if self.last_send.is_some_and(|t| t.elapsed() < SEND_INTERVAL) {
-            ctx.request_repaint_after(SEND_INTERVAL);
+            if visible {
+                ctx.request_repaint_after(SEND_INTERVAL);
+            }
             return;
         }
         let doc = Box::new(self.doc.clone());

@@ -2,6 +2,7 @@ pub mod app;
 pub mod bridge;
 pub mod fixtures;
 pub mod graph_editor;
+pub mod graphics;
 pub mod model;
 pub mod overlays;
 pub mod theme;

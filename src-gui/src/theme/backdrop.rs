@@ -1,6 +1,14 @@
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
 use super::Palette;
+use crate::graphics::Mode;
+
+const LITE_DOT_SPACING: f32 = 28.0;
+const LITE_DOT_RADIUS: f32 = 1.15;
+const LITE_BASE_OPACITY: f32 = 0.55;
+const LITE_MASK_CENTER_X: f32 = 0.70;
+const LITE_MASK_CENTER_Y: f32 = 0.30;
+const LITE_MASK_FADE_STOP: f32 = 0.75;
 
 const NEAR: f32 = 0.34;
 const FAR: f32 = 6.4;
@@ -51,6 +59,58 @@ impl Rng {
     }
 }
 
+fn lite_mask_alpha(pos: Pos2, rect: Rect) -> f32 {
+    let w = rect.width();
+    let h = rect.height();
+    if w <= 0.0 || h <= 0.0 {
+        return 0.0;
+    }
+    let cx = rect.left() + w * LITE_MASK_CENTER_X;
+    let cy = rect.top() + h * LITE_MASK_CENTER_Y;
+    let fx = w * LITE_MASK_CENTER_X.max(1.0 - LITE_MASK_CENTER_X);
+    let fy = h * LITE_MASK_CENTER_Y.max(1.0 - LITE_MASK_CENTER_Y);
+    let rx = fx * std::f32::consts::SQRT_2;
+    let ry = fy * std::f32::consts::SQRT_2;
+    let nx = (pos.x - cx) / rx;
+    let ny = (pos.y - cy) / ry;
+    let d = (nx * nx + ny * ny).sqrt();
+    (1.0 - d / LITE_MASK_FADE_STOP).clamp(0.0, 1.0)
+}
+
+#[derive(Default)]
+struct LiteGridCache {
+    rect: Option<Rect>,
+    hair: Option<Color32>,
+    dots: Vec<(Pos2, Color32)>,
+}
+
+impl LiteGridCache {
+    fn update(&mut self, rect: Rect, pal: &Palette) {
+        if self.rect == Some(rect) && self.hair == Some(pal.hair) {
+            return;
+        }
+        self.rect = Some(rect);
+        self.hair = Some(pal.hair);
+        self.dots.clear();
+
+        let (r, g, b) = (pal.hair.r(), pal.hair.g(), pal.hair.b());
+        let mut y = rect.top() + LITE_DOT_SPACING * 0.5;
+        while y < rect.bottom() {
+            let mut x = rect.left() + LITE_DOT_SPACING * 0.5;
+            while x < rect.right() {
+                let pos = Pos2::new(x, y);
+                let mask = lite_mask_alpha(pos, rect);
+                let alpha = (LITE_BASE_OPACITY * mask * 255.0).round() as u8;
+                if alpha > 0 {
+                    self.dots.push((pos, Color32::from_rgba_unmultiplied(r, g, b, alpha)));
+                }
+                x += LITE_DOT_SPACING;
+            }
+            y += LITE_DOT_SPACING;
+        }
+    }
+}
+
 pub struct Backdrop {
     boxes: Vec<Box3>,
     rng: Rng,
@@ -58,6 +118,7 @@ pub struct Backdrop {
     spread_y: f32,
     focal: f32,
     size: egui::Vec2,
+    lite_cache: LiteGridCache,
     pub speed: f32,
     pub density: f32,
 }
@@ -77,9 +138,14 @@ impl Backdrop {
             spread_y: 1.0,
             focal: 1.0,
             size: egui::Vec2::ZERO,
+            lite_cache: LiteGridCache::default(),
             speed: 1.0,
             density: 1.0,
         }
+    }
+
+    pub fn is_animating(&self, mode: Mode) -> bool {
+        mode == Mode::Full && self.speed > 0.0 && self.density > 0.0
     }
 
     #[allow(clippy::approx_constant)]
@@ -135,19 +201,35 @@ impl Backdrop {
         if self.speed <= 0.0 {
             return;
         }
-        let mut respawn = Vec::new();
-        for (i, b) in self.boxes.iter_mut().enumerate() {
-            b.z -= 0.5 * self.speed * dt;
+        let speed = self.speed;
+        for i in 0..self.boxes.len() {
+            let b = &mut self.boxes[i];
+            b.z -= 0.5 * speed * dt;
             b.rx += b.vx * dt;
             b.ry += b.vy * dt;
             b.rz += b.vz * dt;
             if b.z <= NEAR {
-                respawn.push(i);
+                let fresh = self.make_box(false);
+                self.boxes[i] = fresh;
             }
         }
-        for i in respawn {
-            let fresh = self.make_box(false);
-            self.boxes[i] = fresh;
+    }
+
+    pub fn paint_mode(&mut self, ui: &Ui, rect: Rect, pal: &Palette, dt: f32, mode: Mode) {
+        match mode {
+            Mode::Full => self.paint(ui, rect, pal, dt),
+            Mode::Lite => self.paint_lite(ui, rect, pal),
+        }
+    }
+
+    pub fn paint_lite(&mut self, ui: &Ui, rect: Rect, pal: &Palette) {
+        if rect.width() <= 0.0 || rect.height() <= 0.0 {
+            return;
+        }
+        self.lite_cache.update(rect, pal);
+        let painter = ui.painter().with_clip_rect(rect);
+        for &(pos, color) in &self.lite_cache.dots {
+            painter.circle_filled(pos, LITE_DOT_RADIUS, color);
         }
     }
 
@@ -262,5 +344,39 @@ mod tests {
             b.boxes.iter().all(|x| x.z >= FAR * 0.82),
             "a box that passes the camera comes back at the far plane"
         );
+    }
+
+    #[test]
+    fn lite_mode_never_animates_and_caches_fading_dot_grid() {
+        let mut b = Backdrop::new();
+        assert!(b.is_animating(Mode::Full));
+        assert!(!b.is_animating(Mode::Lite));
+        b.speed = 0.0;
+        assert!(!b.is_animating(Mode::Full));
+
+        let pal = Palette::default();
+        let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(1000.0, 800.0));
+        b.lite_cache.update(rect, &pal);
+        assert!(!b.lite_cache.dots.is_empty());
+
+        let center_mask = lite_mask_alpha(Pos2::new(700.0, 240.0), rect);
+        let mid_mask = lite_mask_alpha(Pos2::new(400.0, 480.0), rect);
+        let far_corner_mask = lite_mask_alpha(Pos2::new(0.0, 800.0), rect);
+        assert!((center_mask - 1.0).abs() < 1e-5);
+        assert!(mid_mask > 0.1 && mid_mask < center_mask);
+        assert_eq!(far_corner_mask, 0.0);
+
+        assert!(
+            b.lite_cache
+                .dots
+                .iter()
+                .all(|&(p, c)| c.a() > 0 && lite_mask_alpha(p, rect) > 0.0)
+        );
+
+        let first_ptr = b.lite_cache.dots.as_ptr();
+        let first_len = b.lite_cache.dots.len();
+        b.lite_cache.update(rect, &pal);
+        assert_eq!(b.lite_cache.dots.as_ptr(), first_ptr);
+        assert_eq!(b.lite_cache.dots.len(), first_len);
     }
 }

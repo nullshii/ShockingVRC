@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use shocking_vrc_app::runtime::{self, SessionOptions};
+use shocking_vrc_gui::graphics::WindowVisibility;
 use shocking_vrc_gui::{GuiApp, bridge};
 
 fn main() -> eframe::Result<()> {
@@ -47,11 +49,17 @@ fn main() -> eframe::Result<()> {
             native_options,
             Box::new(move |cc| {
                 let ctx = cc.egui_ctx.clone();
-                let bridge = bridge::spawn(session, move || ctx.request_repaint());
+                let visibility = WindowVisibility::new();
+                let vis_flag = visibility.handle();
+                let bridge = bridge::spawn(session, move || {
+                    if vis_flag.load(Ordering::Relaxed) {
+                        ctx.request_repaint();
+                    }
+                });
                 if !skip_update_check {
                     bridge.send(bridge::Command::CheckUpdate);
                 }
-                Ok(Box::new(GuiApp::new(cc, bridge, log_buffer)))
+                Ok(Box::new(GuiApp::new(cc, bridge, log_buffer, visibility)))
             }),
         )
     };

@@ -1,13 +1,18 @@
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use egui::{Align2, Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 
 use shocking_vrc_app::logger::LogBuffer;
 use shocking_vrc_app::prefs;
-use shocking_vrc_core::cli::EngineMode;
+use shocking_vrc_core::cli::{AlarmPhase, EngineMode};
 use shocking_vrc_core::modulation::config::ModulationConfig;
 
 use crate::bridge::{Bridge, Command, Snapshot, ToastKind};
+use crate::graphics::{
+    self, Decision as GraphicsDecision, FrameGuard, Mode as GraphicsMode, PowerWatcher,
+    Preference as GraphicsPreference, RepaintNeed, Runtime as GraphicsRuntime, WindowVisibility,
+};
 use crate::model::{Channel, ModKind, Section, default_mod_config};
 use crate::theme::widgets::{self as w, font, space};
 use crate::theme::{Backdrop, Palette, ThemeState};
@@ -54,6 +59,8 @@ pub struct UiState {
 
     pub show_theme_panel: bool,
     pub show_about: bool,
+    pub graphics_mode: GraphicsMode,
+    pub window_visible: bool,
 
     pub mode: EngineMode,
     pub mode_confirm: Option<EngineMode>,
@@ -185,6 +192,8 @@ impl UiState {
             has_seen_tutorial: p.has_seen_tutorial,
             show_theme_panel: false,
             show_about: false,
+            graphics_mode: GraphicsMode::Full,
+            window_visible: true,
             mode: p.mode,
             mode_confirm: None,
             graph_caps: p.graph_power_cap,
@@ -320,15 +329,48 @@ pub struct GuiApp {
     state: UiState,
     tutorial: Tutorial,
     last_frame: Instant,
+    started_at: Instant,
+    visibility: WindowVisibility,
+    graphics_pref: GraphicsPreference,
+    graphics_runtime: GraphicsRuntime,
+    graphics_decision: GraphicsDecision,
+    applied_mode: Option<GraphicsMode>,
+    default_animation_time: f32,
+    power_watcher: PowerWatcher,
+    frame_guard: FrameGuard,
     pub quit: bool,
 }
 
 impl GuiApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, bridge: Bridge, log: LogBuffer) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        bridge: Bridge,
+        log: LogBuffer,
+        visibility: WindowVisibility,
+    ) -> Self {
         let p = prefs::load_ui_prefs();
         let theme_id = p.theme.clone().unwrap_or_else(|| "terminal".to_string());
         let theme = ThemeState::new(&theme_id);
+        let default_animation_time = cc.egui_ctx.style_of(egui::Theme::Dark).animation_time;
         crate::theme::install_style(&cc.egui_ctx, theme.palette());
+
+        let graphics_pref = p.graphics;
+        let graphics_runtime = GraphicsRuntime::detect(cc);
+        let initial_machine = graphics::machine();
+        let power_watcher = PowerWatcher::spawn(initial_machine, visibility.handle(), cc.egui_ctx.clone());
+        let graphics_decision = graphics::decide(graphics_pref, initial_machine, &graphics_runtime);
+        log::info!(
+            "[graphics] {} (renderer: {})",
+            graphics_decision.status_line(graphics_pref),
+            if graphics_runtime.renderer.is_empty() {
+                "unknown"
+            } else {
+                &graphics_runtime.renderer
+            }
+        );
+
+        graphics::apply_mode_to_ctx(&cc.egui_ctx, graphics_decision.mode, default_animation_time);
+        bridge.shared.set_graphics_mode(graphics_decision.mode);
 
         let mut backdrop = Backdrop::new();
         backdrop.speed = p.backdrop_speed.unwrap_or(1.0);
@@ -339,15 +381,43 @@ impl GuiApp {
             tutorial.start();
         }
 
+        let mut state = UiState::new(&p);
+        state.graphics_mode = graphics_decision.mode;
+
+        let initial_mode = graphics_decision.mode;
+        let now = Instant::now();
         Self {
             bridge,
             log,
             theme,
             backdrop,
-            state: UiState::new(&p),
+            state,
             tutorial,
-            last_frame: Instant::now(),
+            last_frame: now,
+            started_at: now,
+            visibility,
+            graphics_pref,
+            graphics_runtime,
+            graphics_decision,
+            applied_mode: Some(initial_mode),
+            default_animation_time,
+            power_watcher,
+            frame_guard: FrameGuard::new(),
             quit: false,
+        }
+    }
+
+    fn recompute_graphics(&mut self, ctx: &egui::Context, machine: graphics::Machine) {
+        let next = graphics::decide(self.graphics_pref, machine, &self.graphics_runtime);
+        let mode_changed = self.applied_mode != Some(next.mode);
+        self.graphics_decision = next;
+        self.state.graphics_mode = self.graphics_decision.mode;
+        if mode_changed {
+            self.applied_mode = Some(self.graphics_decision.mode);
+            graphics::apply_mode_to_ctx(ctx, self.graphics_decision.mode, self.default_animation_time);
+            self.bridge.shared.set_graphics_mode(self.graphics_decision.mode);
+            self.frame_guard.reset();
+            log::info!("[graphics] {}", self.graphics_decision.status_line(self.graphics_pref));
         }
     }
 
@@ -355,6 +425,7 @@ impl GuiApp {
         let theme = self.theme.id.clone();
         let speed = self.backdrop.speed;
         let density = self.backdrop.density;
+        let graphics = self.graphics_pref;
         let (auto_save, alarm_tab, spoof_guard, nickname) = (
             self.state.auto_save,
             self.state.alarm_section_visible,
@@ -369,6 +440,7 @@ impl GuiApp {
             p.alarm_tab = alarm_tab;
             p.spoof_guard = spoof_guard;
             p.nickname = nickname;
+            p.graphics = graphics;
         }) {
             log::warn!("[prefs] Failed to save: {e}");
         }
@@ -376,15 +448,33 @@ impl GuiApp {
 }
 
 impl eframe::App for GuiApp {
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
-        let now = Instant::now();
-        let dt = (now - self.last_frame).as_secs_f32();
-        self.last_frame = now;
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        let frame_start = Instant::now();
+        let dt = (frame_start - self.last_frame).as_secs_f32();
+        self.last_frame = frame_start;
 
-        let animating = self.theme.tick();
-        if animating {
-            crate::theme::install_style(ui.ctx(), self.theme.palette());
+        let (visible, just_restored) = self.visibility.sync_from_ctx(ui.ctx());
+        self.state.window_visible = visible;
+
+        let latest_machine = self.power_watcher.latest();
+        if latest_machine != self.graphics_decision.machine {
+            self.recompute_graphics(ui.ctx(), latest_machine);
         }
+
+        let mode = self.graphics_decision.mode;
+        let theme_animating = if mode == GraphicsMode::Full && visible {
+            let was_fading = self.theme.is_fading();
+            let still = self.theme.tick();
+            if was_fading {
+                crate::theme::install_style(ui.ctx(), self.theme.palette());
+            }
+            still
+        } else {
+            if self.theme.snap() {
+                crate::theme::install_style(ui.ctx(), self.theme.palette());
+            }
+            false
+        };
         let pal = *self.theme.palette();
 
         let snap = self.bridge.snapshot();
@@ -395,7 +485,8 @@ impl eframe::App for GuiApp {
 
         let full = ui.max_rect();
         ui.painter().rect_filled(full, w::SQUARE, pal.base);
-        self.backdrop.paint(ui, full, &pal, dt);
+        self.backdrop
+            .paint_mode(ui, full, &pal, if visible { dt } else { 0.0 }, mode);
 
         self.handle_shortcuts(ui, &snap);
 
@@ -410,12 +501,42 @@ impl eframe::App for GuiApp {
 
         self.overlays(ui, &pal, &snap);
 
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_millis(if self.backdrop.speed > 0.0 {
-                16
-            } else {
-                60
-            }));
+        let backdrop_anim = self.backdrop.is_animating(mode);
+        let wire_anim =
+            mode == GraphicsMode::Full && self.state.section == Section::Graph && has_lit_graph_probe(&snap, self.state.graph_tab);
+        let animating = mode == GraphicsMode::Full && (theme_animating || backdrop_anim || wire_anim);
+
+        if self.graphics_pref == GraphicsPreference::Auto && mode == GraphicsMode::Full && visible && animating {
+            let frame_cost_ms = frame
+                .info()
+                .cpu_usage
+                .map(|secs| secs * 1000.0)
+                .unwrap_or_else(|| frame_start.elapsed().as_secs_f32() * 1000.0);
+            if let Some(avg_ms) = self.frame_guard.record(self.started_at.elapsed(), frame_cost_ms) {
+                log::warn!(
+                    "[graphics] Average frame time {avg_ms:.1} ms exceeded {:.0} ms over 5 s; switching Auto to Lite",
+                    graphics::SLOW_FRAME_MS
+                );
+                self.graphics_runtime.slow_frames = true;
+                let machine = self.graphics_decision.machine;
+                self.recompute_graphics(ui.ctx(), machine);
+            }
+        } else if !visible || !animating {
+            self.frame_guard.reset();
+        }
+
+        let mode = self.graphics_decision.mode;
+        let periodic_telemetry = has_active_telemetry(&snap, &self.bridge);
+        if just_restored {
+            ui.ctx().request_repaint();
+        } else if let Some(delay) = graphics::next_repaint(RepaintNeed {
+            visible,
+            mode,
+            animating: mode == GraphicsMode::Full && animating,
+            periodic_telemetry,
+        }) {
+            ui.ctx().request_repaint_after(delay);
+        }
 
         if ui.ctx().input(|i| i.viewport().close_requested()) {
             self.quit = true;
@@ -558,7 +679,11 @@ impl GuiApp {
         ui.label(egui::RichText::new("coyote@vrc:~$ ").font(font::small()).color(pal.dim));
         let cmd = self.state.section.title().to_lowercase();
         ui.label(egui::RichText::new(&cmd).font(font::small()).color(pal.contrast));
-        let blink = (ui.input(|i| i.time) * 0.9).fract() < 0.5;
+        let blink = if self.graphics_decision.mode == GraphicsMode::Lite || self.backdrop.speed <= 0.0 {
+            true
+        } else {
+            (ui.input(|i| i.time) * 0.9).fract() < 0.5
+        };
         let (cur, _) = ui.allocate_exact_size(vec2(7.0, 13.0), Sense::hover());
         if blink {
             ui.painter().rect_filled(cur, w::SQUARE, pal.accent);
@@ -800,12 +925,13 @@ impl GuiApp {
 
     fn theme_panel(&mut self, ctx: &egui::Context, pal: &Palette) {
         let mut open = true;
+        let swatches = cached_theme_swatches();
         egui::Window::new("theme")
             .title_bar(false)
             .resizable(false)
             .anchor(Align2::RIGHT_TOP, vec2(-18.0, 58.0))
             .frame(egui::Frame::NONE.fill(pal.base).inner_margin(egui::Margin::same(14)))
-            .default_width(300.0)
+            .default_width(320.0)
             .show(ctx, |ui| {
                 let outer = ui.max_rect().expand(14.0);
                 w::dashed_rect(ui, outer, pal.hair);
@@ -820,7 +946,7 @@ impl GuiApp {
                 });
                 ui.add_space(6.0);
 
-                for t in crate::theme::THEMES {
+                for (t, sw_colors) in crate::theme::THEMES.iter().zip(swatches.iter()) {
                     let active = self.theme.id == t.id;
                     let (rect, resp) = w::row(ui, pal, active, 24.0);
                     let inner = rect.shrink2(vec2(8.0, 0.0));
@@ -833,10 +959,9 @@ impl GuiApp {
                         Align2::LEFT_CENTER,
                     );
                     let mut x = inner.right();
-                    for c in [t.accent, t.contrast, t.base] {
+                    for &c in sw_colors {
                         let sw = Rect::from_min_size(egui::pos2(x - 16.0, inner.center().y - 8.0), vec2(16.0, 16.0));
-                        ui.painter()
-                            .rect_filled(sw.shrink(2.0), w::SQUARE, crate::theme::palette::oklch_to_color(c));
+                        ui.painter().rect_filled(sw.shrink(2.0), w::SQUARE, c);
                         ui.painter().rect_stroke(
                             sw,
                             w::SQUARE,
@@ -846,7 +971,7 @@ impl GuiApp {
                         x -= 20.0;
                     }
                     if resp.clicked() {
-                        self.theme.set(t.id, true);
+                        self.theme.set(t.id, self.graphics_decision.mode == GraphicsMode::Full);
                         self.save_prefs();
                     }
                 }
@@ -862,7 +987,7 @@ impl GuiApp {
                 ] {
                     ui.horizontal(|ui| {
                         w::field_label(ui, pal, label, 68.0, false);
-                        if let Some(v) = w::Slider::new(*value, 0.0, max).width(160.0).show(ui, pal) {
+                        if let Some(v) = w::Slider::new(*value, 0.0, max).width(168.0).show(ui, pal) {
                             *value = (v * 10.0).round() / 10.0;
                             changed = true;
                         }
@@ -873,17 +998,88 @@ impl GuiApp {
                     self.save_prefs();
                 }
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
+                w::dashed_hr(ui, pal.hair);
+                ui.add_space(10.0);
+
+                w::caption(ui, pal, "Graphics");
+                ui.add_space(4.0);
+                let prev_pref = self.graphics_pref;
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.graphics_pref, GraphicsPreference::Auto, "Auto");
+                    ui.selectable_value(&mut self.graphics_pref, GraphicsPreference::Full, "Full");
+                    ui.selectable_value(&mut self.graphics_pref, GraphicsPreference::Lite, "Lite");
+                });
+                if self.graphics_pref != prev_pref {
+                    let machine = self.power_watcher.latest();
+                    self.recompute_graphics(ctx, machine);
+                    self.save_prefs();
+                }
+                ui.add_space(4.0);
+                let status = self.graphics_decision.status_line(self.graphics_pref);
                 ui.label(
-                    egui::RichText::new("Nine palettes, three OKLCH colours each — the same set the website uses.")
-                        .font(font::tiny())
-                        .color(pal.dim),
+                    egui::RichText::new(status)
+                        .font(font::small())
+                        .color(if self.graphics_decision.mode == GraphicsMode::Full {
+                            pal.accent
+                        } else {
+                            pal.contrast
+                        }),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(
+                        "Lite replaces the animated 3D backdrop with a static dot grid, keeps indicators steady, \
+                         disables UI transitions, and throttles passive telemetry redraws. \
+                         Auto picks Lite on battery, energy saver, OS animation effects off, software rendering, or slow frames.",
+                    )
+                    .font(font::tiny())
+                    .color(pal.dim),
                 );
             });
         if !open {
             self.state.show_theme_panel = false;
         }
     }
+}
+
+fn cached_theme_swatches() -> &'static [[Color32; 3]; crate::theme::THEMES.len()] {
+    static SWATCHES: OnceLock<[[Color32; 3]; crate::theme::THEMES.len()]> = OnceLock::new();
+    SWATCHES.get_or_init(|| {
+        std::array::from_fn(|i| {
+            let t = &crate::theme::THEMES[i];
+            [
+                crate::theme::palette::oklch_to_color(t.accent),
+                crate::theme::palette::oklch_to_color(t.contrast),
+                crate::theme::palette::oklch_to_color(t.base),
+            ]
+        })
+    })
+}
+
+fn has_lit_graph_probe(snap: &Snapshot, tab: GraphTab) -> bool {
+    let g = if snap.remote_enabled && tab == GraphTab::Remote {
+        &snap.remote_graph
+    } else {
+        &snap.graph
+    };
+    g.probe
+        .nodes
+        .values()
+        .any(|p| p.outputs.iter().any(|&v| v.abs() > 0.02))
+}
+
+fn has_active_telemetry(snap: &Snapshot, bridge: &Bridge) -> bool {
+    let has_toast = bridge.shared.toast.read().ok().is_some_and(|t| t.is_some());
+    let downloading = bridge.shared.update.read().ok().is_some_and(|u| u.downloading);
+    let device_online = snap.devices.iter().any(|d| d.connected || d.reconnecting);
+    device_online
+        || snap.vrchat_found
+        || snap.alarm_status.phase != AlarmPhase::Idle
+        || !snap.remote.service.sessions.is_empty()
+        || snap.remote.service.connecting.is_some()
+        || has_toast
+        || downloading
 }
 
 fn nav_link(ui: &mut Ui, pal: &Palette, key: char, label: &str, current: bool) -> bool {
